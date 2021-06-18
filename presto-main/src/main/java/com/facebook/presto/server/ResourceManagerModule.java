@@ -28,6 +28,7 @@ import com.facebook.presto.resourcemanager.DistributedQueryInfoResource;
 import com.facebook.presto.resourcemanager.DistributedQueryResource;
 import com.facebook.presto.resourcemanager.ForResourceManager;
 import com.facebook.presto.resourcemanager.ResourceManagerClusterStateProvider;
+import com.facebook.presto.resourcemanager.ResourceManagerConfig;
 import com.facebook.presto.resourcemanager.ResourceManagerProxy;
 import com.facebook.presto.resourcemanager.ResourceManagerServer;
 import com.facebook.presto.transaction.NoOpTransactionManager;
@@ -41,6 +42,7 @@ import io.airlift.units.Duration;
 import javax.inject.Singleton;
 
 import static com.facebook.airlift.configuration.ConditionalModule.installModuleIf;
+import static com.facebook.airlift.configuration.ConfigBinder.configBinder;
 import static com.facebook.airlift.discovery.client.DiscoveryBinder.discoveryBinder;
 import static com.facebook.airlift.http.client.HttpClientBinder.httpClientBinder;
 import static com.facebook.airlift.jaxrs.JaxrsBinder.jaxrsBinder;
@@ -90,6 +92,7 @@ public class ResourceManagerModule
 
         binder.bind(TransactionManager.class).to(NoOpTransactionManager.class);
 
+        configBinder(binder).bindConfig(ResourceManagerConfig.class);
         binder.bind(ResourceManagerClusterStateProvider.class).in(Scopes.SINGLETON);
         driftServerBinder(binder).bindService(ResourceManagerServer.class);
 
