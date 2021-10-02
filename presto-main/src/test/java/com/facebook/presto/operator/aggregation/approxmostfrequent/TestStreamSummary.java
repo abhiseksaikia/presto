@@ -42,6 +42,21 @@ public class TestStreamSummary
         assertEquals(buckets, ImmutableMap.of(1L, 2L, 2L, 1L, 3L, 1L));
     }
 
+    @Test
+    public void testLongHistogramRehash()
+    {
+        Block longsBlock = createLongsBlock(1L, 1L, 2L, 3L, 4L, 5L, 5L, 6L, 6L, 7L, 7L, 8L, 9L, 10L, 11L, 13L, 13L);
+        StreamSummary histogram = new StreamSummary(BIGINT, 3, 15, 10);
+        int pos = 0;
+        for (int i = 0; i < 17; i++) {
+            histogram.add(longsBlock, pos++, 1);
+        }
+
+        Map<Long, Long> buckets = getMapForLongType(histogram);
+        assertEquals(buckets.size(), 3);
+        assertEquals(buckets, ImmutableMap.of(1L, 2L, 2L, 1L, 3L, 1L));
+    }
+
     private Map<Long, Long> getMapForLongType(StreamSummary histogram)
     {
         MapType mapType = mapType(BIGINT, BIGINT);

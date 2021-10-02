@@ -37,7 +37,7 @@ public class StreamSummary
     /**
      * mapping between value's position and its count
      **/
-    private final LongBigArray counts;
+    private LongBigArray counts;
     private IntBigArray hashToBlockPosition; // Map<value hash, value's position>
     private int hashCapacity;
 
@@ -141,10 +141,19 @@ public class StreamSummary
         }
         //we have to rehash the map
         BlockBuilder newHeapBlockBuilder = type.createBlockBuilder(null, heapBlockBuilder.getPositionCount());
+        //since block positions are changed, we need to update all data structures which are using blcok position as reference
+        LongBigArray newCounts = new LongBigArray();
+        newCounts.ensureCapacity(maxFill);
+
         for (int heapPosition = 0; heapPosition < positionCount; heapPosition++) {
             //append data from heapIndex[heapPosition][HEAP_BLOCK_POS] to newHeapBlockBuilder
-            type.appendTo(heapBlockBuilder, heapIndexes[heapPosition], newHeapBlockBuilder);
+            int newBlockPos = newHeapBlockBuilder.getPositionCount();
+            int oldBlockPosition = heapIndexes[heapPosition];
+            type.appendTo(heapBlockBuilder, oldBlockPosition, newHeapBlockBuilder);
+            heapIndexes[heapPosition] = newBlockPos;
+            newCounts.set(newBlockPos, counts.get(oldBlockPosition));
         }
+        this.counts = newCounts;
         heapBlockBuilder = newHeapBlockBuilder;
         rehash();
     }

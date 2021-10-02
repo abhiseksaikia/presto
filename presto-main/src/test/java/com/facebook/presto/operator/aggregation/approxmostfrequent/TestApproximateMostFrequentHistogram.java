@@ -24,6 +24,7 @@ import io.airlift.slice.Slice;
 import io.airlift.slice.Slices;
 import org.testng.annotations.Test;
 
+import java.util.Arrays;
 import java.util.Map;
 
 import static com.facebook.presto.block.BlockAssertions.createLongsBlock;
@@ -35,6 +36,18 @@ public class TestApproximateMostFrequentHistogram
 {
     @Test
     public void testLongHistogram()
+    {
+        ApproximateMostFrequentHistogram<Long> histogram = new ApproximateMostFrequentHistogram<Long>(3, 15, LongApproximateMostFrequentStateSerializer::serializeBucket, LongApproximateMostFrequentStateSerializer::deserializeBucket);
+        Arrays.asList(1L, 1L, 2L, 3L, 4L, 5L, 5L, 6L, 6L, 7L, 7L, 8L, 9L, 10L, 11L, 13L, 13L).stream().forEach(k -> histogram.add(k));
+
+        Map<Long, Long> buckets = histogram.getBuckets();
+
+        assertEquals(buckets.size(), 3);
+        assertEquals(buckets, ImmutableMap.of(1L, 2L, 2L, 1L, 3L, 1L));
+    }
+
+    @Test
+    public void testLongHistogramNew()
     {
         Block longsBlock = createLongsBlock(1L, 1L, 2L, 3L, 4L);
         StreamSummary histogram = new StreamSummary(BIGINT, 3, 15, 10);
