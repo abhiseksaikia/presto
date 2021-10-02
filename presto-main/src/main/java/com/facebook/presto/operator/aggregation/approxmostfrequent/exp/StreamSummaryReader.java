@@ -2,7 +2,7 @@ package com.facebook.presto.operator.aggregation.approxmostfrequent.exp;
 
 import com.facebook.presto.common.block.Block;
 
-public interface ApproximateHistogramReader
+public interface StreamSummaryReader
 {
-    void read(int position, Block block, long count);
+    void read(Block block, int position, long count);
 }

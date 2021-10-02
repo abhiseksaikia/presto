@@ -70,7 +70,7 @@ public final class ApproximateMostFrequent
     private static final MethodHandle OUTPUT_FUNCTION = methodHandle(ApproximateMostFrequent.class, "output", ApproximateMostFrequentState.class, BlockBuilder.class);
     private static final MethodHandle INPUT_FUNCTION = methodHandle(ApproximateMostFrequent.class, "input", Type.class, ApproximateMostFrequentState.class, long.class, Block.class, int.class, long.class);
     private static final MethodHandle COMBINE_FUNCTION = methodHandle(ApproximateMostFrequent.class, "combine", ApproximateMostFrequentState.class, ApproximateMostFrequentState.class);
-    //FIXME where to get this expected size
+    //FIXME is this good enough?
     public static final int EXPECTED_SIZE_FOR_HASHING = 10;
 
     protected ApproximateMostFrequent()
@@ -86,7 +86,7 @@ public final class ApproximateMostFrequent
     public InternalAggregationFunction specialize(BoundVariables boundVariables, int arity, FunctionAndTypeManager functionAndTypeManager)
     {
         Type keyType = boundVariables.getTypeVariable("K");
-        Type serializedType = RowType.withDefaultFieldNames(ImmutableList.of(BigintType.BIGINT, BigintType.BIGINT, new ArrayType(keyType), new ArrayType(BigintType.BIGINT)));
+        Type serializedType = RowType.withDefaultFieldNames(ImmutableList.of(BigintType.BIGINT, BigintType.BIGINT, BigintType.BIGINT, new ArrayType(keyType), new ArrayType(BigintType.BIGINT)));
         Type outputType = functionAndTypeManager.getParameterizedType(StandardTypes.MAP, ImmutableList.of(
                 TypeSignatureParameter.of(keyType.getTypeSignature()),
                 TypeSignatureParameter.of(BigintType.BIGINT.getTypeSignature())));
@@ -125,8 +125,7 @@ public final class ApproximateMostFrequent
     @Override
     public String getDescription()
     {
-        //FIXME
-        return null;
+        return "Computes the top frequent elements approximately";
     }
 
     public static void input(Type type,
@@ -135,30 +134,30 @@ public final class ApproximateMostFrequent
             Block valueBlock,
             int valueIndex, long capacity)
     {
-        ApproximateMostFrequentFlattenHistogram histogram = state.get();
-        if (histogram == null) {
+        StreamSummary streamSummary = state.get();
+        if (streamSummary == null) {
             checkCondition(buckets >= 2, INVALID_FUNCTION_ARGUMENT, "approx_most_frequent bucket count must be greater than one");
-            histogram = new ApproximateMostFrequentFlattenHistogram(
+            streamSummary = new StreamSummary(
                     type,
                     toIntExact(buckets),
                     toIntExact(capacity),
                     EXPECTED_SIZE_FOR_HASHING);
-            state.set(histogram);
+            state.set(streamSummary);
         }
-        histogram.add(valueIndex, valueBlock, 1L);
+        streamSummary.add(valueBlock, valueIndex, 1L);
     }
 
     @CombineFunction
     public static void combine(ApproximateMostFrequentState state, ApproximateMostFrequentState otherState)
     {
-        ApproximateMostFrequentFlattenHistogram otherHistogram = otherState.get();
+        StreamSummary otherStreamSummary = otherState.get();
 
-        ApproximateMostFrequentFlattenHistogram histogram = state.get();
-        if (histogram == null) {
-            state.set(otherHistogram);
+        StreamSummary streamSummary = state.get();
+        if (streamSummary == null) {
+            state.set(otherStreamSummary);
         }
         else {
-            histogram.merge(otherHistogram);
+            streamSummary.merge(otherStreamSummary);
         }
     }
 
@@ -168,7 +167,7 @@ public final class ApproximateMostFrequent
             out.appendNull();
         }
         else {
-            state.get().writeMapDataTo(out);
+            state.get().topK(out);
         }
     }
 }

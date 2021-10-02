@@ -15,13 +15,8 @@ package com.facebook.presto.operator.aggregation.approxmostfrequent.exp;
 
 import com.facebook.presto.common.block.Block;
 import com.facebook.presto.common.block.BlockBuilder;
-import com.facebook.presto.common.type.ArrayType;
 import com.facebook.presto.common.type.Type;
 import com.facebook.presto.spi.function.AccumulatorStateSerializer;
-
-import static com.facebook.presto.common.type.BigintType.BIGINT;
-import static java.lang.Math.toIntExact;
-import static java.util.Objects.requireNonNull;
 
 public class ApproximateMostFrequentStateSerializer
         implements AccumulatorStateSerializer<ApproximateMostFrequentState>
@@ -55,20 +50,7 @@ public class ApproximateMostFrequentStateSerializer
     @Override
     public void deserialize(Block block, int index, ApproximateMostFrequentState state)
     {
-        requireNonNull(block, "block is null");
-        Block currentBlock = (Block) getSerializedType().getObject(block, index);
-        int pos = 0;
-        int maxBuckets = toIntExact(BIGINT.getLong(currentBlock, pos++));
-        int capacity = toIntExact(BIGINT.getLong(currentBlock, pos++));
-        int expectedSize = 10; // FIXME how to find this
-
-        Block keysBlock = new ArrayType(type).getObject(currentBlock, pos++);
-        Block valuesBlock = new ArrayType(BIGINT).getObject(currentBlock, pos++);
-
-        final ApproximateMostFrequentFlattenHistogram histogram = new ApproximateMostFrequentFlattenHistogram(type, maxBuckets, capacity, expectedSize);
-        for (int i = 0; i < keysBlock.getPositionCount(); i++) {
-            histogram.add(i, keysBlock, BIGINT.getLong(valuesBlock, i));
-        }
-        state.set(histogram);
+        Block currentBlock = (Block) serializedType.getObject(block, index);
+        state.set(StreamSummary.deserialize(type, currentBlock));
     }
 }

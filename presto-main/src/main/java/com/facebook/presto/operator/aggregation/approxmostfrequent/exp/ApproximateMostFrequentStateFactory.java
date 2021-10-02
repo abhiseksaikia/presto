@@ -47,19 +47,19 @@ public class ApproximateMostFrequentStateFactory
     public static class SingleApproximateMostFrequentState
             implements ApproximateMostFrequentState
     {
-        private ApproximateMostFrequentFlattenHistogram histogram;
+        private StreamSummary streamSummary;
         private long size;
 
         @Override
-        public ApproximateMostFrequentFlattenHistogram get()
+        public StreamSummary get()
         {
-            return histogram;
+            return streamSummary;
         }
 
         @Override
-        public void set(ApproximateMostFrequentFlattenHistogram histogram)
+        public void set(StreamSummary histogram)
         {
-            this.histogram = histogram;
+            this.streamSummary = histogram;
             size = histogram.estimatedInMemorySize();
         }
 
@@ -74,37 +74,37 @@ public class ApproximateMostFrequentStateFactory
             extends AbstractGroupedAccumulatorState
             implements ApproximateMostFrequentState
     {
-        private final ObjectBigArray<ApproximateMostFrequentFlattenHistogram> histograms = new ObjectBigArray<>();
+        private final ObjectBigArray<StreamSummary> streamSummaries = new ObjectBigArray<>();
         private long size;
 
         @Override
-        public ApproximateMostFrequentFlattenHistogram get()
+        public StreamSummary get()
         {
-            return histograms.get(getGroupId());
+            return streamSummaries.get(getGroupId());
         }
 
         @Override
-        public void set(ApproximateMostFrequentFlattenHistogram histogram)
+        public void set(StreamSummary histogram)
         {
-            ApproximateMostFrequentFlattenHistogram previous = get();
+            StreamSummary previous = get();
             if (previous != null) {
                 size -= previous.estimatedInMemorySize();
             }
 
-            histograms.set(getGroupId(), histogram);
+            streamSummaries.set(getGroupId(), histogram);
             size += histogram.estimatedInMemorySize();
         }
 
         @Override
         public void ensureCapacity(long size)
         {
-            histograms.ensureCapacity(size);
+            streamSummaries.ensureCapacity(size);
         }
 
         @Override
         public long getEstimatedSize()
         {
-            return size + histograms.sizeOf();
+            return size + streamSummaries.sizeOf();
         }
     }
 }

@@ -7,7 +7,7 @@ import com.facebook.presto.spi.function.AccumulatorStateMetadata;
 public interface ApproximateMostFrequentState
         extends AccumulatorState
 {
-    ApproximateMostFrequentFlattenHistogram get();
+    StreamSummary get();
 
-    void set(ApproximateMostFrequentFlattenHistogram value);
+    void set(StreamSummary value);
 }
