@@ -45,16 +45,30 @@ public class TestStreamSummary
     @Test
     public void testLongHistogramRehash()
     {
-        Block longsBlock = createLongsBlock(1L, 1L, 2L, 3L, 4L, 5L, 5L, 6L, 6L, 7L, 7L, 8L, 9L, 10L, 11L, 13L, 13L);
-        StreamSummary histogram = new StreamSummary(BIGINT, 3, 15, 10);
+        //Long[] values = {2L, 1L, 1L, 2L};
+        //Long[] values = {14L, 14L, 11L, 13L, 13L, 13L, 14L, 14L}; //->failed
+        Long[] values = {1L, 1L, 2L, 3L, 4L, 5L, 5L, 6L, 6L, 7L, 7L, 8L, 9L, 10L, 11L, 6L, 7L, 7L, 8L, 9L, 10L, 10L, 8L, 9L, 10L, 11L, 6L, 7L, 7L, 8L, 9L, 8L, 9L, 10L, 11L, 6L, 7L,
+                7L, 8L, 9L};
+        Block longsBlock = createLongsBlock(values);
+        int maxBuckets = 3;
+        int heapCapacity = 10;
+        StreamSummary streamSummary = new StreamSummary(BIGINT, maxBuckets, heapCapacity, 10);
         int pos = 0;
-        for (int i = 0; i < 17; i++) {
-            histogram.add(longsBlock, pos++, 1);
+        for (int i = 0; i < values.length; i++) {
+            streamSummary.add(longsBlock, pos++, 1);
         }
 
-        Map<Long, Long> buckets = getMapForLongType(histogram);
-        assertEquals(buckets.size(), 3);
-        assertEquals(buckets, ImmutableMap.of(1L, 2L, 2L, 1L, 3L, 1L));
+        Map<Long, Long> buckets = getMapForLongType(streamSummary);
+
+        ApproximateMostFrequentHistogram<Long> histogram = new ApproximateMostFrequentHistogram<Long>(maxBuckets, heapCapacity, LongApproximateMostFrequentStateSerializer::serializeBucket, LongApproximateMostFrequentStateSerializer::deserializeBucket);
+        for (Long value : values) {
+            histogram.add(value);
+        }
+
+        Map<Long, Long> oldBuckets = histogram.getBuckets();
+
+        assertEquals(buckets.size(), oldBuckets.size());
+        assertEquals(buckets, oldBuckets);
     }
 
     private Map<Long, Long> getMapForLongType(StreamSummary histogram)

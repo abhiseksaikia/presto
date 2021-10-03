@@ -37,8 +37,8 @@ public class TestApproximateMostFrequentHistogram
     @Test
     public void testLongHistogram()
     {
-        ApproximateMostFrequentHistogram<Long> histogram = new ApproximateMostFrequentHistogram<Long>(3, 15, LongApproximateMostFrequentStateSerializer::serializeBucket, LongApproximateMostFrequentStateSerializer::deserializeBucket);
-        Arrays.asList(1L, 1L, 2L, 3L, 4L, 5L, 5L, 6L, 6L, 7L, 7L, 8L, 9L, 10L, 11L, 13L, 13L).stream().forEach(k -> histogram.add(k));
+        ApproximateMostFrequentHistogram<Long> histogram = new ApproximateMostFrequentHistogram<Long>(3, 5, LongApproximateMostFrequentStateSerializer::serializeBucket, LongApproximateMostFrequentStateSerializer::deserializeBucket);
+        Arrays.asList(1L, 1L, 2L, 3L, 4L, 5L, 5L, 6L, 6L, 7L, 7L, 8L, 9L, 10L, 11L, 13L, 13L, 13L, 14L, 14L, 15L, 19L, 20L).stream().forEach(k -> histogram.add(k));
 
         Map<Long, Long> buckets = histogram.getBuckets();
 
