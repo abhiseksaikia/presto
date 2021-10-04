@@ -13,10 +13,6 @@
  */
 package com.facebook.presto.operator.aggregation.approxmostfrequent;
 
-import com.facebook.presto.common.block.Block;
-import com.facebook.presto.common.block.BlockBuilder;
-import com.facebook.presto.common.type.MapType;
-import com.facebook.presto.operator.aggregation.approxmostfrequent.exp.StreamSummary;
 import com.facebook.presto.operator.aggregation.state.LongApproximateMostFrequentStateSerializer;
 import com.facebook.presto.operator.aggregation.state.StringApproximateMostFrequentStateSerializer;
 import com.google.common.collect.ImmutableMap;
@@ -24,12 +20,8 @@ import io.airlift.slice.Slice;
 import io.airlift.slice.Slices;
 import org.testng.annotations.Test;
 
-import java.util.Arrays;
 import java.util.Map;
 
-import static com.facebook.presto.block.BlockAssertions.createLongsBlock;
-import static com.facebook.presto.common.type.BigintType.BIGINT;
-import static com.facebook.presto.util.StructuralTestUtil.mapType;
 import static org.testng.Assert.assertEquals;
 
 public class TestApproximateMostFrequentHistogram
@@ -37,8 +29,13 @@ public class TestApproximateMostFrequentHistogram
     @Test
     public void testLongHistogram()
     {
-        ApproximateMostFrequentHistogram<Long> histogram = new ApproximateMostFrequentHistogram<Long>(3, 5, LongApproximateMostFrequentStateSerializer::serializeBucket, LongApproximateMostFrequentStateSerializer::deserializeBucket);
-        Arrays.asList(1L, 1L, 2L, 3L, 4L, 5L, 5L, 6L, 6L, 7L, 7L, 8L, 9L, 10L, 11L, 13L, 13L, 13L, 14L, 14L, 15L, 19L, 20L).stream().forEach(k -> histogram.add(k));
+        ApproximateMostFrequentHistogram<Long> histogram = new ApproximateMostFrequentHistogram<Long>(3, 15, LongApproximateMostFrequentStateSerializer::serializeBucket, LongApproximateMostFrequentStateSerializer::deserializeBucket);
+
+        histogram.add(1L);
+        histogram.add(1L);
+        histogram.add(2L);
+        histogram.add(3L);
+        histogram.add(4L);
 
         Map<Long, Long> buckets = histogram.getBuckets();
 
@@ -47,44 +44,14 @@ public class TestApproximateMostFrequentHistogram
     }
 
     @Test
-    public void testLongHistogramNew()
-    {
-        Block longsBlock = createLongsBlock(1L, 1L, 2L, 3L, 4L);
-        StreamSummary histogram = new StreamSummary(BIGINT, 3, 15, 10);
-        int pos = 0;
-        histogram.add(longsBlock, pos++, 1);
-        histogram.add(longsBlock, pos++, 1);
-        histogram.add(longsBlock, pos++, 1);
-        histogram.add(longsBlock, pos++, 1);
-        histogram.add(longsBlock, pos++, 1);
-        MapType mapType = mapType(BIGINT, BIGINT);
-        BlockBuilder blockBuilder = mapType.createBlockBuilder(null, 10);
-        histogram.topK(blockBuilder);
-        Block object = mapType.getObject(blockBuilder, 0);
-        Map<Long, Long> buckets = getMapFromLongMapBucket(object);
-        assertEquals(buckets.size(), 3);
-        assertEquals(buckets, ImmutableMap.of(1L, 2L, 2L, 1L, 3L, 1L));
-    }
-
-    public Map<Long, Long> getMapFromLongMapBucket(Block block)
-    {
-        ImmutableMap.Builder<Long, Long> buckets = new ImmutableMap.Builder<>();
-        for (int pos = 0; pos < block.getPositionCount(); pos += 2) {
-            buckets.put(block.getLong(pos), block.getLong(pos + 1));
-        }
-        return buckets.build();
-    }
-
-    @Test
     public void testLongRoundtrip()
     {
-        ApproximateMostFrequentHistogram<Long> original = new ApproximateMostFrequentHistogram<Long>(3, 15, LongApproximateMostFrequentStateSerializer::serializeBucket, LongApproximateMostFrequentStateSerializer::deserializeBucket);
+        ApproximateMostFrequentHistogram<Long> original = new ApproximateMostFrequentHistogram<Long>(1, 2, LongApproximateMostFrequentStateSerializer::serializeBucket, LongApproximateMostFrequentStateSerializer::deserializeBucket);
+        Long[] values = {14L, 14L, 11L, 13L, 13L, 13L, 14L, 14L};
 
-        original.add(1L);
-        original.add(1L);
-        original.add(2L);
-        original.add(3L);
-        original.add(4L);
+        for (Long value : values) {
+            original.add(value);
+        }
 
         Slice serialized = original.serialize();
 

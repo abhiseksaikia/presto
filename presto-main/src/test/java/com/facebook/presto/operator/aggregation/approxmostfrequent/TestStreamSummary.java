@@ -16,6 +16,7 @@ import io.airlift.slice.Slices;
 import org.testng.annotations.Test;
 
 import java.util.Map;
+import java.util.concurrent.ThreadLocalRandom;
 
 import static com.facebook.presto.block.BlockAssertions.createLongsBlock;
 import static com.facebook.presto.common.type.BigintType.BIGINT;
@@ -71,6 +72,91 @@ public class TestStreamSummary
         assertEquals(buckets, oldBuckets);
     }
 
+    @Test
+    public void testDeserialize()
+    {
+        StreamSummary original = new StreamSummary(BIGINT, 3, 15, 10);
+        Long[] values = {1L, 1L, 2L, 3L, 4L};
+        int pos = 0;
+        Block longsBlock = createLongsBlock(values);
+        for (int i = 0; i < values.length; i++) {
+            original.add(longsBlock, pos++, 1);
+        }
+        Map<Long, Long> originalMap = getMapForLongType(original);
+        BlockBuilder blockBuilder = INT_SERIALIZED_TYPE.createBlockBuilder(null, 10);
+        original.serialize(blockBuilder);
+
+        StreamSummary deserialize = StreamSummary.deserialize(BIGINT, (Block) INT_SERIALIZED_TYPE.getObject(blockBuilder, 0));
+        Map<Long, Long> deserializedMap = getMapForLongType(deserialize);
+        assertEquals(originalMap, deserializedMap);
+    }
+
+    @Test
+    public void testComparison()
+    {
+        for (int test = 0; test < 100; test++) {
+            int totalValues = 729413;
+            int maxBuckets = 3; //ThreadLocalRandom.current().nextInt(1, 10);
+            int heapCapacity = 100; //ThreadLocalRandom.current().nextInt(10, 20);
+            Long[] values = new Long[totalValues];
+            for (int i = 0; i < totalValues; i++) {
+                values[i] = Long.valueOf(ThreadLocalRandom.current().nextInt(1, 1000));
+            }
+            Block longsBlock = createLongsBlock(values);
+
+            StreamSummary streamSummary = new StreamSummary(BIGINT, maxBuckets, heapCapacity, 10);
+            int pos = 0;
+            for (int i = 0; i < values.length; i++) {
+                streamSummary.add(longsBlock, pos++, 1);
+            }
+
+            Map<Long, Long> buckets = getMapForLongType(streamSummary);
+
+            ApproximateMostFrequentHistogram<Long> histogram = new ApproximateMostFrequentHistogram<Long>(maxBuckets, heapCapacity, LongApproximateMostFrequentStateSerializer::serializeBucket, LongApproximateMostFrequentStateSerializer::deserializeBucket);
+            for (Long value : values) {
+                histogram.add(value);
+            }
+
+            Map<Long, Long> oldBuckets = histogram.getBuckets();
+
+            assertEquals(buckets.size(), oldBuckets.size());
+            assertEquals(buckets, oldBuckets);
+            System.out.println("totalValues =" + totalValues + "maxBuckets" + maxBuckets + "heapCapacity=" + heapCapacity);
+            System.out.println("values = " + values);
+        }
+    }
+
+    @Test
+    public void testComparisonFailedCase()
+    {
+        int maxBuckets = 2; //ThreadLocalRandom.current().nextInt(1, 10);
+        int heapCapacity = 100; //ThreadLocalRandom.current().nextInt(10, 20);
+
+        Long[] values = {17200L, 18853L, 55624L, 55624L, 18853L, 55624L, 55624L, 18853L, 18853L, 18853L, 17200L, 18853L, 18853L, 55624L, 55624L, 55624L, 17200L, 55624L, 18853L,
+                55624L, 17200L, 18853L, 18853L, 17200L, 17200L, 17200L, 18853L, 55624L, 17200L, 18853L, 17200L, 17200L, 17200L, 55624L, 18853L, 17200L, 17200L, 17200L, 55624L,
+                17200L, 55624L, 55624L, 17200L, 17200L, 55624L, 18853L, 18853L, 17200L, 17200L, 17200L, 17200L, 55624L, 55624L, 18853L, 17200L, 18853L, 18853L, 55624L, 55624L,
+                18853L, 18853L, 17200L, 55624L, 55624L, 55624L, 17200L, 18853L, 17200L, 17200L, 18853L};
+        Block longsBlock = createLongsBlock(values);
+
+        StreamSummary streamSummary = new StreamSummary(BIGINT, maxBuckets, heapCapacity, 10);
+        int pos = 0;
+        for (int i = 0; i < values.length; i++) {
+            streamSummary.add(longsBlock, pos++, 1);
+        }
+
+        Map<Long, Long> buckets = getMapForLongType(streamSummary);
+
+        ApproximateMostFrequentHistogram<Long> histogram = new ApproximateMostFrequentHistogram<Long>(maxBuckets, heapCapacity, LongApproximateMostFrequentStateSerializer::serializeBucket, LongApproximateMostFrequentStateSerializer::deserializeBucket);
+        for (Long value : values) {
+            histogram.add(value);
+        }
+
+        Map<Long, Long> oldBuckets = histogram.getBuckets();
+
+        assertEquals(buckets.size(), oldBuckets.size());
+        assertEquals(buckets, oldBuckets);
+    }
+
     private Map<Long, Long> getMapForLongType(StreamSummary histogram)
     {
         MapType mapType = mapType(BIGINT, BIGINT);
@@ -105,25 +191,31 @@ public class TestStreamSummary
         BlockBuilder blockBuilder = INT_SERIALIZED_TYPE.createBlockBuilder(null, 10);
         original.serialize(blockBuilder);
 
-        StreamSummary deserialize = StreamSummary.deserialize(INT_SERIALIZED_TYPE, (Block) INT_SERIALIZED_TYPE.getObject(blockBuilder, 0));
+        StreamSummary deserialize = StreamSummary.deserialize(BIGINT, (Block) INT_SERIALIZED_TYPE.getObject(blockBuilder, 0));
         assertEquals(getMapForLongType(original), getMapForLongType(deserialize));
     }
 
     @Test
     public void testMerge()
     {
-        ApproximateMostFrequentHistogram<Long> histogram1 = new ApproximateMostFrequentHistogram<Long>(3, 15, LongApproximateMostFrequentStateSerializer::serializeBucket, LongApproximateMostFrequentStateSerializer::deserializeBucket);
+        StreamSummary histogram1 = new StreamSummary(BIGINT, 3, 15, 10);
+        Long[] values = {1L, 1L, 2L};
+        int pos = 0;
+        Block longsBlock = createLongsBlock(values);
+        for (int i = 0; i < values.length; i++) {
+            histogram1.add(longsBlock, pos++, 1);
+        }
 
-        histogram1.add(1L);
-        histogram1.add(1L);
-        histogram1.add(2L);
-
-        ApproximateMostFrequentHistogram<Long> histogram2 = new ApproximateMostFrequentHistogram<Long>(3, 15, LongApproximateMostFrequentStateSerializer::serializeBucket, LongApproximateMostFrequentStateSerializer::deserializeBucket);
-        histogram2.add(3L);
-        histogram2.add(4L);
+        StreamSummary histogram2 = new StreamSummary(BIGINT, 3, 15, 10);
+        values = new Long[] {3L, 4L};
+        pos = 0;
+        longsBlock = createLongsBlock(values);
+        for (int i = 0; i < values.length; i++) {
+            histogram2.add(longsBlock, pos++, 1);
+        }
 
         histogram1.merge(histogram2);
-        Map<Long, Long> buckets = histogram1.getBuckets();
+        Map<Long, Long> buckets = getMapForLongType(histogram1);
 
         assertEquals(buckets.size(), 3);
         assertEquals(buckets, ImmutableMap.of(1L, 2L, 2L, 1L, 3L, 1L));
