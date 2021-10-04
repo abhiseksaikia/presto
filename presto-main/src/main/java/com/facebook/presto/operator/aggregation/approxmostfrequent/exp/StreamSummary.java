@@ -33,7 +33,6 @@ public class StreamSummary
     private final int maxBuckets;
     private final int expectedSizeInHash;
     private int maxFill;
-    int lastMaxInsertPos;
     int insertOrder;
 
     /**
@@ -85,7 +84,6 @@ public class StreamSummary
 
     public void add(Block block, int blockPosition, long incrementCount)
     {
-        incrementCount = toIntExact(incrementCount);
         int hashPosition = getBucketId(TypeUtils.hashPosition(type, block, blockPosition), mask);
         // look for empty slot or slot containing this key
         while (true) {
@@ -96,7 +94,7 @@ public class StreamSummary
             if (type.equalTo(block, blockPosition, heapBlockBuilder, bucketPosition)) {
                 blockPositionToCount.add(bucketPosition, incrementCount);
                 int heapIndex = blockToHeapIndex.get(hashToBlockPosition.get(hashPosition));
-                minHeap[heapIndex][HEAP_BLOCK_INSERTION_INDEX] = lastMaxInsertPos + (insertOrder++);
+                minHeap[heapIndex][HEAP_BLOCK_INSERTION_INDEX] = insertOrder++;
                 percolateDown(heapIndex);
                 return;
             }
@@ -146,7 +144,7 @@ public class StreamSummary
     private void insertIntoHeap(int heapIndexPosition, int hashPosition, int blockPosition)
     {
         minHeap[heapIndexPosition][HEAP_BLOCK_POS_INDEX] = blockPosition;
-        minHeap[heapIndexPosition][HEAP_BLOCK_INSERTION_INDEX] = lastMaxInsertPos + (insertOrder++);
+        minHeap[heapIndexPosition][HEAP_BLOCK_INSERTION_INDEX] = insertOrder++;
         minHeap[heapIndexPosition][HEAP_HASH_POS_INDEX] = hashPosition;
         blockToHeapIndex.set(blockPosition, heapIndexPosition);
     }
@@ -180,7 +178,6 @@ public class StreamSummary
             int newBlockPos = newHeapBlockBuilder.getPositionCount();
             int oldBlockPosition = minHeap[heapPosition][HEAP_BLOCK_POS_INDEX];
             //insert positon in the blocks could be 1-->120--->100, we need to start insert pos
-            lastMaxInsertPos = Math.max(lastMaxInsertPos, minHeap[heapPosition][HEAP_BLOCK_INSERTION_INDEX]);
             type.appendTo(heapBlockBuilder, oldBlockPosition, newHeapBlockBuilder);
             minHeap[heapPosition][HEAP_BLOCK_POS_INDEX] = newBlockPos;
 
