@@ -94,7 +94,7 @@ public class TestStreamSummary
     @Test
     public void testComparison()
     {
-        for (int test = 0; test < 100; test++) {
+        for (int test = 0; test < 10; test++) {
             int totalValues = 729413;
             int maxBuckets = 3; //ThreadLocalRandom.current().nextInt(1, 10);
             int heapCapacity = 100; //ThreadLocalRandom.current().nextInt(10, 20);

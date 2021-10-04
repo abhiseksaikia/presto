@@ -11,7 +11,6 @@ import com.facebook.presto.type.TypeUtils;
 import org.openjdk.jol.info.ClassLayout;
 
 import java.util.Arrays;
-import java.util.Comparator;
 
 import static com.facebook.presto.common.type.BigintType.BIGINT;
 import static com.facebook.presto.spi.StandardErrorCode.GENERIC_INSUFFICIENT_RESOURCES;
@@ -301,7 +300,7 @@ public class StreamSummary
 
     public void readAllValues(StreamSummaryReader reader)
     {
-        int[][] sortedHeap = sortHeapByInsertionPosition();
+        int[][] sortedHeap = sortHeapByCountAndInsertPosition();
 
         for (int heapIndexPosition = 0; heapIndexPosition < positionCount; heapIndexPosition++) {
             long count = blockPositionToCount.get(sortedHeap[heapIndexPosition][HEAP_BLOCK_POS_INDEX]);
@@ -331,13 +330,6 @@ public class StreamSummary
             blockBuilder.closeEntry();
         }
         out.closeEntry();
-    }
-
-    private int[][] sortHeapByInsertionPosition()
-    {
-        int[][] copyOfHeap = Arrays.copyOf(minHeap, positionCount);
-        Arrays.sort(copyOfHeap, Comparator.comparingInt(a -> a[HEAP_BLOCK_INSERTION_INDEX]));
-        return copyOfHeap;
     }
 
     public static StreamSummary deserialize(Type type, Block block)
