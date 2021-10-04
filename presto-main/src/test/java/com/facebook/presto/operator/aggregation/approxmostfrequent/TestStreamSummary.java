@@ -25,13 +25,13 @@ import static org.testng.Assert.assertEquals;
 
 public class TestStreamSummary
 {
-    private static final Type INT_SERIALIZED_TYPE = RowType.withDefaultFieldNames(ImmutableList.of(BIGINT, BIGINT, BIGINT, new ArrayType(BIGINT), new ArrayType(BIGINT)));
+    private static final Type INT_SERIALIZED_TYPE = RowType.withDefaultFieldNames(ImmutableList.of(BIGINT, BIGINT, new ArrayType(BIGINT), new ArrayType(BIGINT)));
 
     @Test
     public void testLongHistogram()
     {
         Block longsBlock = createLongsBlock(1L, 1L, 2L, 3L, 4L);
-        StreamSummary histogram = new StreamSummary(BIGINT, 3, 15, 10);
+        StreamSummary histogram = new StreamSummary(BIGINT, 3, 15);
         int pos = 0;
         histogram.add(longsBlock, pos++, 1);
         histogram.add(longsBlock, pos++, 1);
@@ -53,7 +53,7 @@ public class TestStreamSummary
         Block longsBlock = createLongsBlock(values);
         int maxBuckets = 3;
         int heapCapacity = 10;
-        StreamSummary streamSummary = new StreamSummary(BIGINT, maxBuckets, heapCapacity, 10);
+        StreamSummary streamSummary = new StreamSummary(BIGINT, maxBuckets, heapCapacity);
         int pos = 0;
         for (int i = 0; i < values.length; i++) {
             streamSummary.add(longsBlock, pos++, 1);
@@ -75,7 +75,7 @@ public class TestStreamSummary
     @Test
     public void testDeserialize()
     {
-        StreamSummary original = new StreamSummary(BIGINT, 3, 15, 10);
+        StreamSummary original = new StreamSummary(BIGINT, 3, 15);
         Long[] values = {1L, 1L, 2L, 3L, 4L};
         int pos = 0;
         Block longsBlock = createLongsBlock(values);
@@ -104,7 +104,7 @@ public class TestStreamSummary
             }
             Block longsBlock = createLongsBlock(values);
 
-            StreamSummary streamSummary = new StreamSummary(BIGINT, maxBuckets, heapCapacity, 10);
+            StreamSummary streamSummary = new StreamSummary(BIGINT, maxBuckets, heapCapacity);
             int pos = 0;
             for (int i = 0; i < values.length; i++) {
                 streamSummary.add(longsBlock, pos++, 1);
@@ -138,7 +138,7 @@ public class TestStreamSummary
                 18853L, 18853L, 17200L, 55624L, 55624L, 55624L, 17200L, 18853L, 17200L, 17200L, 18853L};
         Block longsBlock = createLongsBlock(values);
 
-        StreamSummary streamSummary = new StreamSummary(BIGINT, maxBuckets, heapCapacity, 10);
+        StreamSummary streamSummary = new StreamSummary(BIGINT, maxBuckets, heapCapacity);
         int pos = 0;
         for (int i = 0; i < values.length; i++) {
             streamSummary.add(longsBlock, pos++, 1);
@@ -180,7 +180,7 @@ public class TestStreamSummary
     public void testLongRoundtrip()
     {
         Block longsBlock = createLongsBlock(1L, 1L, 2L, 3L, 4L);
-        StreamSummary original = new StreamSummary(BIGINT, 3, 15, 10);
+        StreamSummary original = new StreamSummary(BIGINT, 3, 15);
         int pos = 0;
         original.add(longsBlock, pos++, 1);
         original.add(longsBlock, pos++, 1);
@@ -198,7 +198,7 @@ public class TestStreamSummary
     @Test
     public void testMerge()
     {
-        StreamSummary histogram1 = new StreamSummary(BIGINT, 3, 15, 10);
+        StreamSummary histogram1 = new StreamSummary(BIGINT, 3, 15);
         Long[] values = {1L, 1L, 2L};
         int pos = 0;
         Block longsBlock = createLongsBlock(values);
@@ -206,7 +206,7 @@ public class TestStreamSummary
             histogram1.add(longsBlock, pos++, 1);
         }
 
-        StreamSummary histogram2 = new StreamSummary(BIGINT, 3, 15, 10);
+        StreamSummary histogram2 = new StreamSummary(BIGINT, 3, 15);
         values = new Long[] {3L, 4L};
         pos = 0;
         longsBlock = createLongsBlock(values);

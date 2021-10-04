@@ -70,8 +70,6 @@ public final class ApproximateMostFrequent
     private static final MethodHandle OUTPUT_FUNCTION = methodHandle(ApproximateMostFrequent.class, "output", ApproximateMostFrequentState.class, BlockBuilder.class);
     private static final MethodHandle INPUT_FUNCTION = methodHandle(ApproximateMostFrequent.class, "input", Type.class, ApproximateMostFrequentState.class, long.class, Block.class, int.class, long.class);
     private static final MethodHandle COMBINE_FUNCTION = methodHandle(ApproximateMostFrequent.class, "combine", ApproximateMostFrequentState.class, ApproximateMostFrequentState.class);
-    //FIXME is this good enough?
-    public static final int EXPECTED_SIZE_FOR_HASHING = 10;
 
     protected ApproximateMostFrequent()
     {
@@ -86,7 +84,7 @@ public final class ApproximateMostFrequent
     public InternalAggregationFunction specialize(BoundVariables boundVariables, int arity, FunctionAndTypeManager functionAndTypeManager)
     {
         Type keyType = boundVariables.getTypeVariable("K");
-        Type serializedType = RowType.withDefaultFieldNames(ImmutableList.of(BigintType.BIGINT, BigintType.BIGINT, BigintType.BIGINT, new ArrayType(keyType), new ArrayType(BigintType.BIGINT)));
+        Type serializedType = RowType.withDefaultFieldNames(ImmutableList.of(BigintType.BIGINT, BigintType.BIGINT, new ArrayType(keyType), new ArrayType(BigintType.BIGINT)));
         Type outputType = functionAndTypeManager.getParameterizedType(StandardTypes.MAP, ImmutableList.of(
                 TypeSignatureParameter.of(keyType.getTypeSignature()),
                 TypeSignatureParameter.of(BigintType.BIGINT.getTypeSignature())));
@@ -140,8 +138,7 @@ public final class ApproximateMostFrequent
             streamSummary = new StreamSummary(
                     type,
                     toIntExact(buckets),
-                    toIntExact(capacity),
-                    EXPECTED_SIZE_FOR_HASHING);
+                    toIntExact(capacity));
             state.set(streamSummary);
         }
         streamSummary.add(valueBlock, valueIndex, 1L);

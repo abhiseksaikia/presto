@@ -31,7 +31,6 @@ public class StreamSummary
     private final Type type;
     private final int heapCapacity;
     private final int maxBuckets;
-    private final int expectedSizeInHash;
     private int maxFill;
     int insertOrder;
 
@@ -46,7 +45,9 @@ public class StreamSummary
      * min heap - values and indexes
      **/
     private BlockBuilder heapBlockBuilder;
+    //
     private static final int HEAP_BLOCK_POS_INDEX = 0;
+    //maintain hash in heap to delete from hashToBlockPosition when deleted from heap
     private static final int HEAP_HASH_POS_INDEX = 1;
     private static final int HEAP_BLOCK_INSERTION_INDEX = 2;
     //in heap index, we need to maintain the last insertion
@@ -62,13 +63,11 @@ public class StreamSummary
     public StreamSummary(
             Type type,
             int maxBuckets,
-            int heapCapacity,
-            int expectedSizeInHash) //TODO figure out what drives hashCapacity, can we use heapCapacity instead
+            int heapCapacity) //TODO figure out what drives hashCapacity, can we use heapCapacity instead
     {
         this.type = type;
         this.maxBuckets = maxBuckets;
         this.heapCapacity = heapCapacity;
-        this.expectedSizeInHash = expectedSizeInHash;
         this.blockPositionToCount = new LongBigArray();
         this.blockToHeapIndex = new IntBigArray();
         this.hashToBlockPosition = new IntBigArray(-1);
@@ -298,7 +297,6 @@ public class StreamSummary
     public void readAllValues(StreamSummaryReader reader)
     {
         int[][] sortedHeap = sortHeapByCountAndInsertPosition();
-
         for (int heapIndexPosition = 0; heapIndexPosition < positionCount; heapIndexPosition++) {
             long count = blockPositionToCount.get(sortedHeap[heapIndexPosition][HEAP_BLOCK_POS_INDEX]);
             reader.read(heapBlockBuilder, sortedHeap[heapIndexPosition][HEAP_BLOCK_POS_INDEX], count);
@@ -311,7 +309,6 @@ public class StreamSummary
         if (positionCount > 0) {
             BIGINT.writeLong(blockBuilder, maxBuckets);
             BIGINT.writeLong(blockBuilder, heapCapacity);
-            BIGINT.writeLong(blockBuilder, expectedSizeInHash);
             //this resolves the issue with select approx_most_frequent_improved(2,custkey,100) from tpch.sf1.orders where  custkey in (55624,17200,18853) to return save value as the algo returns int[][] copyOfHeap = sortHeapByInsertionPosition();
             int[][] sortedHeap = sortHeapByCountAndInsertPosition();
             BlockBuilder keyItems = blockBuilder.beginBlockEntry();
@@ -334,9 +331,8 @@ public class StreamSummary
         int currentPosition = 0;
         int maxBuckets = toIntExact(BIGINT.getLong(block, currentPosition++));
         int heapCapacity = toIntExact(BIGINT.getLong(block, currentPosition++));
-        int expectedHashSize = toIntExact(BIGINT.getLong(block, currentPosition++));
 
-        StreamSummary streamSummary = new StreamSummary(type, maxBuckets, heapCapacity, expectedHashSize);
+        StreamSummary streamSummary = new StreamSummary(type, maxBuckets, heapCapacity);
         Block keysBlock = new ArrayType(type).getObject(block, currentPosition++);
         Block valuesBlock = new ArrayType(BIGINT).getObject(block, currentPosition++);
 
