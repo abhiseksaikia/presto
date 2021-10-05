@@ -324,7 +324,8 @@ public class StreamSummary
     public void readAllValues(StreamSummaryReader reader)
     {
         int[][] sortedHeap = sortHeapByCountAndInsertPosition();
-        for (int heapIndexPosition = 0; heapIndexPosition < positionCount; heapIndexPosition++) {
+        int topKPosition = Math.min(maxBuckets, positionCount);
+        for (int heapIndexPosition = 0; heapIndexPosition < topKPosition; heapIndexPosition++) {
             long count = blockPositionToCount.get(hashToBlockPosition.get(sortedHeap[heapIndexPosition][HEAP_HASH_POS_INDEX]));
             reader.read(heapBlockBuilder, hashToBlockPosition.get(sortedHeap[heapIndexPosition][HEAP_HASH_POS_INDEX]), count);
         }
@@ -338,14 +339,15 @@ public class StreamSummary
             BIGINT.writeLong(blockBuilder, heapCapacity);
             //this resolves the issue with select approx_most_frequent_improved(2,custkey,100) from tpch.sf1.orders where  custkey in (55624,17200,18853) to return save value as the algo returns int[][] copyOfHeap = sortHeapByInsertionPosition();
             int[][] sortedHeap = sortHeapByCountAndInsertPosition();
+            int topKPosition = Math.min(maxBuckets, positionCount);
             BlockBuilder keyItems = blockBuilder.beginBlockEntry();
-            for (int position = 0; position < positionCount; position++) {
+            for (int position = 0; position < topKPosition; position++) {
                 type.appendTo(heapBlockBuilder, hashToBlockPosition.get(sortedHeap[position][HEAP_HASH_POS_INDEX]), keyItems);
             }
             blockBuilder.closeEntry();
 
             BlockBuilder valueItems = blockBuilder.beginBlockEntry();
-            for (int position = 0; position < positionCount; position++) {
+            for (int position = 0; position < topKPosition; position++) {
                 BIGINT.writeLong(valueItems, blockPositionToCount.get(hashToBlockPosition.get(sortedHeap[position][HEAP_HASH_POS_INDEX])));
             }
             blockBuilder.closeEntry();
