@@ -70,7 +70,7 @@ public class PriorityQueueWithIndexLookup<T>
                 break; // child is larger or equal
             }
             swap(position, smallerChildPosition);
-
+            heapDataChangeListener.positionChanged(minHeap[position], position);
             position = smallerChildPosition;
         }
         heapDataChangeListener.positionChanged(minHeap[position], position);
@@ -81,8 +81,6 @@ public class PriorityQueueWithIndexLookup<T>
         T swapTemp = minHeap[position];
         minHeap[position] = minHeap[smallerChildPosition];
         minHeap[smallerChildPosition] = swapTemp;
-        heapDataChangeListener.positionChanged(minHeap[smallerChildPosition], smallerChildPosition);
-        heapDataChangeListener.positionChanged(minHeap[position], position);
     }
 
     public void percolateUp(int position)
@@ -93,6 +91,7 @@ public class PriorityQueueWithIndexLookup<T>
                 break; // child is larger or equal
             }
             swap(position, parentPosition);
+            heapDataChangeListener.positionChanged(minHeap[position], position);
             position = parentPosition;
         }
         heapDataChangeListener.positionChanged(minHeap[position], position);
