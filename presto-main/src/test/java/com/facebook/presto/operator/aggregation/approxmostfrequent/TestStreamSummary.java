@@ -53,13 +53,13 @@ public class TestStreamSummary
         Block longsBlock = createLongsBlock(values);
         int maxBuckets = 3;
         int heapCapacity = 10;
-        StreamSummary streamSummary = new StreamSummary(BIGINT, maxBuckets, heapCapacity);
+        StreamSummary streamSummaryNew = new StreamSummary(BIGINT, maxBuckets, heapCapacity);
         int pos = 0;
         for (int i = 0; i < values.length; i++) {
-            streamSummary.add(longsBlock, pos++, 1);
+            streamSummaryNew.add(longsBlock, pos++, 1);
         }
 
-        Map<Long, Long> buckets = getMapForLongType(streamSummary);
+        Map<Long, Long> buckets = getMapForLongType(streamSummaryNew);
 
         ApproximateMostFrequentHistogram<Long> histogram = new ApproximateMostFrequentHistogram<Long>(maxBuckets, heapCapacity, LongApproximateMostFrequentStateSerializer::serializeBucket, LongApproximateMostFrequentStateSerializer::deserializeBucket);
         for (Long value : values) {
@@ -94,23 +94,23 @@ public class TestStreamSummary
     @Test
     public void testComparison()
     {
-        for (int test = 0; test < 10; test++) {
+        for (int test = 0; test < 50; test++) {
             int totalValues = 729413;
-            int maxBuckets = 3; //ThreadLocalRandom.current().nextInt(1, 10);
-            int heapCapacity = 100; //ThreadLocalRandom.current().nextInt(10, 20);
+            int maxBuckets = ThreadLocalRandom.current().nextInt(1, 10);
+            int heapCapacity = ThreadLocalRandom.current().nextInt(10, 100);
             Long[] values = new Long[totalValues];
             for (int i = 0; i < totalValues; i++) {
                 values[i] = Long.valueOf(ThreadLocalRandom.current().nextInt(1, 1000));
             }
             Block longsBlock = createLongsBlock(values);
 
-            StreamSummary streamSummary = new StreamSummary(BIGINT, maxBuckets, heapCapacity);
+            StreamSummary streamSummaryNew = new StreamSummary(BIGINT, maxBuckets, heapCapacity);
             int pos = 0;
             for (int i = 0; i < values.length; i++) {
-                streamSummary.add(longsBlock, pos++, 1);
+                streamSummaryNew.add(longsBlock, pos++, 1);
             }
 
-            Map<Long, Long> buckets = getMapForLongType(streamSummary);
+            Map<Long, Long> buckets = getMapForLongType(streamSummaryNew);
 
             ApproximateMostFrequentHistogram<Long> histogram = new ApproximateMostFrequentHistogram<Long>(maxBuckets, heapCapacity, LongApproximateMostFrequentStateSerializer::serializeBucket, LongApproximateMostFrequentStateSerializer::deserializeBucket);
             for (Long value : values) {
@@ -138,13 +138,13 @@ public class TestStreamSummary
                 18853L, 18853L, 17200L, 55624L, 55624L, 55624L, 17200L, 18853L, 17200L, 17200L, 18853L};
         Block longsBlock = createLongsBlock(values);
 
-        StreamSummary streamSummary = new StreamSummary(BIGINT, maxBuckets, heapCapacity);
+        StreamSummary streamSummaryNew = new StreamSummary(BIGINT, maxBuckets, heapCapacity);
         int pos = 0;
         for (int i = 0; i < values.length; i++) {
-            streamSummary.add(longsBlock, pos++, 1);
+            streamSummaryNew.add(longsBlock, pos++, 1);
         }
 
-        Map<Long, Long> buckets = getMapForLongType(streamSummary);
+        Map<Long, Long> buckets = getMapForLongType(streamSummaryNew);
 
         ApproximateMostFrequentHistogram<Long> histogram = new ApproximateMostFrequentHistogram<Long>(maxBuckets, heapCapacity, LongApproximateMostFrequentStateSerializer::serializeBucket, LongApproximateMostFrequentStateSerializer::deserializeBucket);
         for (Long value : values) {
