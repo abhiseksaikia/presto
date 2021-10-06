@@ -27,7 +27,7 @@ public class StreamSummary
     private static final float FILL_RATIO = 0.75f;
     //1 for testing, use 3
     private static final int COMPACT_THRESHOLD_RATIO = 3; // when 2/3 of elements in heapBlockBuilder is unreferenced, do compact
-    public static final int DELETE_MARKER = -1;
+    private static final int EMPTY_SLOT = -1;
     private final Type type;
     private final int heapCapacity;
     private final int maxBuckets;
@@ -60,7 +60,7 @@ public class StreamSummary
         this.heapCapacity = heapCapacity;
         this.blockPositionToCount = new LongBigArray();
         this.blockToHeapIndex = new IntBigArray();
-        this.hashToBlockPosition = new IntBigArray(-1);
+        this.hashToBlockPosition = new IntBigArray(EMPTY_SLOT);
         this.hashCapacity = arraySize(heapCapacity, FILL_RATIO);
         this.hashToBlockPosition.ensureCapacity(hashCapacity);
         this.heapBlockBuilder = type.createBlockBuilder(null, heapCapacity);
@@ -78,7 +78,7 @@ public class StreamSummary
         // look for empty slot or slot containing this key
         while (true) {
             int bucketPosition = hashToBlockPosition.get(hashPosition);
-            if (bucketPosition == -1) {
+            if (bucketPosition == EMPTY_SLOT) {
                 break;
             }
             //if its occupied by old deleted block, dont consider it a match
@@ -101,7 +101,6 @@ public class StreamSummary
     {
         int newElementBlockPosition = heapBlockBuilder.getPositionCount();
         if (minHeap.isFull()) {
-            System.out.println("heap is full, remove min and reuse count");
             //replace min
             HeapEntry min = minHeap.getMin();
             int removedBlock = min.getBlockPosition();
@@ -120,44 +119,13 @@ public class StreamSummary
             minHeap.add(new HeapEntry(newElementBlockPosition, insertOrder++));
             type.appendTo(block, blockPosition, heapBlockBuilder);
         }
-        System.out.println("Incoming element -> " + block.getLong(blockPosition));
         compactAndRehashIfNeeded();
-        printHeap("Heap:");
     }
 
     private void handleDelete(int removedBlock)
     {
         blockPositionToCount.set(removedBlock, 0);
-        blockToHeapIndex.set(removedBlock, -1);
-    }
-
-    private void printHeap(String message)
-    {
-        System.out.println(message + "--->");
-        StringBuilder sb = new StringBuilder();
-        int max = 0;
-        for (int i = 0; i < minHeap.getSize(); i++) {
-            for (int j = 0; j < Math.pow(2, i) && j + Math.pow(2, i) <= minHeap.getSize(); j++) {
-                if (j > max) {
-                    max = j;
-                }
-            }
-        }
-
-        for (int i = 0; i < minHeap.getSize(); i++) {
-            for (int j = 0; j < Math.pow(2, i) && j + Math.pow(2, i) <= minHeap.getSize(); j++) {
-                for (int k = 0; (k < max / ((int) Math.pow(2, i))); k++) {
-                    sb.append(" ");
-                }
-                HeapEntry heapEntry = minHeap.get(j + (int) Math.pow(2, i) - 1);
-                long heapDataValue = heapBlockBuilder.getLong(heapEntry.getBlockPosition());
-                long count = blockPositionToCount.get(heapEntry.getBlockPosition());
-                sb.append(heapDataValue + "(count:" + count + "gen:" + heapEntry.getGeneration() + ")" + " ");
-            }
-            sb.append("\n");
-        }
-
-        System.out.println(sb.toString());
+        blockToHeapIndex.set(removedBlock, EMPTY_SLOT);
     }
 
     private void compactAndRehashIfNeeded()
@@ -213,7 +181,7 @@ public class StreamSummary
         }
         int newCapacity = (int) newCapacityLong;
         int newMask = newCapacity - 1;
-        IntBigArray newHashToBlockPosition = new IntBigArray(-1);
+        IntBigArray newHashToBlockPosition = new IntBigArray(EMPTY_SLOT);
         newHashToBlockPosition.ensureCapacity(newCapacity);
 
         for (int heapPosition = 0; heapPosition < minHeap.getSize(); heapPosition++) {
@@ -221,7 +189,7 @@ public class StreamSummary
             // find an empty slot for the address
             int hashPosition = getBucketId(TypeUtils.hashPosition(type, heapBlockBuilder, blockPosition), newMask);
 
-            while (newHashToBlockPosition.get(hashPosition) != -1) {
+            while (newHashToBlockPosition.get(hashPosition) != EMPTY_SLOT) {
                 hashPosition = (hashPosition + 1) & newMask;
             }
 

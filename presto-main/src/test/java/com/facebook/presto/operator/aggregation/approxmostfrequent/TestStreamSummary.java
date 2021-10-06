@@ -271,16 +271,16 @@ public class TestStreamSummary
             }
 
             Map<Long, Long> oldBuckets = histogram.getBuckets();
-            System.out.println("totalValues =" + totalValues + "maxBuckets" + maxBuckets + "heapCapacity=" + heapCapacity);
+            //System.out.println("totalValues =" + totalValues + "maxBuckets" + maxBuckets + "heapCapacity=" + heapCapacity);
 
             assertEquals(buckets.size(), oldBuckets.size());
-            if (!buckets.equals(oldBuckets)) {
+            /*if (!buckets.equals(oldBuckets)) {
                 System.out.println("\n");
                 Arrays.stream(values).forEach(i -> System.out.print(i + "L,"));
                 System.out.println("\n");
-            }
+            }*/
             assertEquals(buckets, oldBuckets);
-            System.out.println("totalValues =" + totalValues + "maxBuckets" + maxBuckets + "heapCapacity=" + heapCapacity);
+            //System.out.println("totalValues =" + totalValues + "maxBuckets" + maxBuckets + "heapCapacity=" + heapCapacity);
         }
     }
 
