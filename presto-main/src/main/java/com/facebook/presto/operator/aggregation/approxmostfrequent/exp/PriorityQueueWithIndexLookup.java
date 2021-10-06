@@ -1,27 +1,30 @@
-package com.facebook.presto.operator.aggregation.approxmostfrequent.exp.pq;
+package com.facebook.presto.operator.aggregation.approxmostfrequent.exp;
 
 import com.google.common.collect.ImmutableList;
+import org.openjdk.jol.info.ClassLayout;
 
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 
+import static io.airlift.slice.SizeOf.sizeOf;
+
 public class PriorityQueueWithIndexLookup<T>
 {
+    private static final int INSTANCE_SIZE = ClassLayout.parseClass(StreamSummary.class).instanceSize();
     public static final int MIN_POSITION = 0;
     private final T[] minHeap;
     private final int heapCapacity;
     private final HeapDataChangeListener heapDataChangeListener;
-    private Comparator<T> comparator;
+    private Comparator<T> heapDataComparator;
     private int positionCount;
 
-    public PriorityQueueWithIndexLookup(int heapCapacity, Comparator<T> comparator, HeapDataChangeListener heapDataChangeListener)
+    public PriorityQueueWithIndexLookup(int heapCapacity, Comparator<T> heapDataComparator, HeapDataChangeListener heapDataChangeListener)
     {
         this.minHeap = (T[]) new Object[heapCapacity];
         this.heapCapacity = heapCapacity;
         this.heapDataChangeListener = heapDataChangeListener;
-        this.comparator = comparator;
+        this.heapDataComparator = heapDataComparator;
     }
 
     public boolean isFull()
@@ -53,24 +56,21 @@ public class PriorityQueueWithIndexLookup<T>
 
     public void percolateDown(int position)
     {
-        while (true) {
-            int leftPosition = position * 2 + 1;
-            if (leftPosition >= positionCount) {
-                break;
-            }
+        int leftPosition;
+        while ((leftPosition = position * 2 + 1) < positionCount) {
             int rightPosition = leftPosition + 1;
             int smallerChildPosition;
             if (rightPosition >= positionCount) {
                 smallerChildPosition = leftPosition;
             }
             else {
-                smallerChildPosition = comparator.compare(minHeap[leftPosition], minHeap[rightPosition]) >= 0 ? rightPosition : leftPosition;
+                smallerChildPosition = heapDataComparator.compare(minHeap[leftPosition], minHeap[rightPosition]) >= 0 ? rightPosition : leftPosition;
             }
-            if (comparator.compare(minHeap[smallerChildPosition], minHeap[position]) >= 0) {
+            if (heapDataComparator.compare(minHeap[smallerChildPosition], minHeap[position]) >= 0) {
                 break; // child is larger or equal
             }
             swap(position, smallerChildPosition);
-            heapDataChangeListener.positionChanged(minHeap[position], position);
+
             position = smallerChildPosition;
         }
         heapDataChangeListener.positionChanged(minHeap[position], position);
@@ -81,26 +81,21 @@ public class PriorityQueueWithIndexLookup<T>
         T swapTemp = minHeap[position];
         minHeap[position] = minHeap[smallerChildPosition];
         minHeap[smallerChildPosition] = swapTemp;
+        heapDataChangeListener.positionChanged(minHeap[smallerChildPosition], smallerChildPosition);
+        heapDataChangeListener.positionChanged(minHeap[position], position);
     }
 
     public void percolateUp(int position)
     {
-        //int position = positionCount - 1;
         while (position != 0) {
             int parentPosition = (position - 1) / 2;
-            if (comparator.compare(minHeap[position], minHeap[parentPosition]) >= 0) {
+            if (heapDataComparator.compare(minHeap[position], minHeap[parentPosition]) >= 0) {
                 break; // child is larger or equal
             }
             swap(position, parentPosition);
-            heapDataChangeListener.positionChanged(minHeap[position], position);
             position = parentPosition;
         }
         heapDataChangeListener.positionChanged(minHeap[position], position);
-    }
-
-    public int estimatedInMemorySize()
-    {
-        return 0;
     }
 
     public int getSize()
@@ -119,13 +114,8 @@ public class PriorityQueueWithIndexLookup<T>
         return builder.build();
     }
 
-    public List<T> getData()
+    public long estimatedInMemorySize()
     {
-        List<T> copy = new ArrayList<>();
-
-        for (int i = 0; i < positionCount; i++) {
-            copy.add(minHeap[i]);
-        }
-        return copy;
+        return INSTANCE_SIZE + sizeOf(minHeap);
     }
 }

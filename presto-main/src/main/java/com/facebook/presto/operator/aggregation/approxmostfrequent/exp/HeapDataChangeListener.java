@@ -1,4 +1,4 @@
-package com.facebook.presto.operator.aggregation.approxmostfrequent.exp.pq;
+package com.facebook.presto.operator.aggregation.approxmostfrequent.exp;
 
 public interface HeapDataChangeListener<T>
 {

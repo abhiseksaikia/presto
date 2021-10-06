@@ -15,6 +15,7 @@ import io.airlift.slice.Slice;
 import io.airlift.slice.Slices;
 import org.testng.annotations.Test;
 
+import java.util.Arrays;
 import java.util.Map;
 import java.util.concurrent.ThreadLocalRandom;
 
@@ -41,6 +42,118 @@ public class TestStreamSummary
         Map<Long, Long> buckets = getMapForLongType(histogram);
         assertEquals(buckets.size(), 3);
         assertEquals(buckets, ImmutableMap.of(1L, 2L, 2L, 1L, 3L, 1L));
+    }
+
+    @Test
+    public void testLongHistogramRehashError()
+    {
+        //Long[] values = {2L, 1L, 1L, 2L};
+        //Long[] values = {14L, 14L, 11L, 13L, 13L, 13L, 14L, 14L}; //->failed
+        Long[] values = {37L, 41L, 80L, 99L, 14L, 57L, 69L, 69L, 65L, 45L};
+        Block longsBlock = createLongsBlock(values);
+        int maxBuckets = 2;
+        int heapCapacity = 4;
+        StreamSummary streamSummaryNew = new StreamSummary(BIGINT, maxBuckets, heapCapacity);
+        int pos = 0;
+        for (int i = 0; i < values.length; i++) {
+            streamSummaryNew.add(longsBlock, pos++, 1);
+        }
+
+        Map<Long, Long> buckets = getMapForLongType(streamSummaryNew);
+
+        ApproximateMostFrequentHistogram<Long> histogram = new ApproximateMostFrequentHistogram<Long>(maxBuckets, heapCapacity, LongApproximateMostFrequentStateSerializer::serializeBucket, LongApproximateMostFrequentStateSerializer::deserializeBucket);
+        for (Long value : values) {
+            histogram.add(value);
+        }
+
+        Map<Long, Long> oldBuckets = histogram.getBuckets();
+
+        assertEquals(buckets.size(), oldBuckets.size());
+        assertEquals(buckets, oldBuckets);
+    }
+
+    @Test
+    public void testLongHistogramRehashError2()
+    {
+        //Long[] values = {2L, 1L, 1L, 2L};
+        //Long[] values = {14L, 14L, 11L, 13L, 13L, 13L, 14L, 14L}; //->failed
+        Long[] values = {89L, 98L, 52L, 66L, 32L, 68L, 89L, 8L, 67L, 80L};
+        Block longsBlock = createLongsBlock(values);
+        int maxBuckets = 2;
+        int heapCapacity = 3;
+        StreamSummary streamSummaryNew = new StreamSummary(BIGINT, maxBuckets, heapCapacity);
+        int pos = 0;
+        for (int i = 0; i < values.length; i++) {
+            streamSummaryNew.add(longsBlock, pos++, 1);
+        }
+
+        Map<Long, Long> buckets = getMapForLongType(streamSummaryNew);
+
+        ApproximateMostFrequentHistogram<Long> histogram = new ApproximateMostFrequentHistogram<Long>(maxBuckets, heapCapacity, LongApproximateMostFrequentStateSerializer::serializeBucket, LongApproximateMostFrequentStateSerializer::deserializeBucket);
+        for (Long value : values) {
+            histogram.add(value);
+        }
+
+        Map<Long, Long> oldBuckets = histogram.getBuckets();
+
+        assertEquals(buckets.size(), oldBuckets.size());
+        assertEquals(buckets, oldBuckets);
+    }
+
+    @Test
+    public void testLongHistogramRehashError3()
+    {
+        //Long[] values = {2L, 1L, 1L, 2L};
+        //Long[] values = {14L, 14L, 11L, 13L, 13L, 13L, 14L, 14L}; //->failed
+        Long[] values = {64L, 56L, 87L, 15L, 24L, 12L, 22L, 12L, 62L, 79L};
+        Block longsBlock = createLongsBlock(values);
+        int maxBuckets = 2;
+        int heapCapacity = 3;
+        StreamSummary streamSummaryNew = new StreamSummary(BIGINT, maxBuckets, heapCapacity);
+        int pos = 0;
+        for (int i = 0; i < values.length; i++) {
+            streamSummaryNew.add(longsBlock, pos++, 1);
+        }
+
+        Map<Long, Long> buckets = getMapForLongType(streamSummaryNew);
+
+        ApproximateMostFrequentHistogram<Long> histogram = new ApproximateMostFrequentHistogram<Long>(maxBuckets, heapCapacity, LongApproximateMostFrequentStateSerializer::serializeBucket, LongApproximateMostFrequentStateSerializer::deserializeBucket);
+        for (Long value : values) {
+            histogram.add(value);
+        }
+
+        Map<Long, Long> oldBuckets = histogram.getBuckets();
+
+        assertEquals(buckets.size(), oldBuckets.size());
+        assertEquals(buckets, oldBuckets);
+    }
+
+    @Test
+    public void testLongHistogramRehashError4()
+    {
+        //Long[] values = {2L, 1L, 1L, 2L};
+        //Long[] values = {14L, 14L, 11L, 13L, 13L, 13L, 14L, 14L}; //->failed
+        Long[] values = {80L, 54L, 32L, 4L, 67L, 68L, 68L, 15L, 38L, 30L};
+        Block longsBlock = createLongsBlock(values);
+        int maxBuckets = 2;
+        int heapCapacity = 4;
+        StreamSummary streamSummaryNew = new StreamSummary(BIGINT, maxBuckets, heapCapacity);
+        int pos = 0;
+        for (int i = 0; i < values.length; i++) {
+            streamSummaryNew.add(longsBlock, pos++, 1);
+        }
+
+        Map<Long, Long> buckets = getMapForLongType(streamSummaryNew);
+
+        ApproximateMostFrequentHistogram<Long> histogram = new ApproximateMostFrequentHistogram<Long>(maxBuckets, heapCapacity, LongApproximateMostFrequentStateSerializer::serializeBucket, LongApproximateMostFrequentStateSerializer::deserializeBucket);
+        for (Long value : values) {
+            histogram.add(value);
+        }
+
+        Map<Long, Long> oldBuckets = histogram.getBuckets();
+
+        assertEquals(buckets.size(), oldBuckets.size());
+        assertEquals(buckets, oldBuckets);
     }
 
     @Test
@@ -94,10 +207,50 @@ public class TestStreamSummary
     @Test
     public void testComparison()
     {
+        for (int test = 0; test < 100; test++) {
+            int totalValues = 10;
+            int maxBuckets = ThreadLocalRandom.current().nextInt(2, 3);
+            int heapCapacity = ThreadLocalRandom.current().nextInt(2, 5);
+            Long[] values = new Long[totalValues];
+            for (int i = 0; i < totalValues; i++) {
+                values[i] = Long.valueOf(ThreadLocalRandom.current().nextInt(1, 100));
+            }
+            Block longsBlock = createLongsBlock(values);
+
+            StreamSummary streamSummaryNew = new StreamSummary(BIGINT, maxBuckets, heapCapacity);
+            int pos = 0;
+            for (int i = 0; i < values.length; i++) {
+                streamSummaryNew.add(longsBlock, pos++, 1);
+            }
+
+            Map<Long, Long> buckets = getMapForLongType(streamSummaryNew);
+
+            ApproximateMostFrequentHistogram<Long> histogram = new ApproximateMostFrequentHistogram<Long>(maxBuckets, heapCapacity, LongApproximateMostFrequentStateSerializer::serializeBucket, LongApproximateMostFrequentStateSerializer::deserializeBucket);
+            for (Long value : values) {
+                histogram.add(value);
+            }
+
+            Map<Long, Long> oldBuckets = histogram.getBuckets();
+            System.out.println("totalValues =" + totalValues + "maxBuckets" + maxBuckets + "heapCapacity=" + heapCapacity);
+
+            assertEquals(buckets.size(), oldBuckets.size());
+            if (!buckets.equals(oldBuckets)) {
+                System.out.println("\n");
+                Arrays.stream(values).forEach(i -> System.out.print(i + "L,"));
+                System.out.println("\n");
+            }
+            assertEquals(buckets, oldBuckets);
+            System.out.println("totalValues =" + totalValues + "maxBuckets" + maxBuckets + "heapCapacity=" + heapCapacity);
+        }
+    }
+
+    @Test
+    public void testComparisonBig()
+    {
         for (int test = 0; test < 50; test++) {
-            int totalValues = 729413;
-            int maxBuckets = ThreadLocalRandom.current().nextInt(1, 10);
-            int heapCapacity = ThreadLocalRandom.current().nextInt(10, 100);
+            int totalValues = 50000;
+            int maxBuckets = ThreadLocalRandom.current().nextInt(2, 20);
+            int heapCapacity = ThreadLocalRandom.current().nextInt(2, 100);
             Long[] values = new Long[totalValues];
             for (int i = 0; i < totalValues; i++) {
                 values[i] = Long.valueOf(ThreadLocalRandom.current().nextInt(1, 1000));
@@ -118,11 +271,16 @@ public class TestStreamSummary
             }
 
             Map<Long, Long> oldBuckets = histogram.getBuckets();
+            System.out.println("totalValues =" + totalValues + "maxBuckets" + maxBuckets + "heapCapacity=" + heapCapacity);
 
             assertEquals(buckets.size(), oldBuckets.size());
+            if (!buckets.equals(oldBuckets)) {
+                System.out.println("\n");
+                Arrays.stream(values).forEach(i -> System.out.print(i + "L,"));
+                System.out.println("\n");
+            }
             assertEquals(buckets, oldBuckets);
             System.out.println("totalValues =" + totalValues + "maxBuckets" + maxBuckets + "heapCapacity=" + heapCapacity);
-            System.out.println("values = " + values);
         }
     }
 
