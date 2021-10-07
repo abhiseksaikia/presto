@@ -1,3 +1,16 @@
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.facebook.presto.operator.aggregation.approxmostfrequent.exp;
 
 import com.facebook.presto.array.IntBigArray;
@@ -23,11 +36,12 @@ public class StreamSummary
         implements HeapDataChangeListener<HeapEntry>
 {
     private static final int INSTANCE_SIZE = ClassLayout.parseClass(StreamSummary.class).instanceSize();
-    private static final int COMPACT_THRESHOLD_BYTES = 10; //32768; // using 100 for test to reach early 32768;
+    private static final int COMPACT_THRESHOLD_BYTES = 32768; //32768; // using 100 for test to reach early 32768;
     private static final float FILL_RATIO = 0.75f;
     //1 for testing, use 3
     private static final int COMPACT_THRESHOLD_RATIO = 3; // when 2/3 of elements in heapBlockBuilder is unreferenced, do compact
     private static final int EMPTY_SLOT = -1;
+    private static final int DELETE_MARKER = -2;
     private final Type type;
     private final int heapCapacity;
     private final int maxBuckets;
@@ -64,8 +78,7 @@ public class StreamSummary
         this.hashCapacity = arraySize(heapCapacity, FILL_RATIO);
         this.hashToBlockPosition.ensureCapacity(hashCapacity);
         this.heapBlockBuilder = type.createBlockBuilder(null, heapCapacity);
-
-        this.minHeap = new PriorityQueueWithIndexLookup<HeapEntry>(heapCapacity, (o1, o2) -> compare(o1, o2), this);
+        this.minHeap = new PriorityQueueWithIndexLookup<>(heapCapacity, (heapEntry1, heapEntry2) -> compare(heapEntry1, heapEntry2), this);
         this.mask = hashCapacity - 1;
         this.maxFill = calculateMaxFill(hashCapacity);
         this.blockPositionToCount.ensureCapacity(hashCapacity);
@@ -81,8 +94,7 @@ public class StreamSummary
             if (bucketPosition == EMPTY_SLOT) {
                 break;
             }
-            //if its occupied by old deleted block, dont consider it a match
-            if (blockPositionToCount.get(bucketPosition) != 0 && type.equalTo(block, blockPosition, heapBlockBuilder, bucketPosition)) {
+            if (bucketPosition != DELETE_MARKER && type.equalTo(block, blockPosition, heapBlockBuilder, bucketPosition)) {
                 blockPositionToCount.add(bucketPosition, incrementCount);
                 int heapIndex = blockToHeapIndex.get(bucketPosition);
                 minHeap.get(heapIndex).setGeneration(insertOrder++);
@@ -103,29 +115,30 @@ public class StreamSummary
         if (minHeap.isFull()) {
             //replace min
             HeapEntry min = minHeap.getMin();
-            int removedBlock = min.getBlockPosition();
+            int removedBlock = getBlockPosition(min);
             long minCount = blockPositionToCount.get(removedBlock);
-            handleDelete(removedBlock);
+            handleDelete(removedBlock, min.getHashPosition());
 
             hashToBlockPosition.set(hashPosition, newElementBlockPosition);
             blockPositionToCount.set(newElementBlockPosition, minCount + incrementCount);
-            minHeap.replaceMin(new HeapEntry(newElementBlockPosition, insertOrder++));
+            minHeap.replaceMin(new HeapEntry(hashPosition, insertOrder++));
 
             type.appendTo(block, blockPosition, heapBlockBuilder);
         }
         else {
             hashToBlockPosition.set(hashPosition, newElementBlockPosition);
             blockPositionToCount.set(newElementBlockPosition, incrementCount);
-            minHeap.add(new HeapEntry(newElementBlockPosition, insertOrder++));
+            minHeap.add(new HeapEntry(hashPosition, insertOrder++));
             type.appendTo(block, blockPosition, heapBlockBuilder);
         }
         compactAndRehashIfNeeded();
     }
 
-    private void handleDelete(int removedBlock)
+    private void handleDelete(int removedBlock, int removedHashPosition)
     {
         blockPositionToCount.set(removedBlock, 0);
         blockToHeapIndex.set(removedBlock, EMPTY_SLOT);
+        hashToBlockPosition.set(removedHashPosition, DELETE_MARKER);
     }
 
     private void compactAndRehashIfNeeded()
@@ -157,7 +170,7 @@ public class StreamSummary
             //append data from heapIndex[heapPosition][HEAP_BLOCK_POS] to newHeapBlockBuilder
             int newBlockPos = newHeapBlockBuilder.getPositionCount();
             HeapEntry heapEntry = minHeap.get(heapPosition);
-            int oldBlockPosition = heapEntry.getBlockPosition();
+            int oldBlockPosition = getBlockPosition(heapEntry);
             //insert positon in the blocks could be 1-->120--->100, we need to start insert pos
             type.appendTo(heapBlockBuilder, oldBlockPosition, newHeapBlockBuilder);
             //minHeap[heapPosition][HEAP_BLOCK_POS_INDEX] = newBlockPos;
@@ -165,7 +178,7 @@ public class StreamSummary
             //how to compact the insert position?
             newBlockPositionToCount.set(newBlockPos, blockPositionToCount.get(oldBlockPosition));
             newBlockToHeapIndex.set(newBlockPos, heapPosition);
-            heapEntry.setBlockPosition(newBlockPos);
+            hashToBlockPosition.set(heapEntry.getHashPosition(), newBlockPos);
         }
         blockPositionToCount = newBlockPositionToCount;
         heapBlockBuilder = newHeapBlockBuilder;
@@ -185,7 +198,8 @@ public class StreamSummary
         newHashToBlockPosition.ensureCapacity(newCapacity);
 
         for (int heapPosition = 0; heapPosition < minHeap.getSize(); heapPosition++) {
-            int blockPosition = minHeap.get(heapPosition).getBlockPosition();
+            HeapEntry heapEntry = minHeap.get(heapPosition);
+            int blockPosition = getBlockPosition(heapEntry);
             // find an empty slot for the address
             int hashPosition = getBucketId(TypeUtils.hashPosition(type, heapBlockBuilder, blockPosition), newMask);
 
@@ -195,6 +209,7 @@ public class StreamSummary
 
             // record the mapping
             newHashToBlockPosition.set(hashPosition, blockPosition);
+            heapEntry.setHashPosition(hashPosition);
         }
         hashCapacity = newCapacity;
         mask = newMask;
@@ -207,12 +222,22 @@ public class StreamSummary
     private int compare(HeapEntry heapValue1, HeapEntry heapValue2)
     {
         int compare = Long.compare(
-                blockPositionToCount.get(heapValue1.getBlockPosition()),
-                blockPositionToCount.get(heapValue2.getBlockPosition()));
+                getCount(heapValue1),
+                getCount(heapValue2));
         if (compare == 0) {
             compare = Long.compare(heapValue1.getGeneration(), heapValue2.getGeneration());
         }
         return compare;
+    }
+
+    private long getCount(HeapEntry heapEntry)
+    {
+        return blockPositionToCount.get(getBlockPosition(heapEntry));
+    }
+
+    private int getBlockPosition(HeapEntry heapEntry)
+    {
+        return hashToBlockPosition.get(heapEntry.getHashPosition());
     }
 
     private static int getBucketId(long rawHash, int mask)
@@ -227,9 +252,8 @@ public class StreamSummary
         //write data and count to output
         BlockBuilder valueBuilder = out.beginBlockEntry();
         for (HeapEntry heapEntry : sortedHeapEntries) {
-            long count = blockPositionToCount.get(heapEntry.getBlockPosition());
-            type.appendTo(heapBlockBuilder, heapEntry.getBlockPosition(), valueBuilder);
-            BIGINT.writeLong(valueBuilder, count);
+            type.appendTo(heapBlockBuilder, getBlockPosition(heapEntry), valueBuilder);
+            BIGINT.writeLong(valueBuilder, getCount(heapEntry));
         }
         out.closeEntry();
     }
@@ -238,8 +262,8 @@ public class StreamSummary
     {
         List<HeapEntry> sortedHeapEntries = minHeap.topK(maxBuckets, (a, b) -> {
             int compare = Long.compare(
-                    blockPositionToCount.get(b.getBlockPosition()),
-                    blockPositionToCount.get(a.getBlockPosition()));
+                    getCount(b),
+                    getCount(a));
             if (compare == 0) {
                 return Integer.compare(a.getGeneration(), b.getGeneration());
             }
@@ -257,8 +281,7 @@ public class StreamSummary
     {
         List<HeapEntry> heapEntries = getTopHeapEntries();
         for (HeapEntry heapEntry : heapEntries) {
-            long count = blockPositionToCount.get(heapEntry.getBlockPosition());
-            reader.read(heapBlockBuilder, heapEntry.getBlockPosition(), count);
+            reader.read(heapBlockBuilder, getBlockPosition(heapEntry), getCount(heapEntry));
         }
     }
 
@@ -273,13 +296,13 @@ public class StreamSummary
             int topKPosition = Math.min(maxBuckets, minHeap.getSize());
             BlockBuilder keyItems = blockBuilder.beginBlockEntry();
             for (HeapEntry heapEntry : sortedHeap) {
-                type.appendTo(heapBlockBuilder, heapEntry.getBlockPosition(), keyItems);
+                type.appendTo(heapBlockBuilder, getBlockPosition(heapEntry), keyItems);
             }
             blockBuilder.closeEntry();
 
             BlockBuilder valueItems = blockBuilder.beginBlockEntry();
             for (HeapEntry heapEntry : sortedHeap) {
-                BIGINT.writeLong(valueItems, blockPositionToCount.get(heapEntry.getBlockPosition()));
+                BIGINT.writeLong(valueItems, getCount(heapEntry));
             }
             blockBuilder.closeEntry();
         }
@@ -322,6 +345,6 @@ public class StreamSummary
     @Override
     public void positionChanged(HeapEntry heapEntry, int index)
     {
-        blockToHeapIndex.set(heapEntry.getBlockPosition(), index);
+        blockToHeapIndex.set(getBlockPosition(heapEntry), index);
     }
 }

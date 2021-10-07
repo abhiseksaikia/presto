@@ -79,7 +79,6 @@ import com.facebook.presto.operator.aggregation.SumDataSizeForStats;
 import com.facebook.presto.operator.aggregation.VarianceAggregation;
 import com.facebook.presto.operator.aggregation.approxmostfrequent.BigintApproximateMostFrequent;
 import com.facebook.presto.operator.aggregation.approxmostfrequent.VarcharApproximateMostFrequent;
-import com.facebook.presto.operator.aggregation.approxmostfrequent.exp.ApproximateMostFrequent;
 import com.facebook.presto.operator.aggregation.arrayagg.ArrayAggregationFunction;
 import com.facebook.presto.operator.aggregation.differentialentropy.DifferentialEntropyAggregation;
 import com.facebook.presto.operator.aggregation.histogram.Histogram;
