@@ -38,7 +38,6 @@ public class StreamSummary
     private static final int INSTANCE_SIZE = ClassLayout.parseClass(StreamSummary.class).instanceSize();
     private static final int COMPACT_THRESHOLD_BYTES = 32768; //32768; // using 100 for test to reach early 32768;
     private static final float FILL_RATIO = 0.75f;
-    //1 for testing, use 3
     private static final int COMPACT_THRESHOLD_RATIO = 3; // when 2/3 of elements in heapBlockBuilder is unreferenced, do compact
     private static final int EMPTY_SLOT = -1;
     private static final int DELETE_MARKER = -2;

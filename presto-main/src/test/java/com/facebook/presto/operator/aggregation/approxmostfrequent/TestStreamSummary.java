@@ -220,6 +220,10 @@ public class TestStreamSummary
     @Test
     public void testComparison()
     {
+        /**
+         * 45L,16L,27L,77L,43L,24L,3L,22L,76L,32L,
+         *
+         */
         for (int test = 0; test < 100; test++) {
             int totalValues = 10;
             int maxBuckets = ThreadLocalRandom.current().nextInt(2, 3);
@@ -301,12 +305,10 @@ public class TestStreamSummary
     public void testComparisonFailedCase()
     {
         int maxBuckets = 2; //ThreadLocalRandom.current().nextInt(1, 10);
-        int heapCapacity = 100; //ThreadLocalRandom.current().nextInt(10, 20);
-
-        Long[] values = {17200L, 18853L, 55624L, 55624L, 18853L, 55624L, 55624L, 18853L, 18853L, 18853L, 17200L, 18853L, 18853L, 55624L, 55624L, 55624L, 17200L, 55624L, 18853L,
-                55624L, 17200L, 18853L, 18853L, 17200L, 17200L, 17200L, 18853L, 55624L, 17200L, 18853L, 17200L, 17200L, 17200L, 55624L, 18853L, 17200L, 17200L, 17200L, 55624L,
-                17200L, 55624L, 55624L, 17200L, 17200L, 55624L, 18853L, 18853L, 17200L, 17200L, 17200L, 17200L, 55624L, 55624L, 18853L, 17200L, 18853L, 18853L, 55624L, 55624L,
-                18853L, 18853L, 17200L, 55624L, 55624L, 55624L, 17200L, 18853L, 17200L, 17200L, 18853L};
+        int heapCapacity = 3; //ThreadLocalRandom.current().nextInt(10, 20);
+        //if heapify based on min as new generation, then this will result in wrong value
+        Long[] values = {29L, 51L, 84L, 60L, 32L, 54L, 82L, 30L, 53L, 57L};
+        //result : 57->4 , 30->3
         Block longsBlock = createLongsBlock(values);
 
         StreamSummary streamSummaryNew = new StreamSummary(BIGINT, maxBuckets, heapCapacity);
