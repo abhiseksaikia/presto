@@ -11,10 +11,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.facebook.presto.operator.aggregation.approxmostfrequent;
+package com.facebook.presto.operator.aggregation.approxmostfrequent.stream;
+
+import com.facebook.presto.common.block.Block;
 
 @FunctionalInterface
-public interface BucketConsumer<K>
+public interface StreamSummaryReader
 {
-    void process(K key, long value);
+    void read(Block block, int position, long count);
 }

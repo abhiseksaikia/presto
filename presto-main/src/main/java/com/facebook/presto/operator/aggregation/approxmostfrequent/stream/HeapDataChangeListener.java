@@ -11,11 +11,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.facebook.presto.operator.aggregation.approxmostfrequent;
+package com.facebook.presto.operator.aggregation.approxmostfrequent.stream;
 
-import io.airlift.slice.SliceInput;
-
-public interface ApproximateMostFrequentBucketDeserializer<K>
+public interface HeapDataChangeListener<T>
 {
-    void deserialize(SliceInput input, ApproximateMostFrequentHistogram<K> histogram);
+    void positionChanged(T heapEntry, int index);
 }

@@ -13,9 +13,15 @@
  */
 package com.facebook.presto.operator.aggregation.approxmostfrequent;
 
-import io.airlift.slice.DynamicSliceOutput;
+import com.facebook.presto.operator.aggregation.approxmostfrequent.stream.StreamSummary;
+import com.facebook.presto.spi.function.AccumulatorState;
+import com.facebook.presto.spi.function.AccumulatorStateMetadata;
 
-public interface ApproximateMostFrequentBucketSerializer<K>
+@AccumulatorStateMetadata(stateSerializerClass = ApproximateMostFrequentStateSerializer.class, stateFactoryClass = ApproximateMostFrequentStateFactory.class)
+public interface ApproximateMostFrequentState
+        extends AccumulatorState
 {
-    public void serialize(K key, long count, DynamicSliceOutput output);
+    StreamSummary get();
+
+    void set(StreamSummary value);
 }
