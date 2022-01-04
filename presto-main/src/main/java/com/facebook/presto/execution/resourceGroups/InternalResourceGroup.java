@@ -180,7 +180,7 @@ public class InternalResourceGroup
         else {
             id = new ResourceGroupId(name);
             root = this;
-            this.lock = new ReentrantReadWriteLock(true);
+            this.lock = new ReentrantReadWriteLock();
         }
         this.staticResourceGroup = staticResourceGroup;
         this.additionalRuntimeInfo = requireNonNull(additionalRuntimeInfo, "additionalRuntimeInfo is null");
