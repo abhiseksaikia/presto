@@ -65,6 +65,7 @@ public class InternalHiveSplit
     private final boolean s3SelectPushdownEnabled;
     private final HiveSplitPartitionInfo partitionInfo;
     private final Optional<byte[]> extraFileInfo;
+    private final Optional<byte[]> fileDeltaInfo;
     private final Optional<EncryptionInformation> encryptionInformation;
     private final Map<String, String> customSplitInfo;
 
@@ -86,7 +87,8 @@ public class InternalHiveSplit
             HiveSplitPartitionInfo partitionInfo,
             Optional<byte[]> extraFileInfo,
             Optional<EncryptionInformation> encryptionInformation,
-            Map<String, String> customSplitInfo)
+            Map<String, String> customSplitInfo,
+            Optional<byte[]> fileDeltaInfo)
     {
         checkArgument(start >= 0, "start must be positive");
         checkArgument(end >= 0, "end must be positive");
@@ -99,7 +101,6 @@ public class InternalHiveSplit
         requireNonNull(partitionInfo, "partitionInfo is null");
         requireNonNull(extraFileInfo, "extraFileInfo is null");
         requireNonNull(encryptionInformation, "encryptionInformation is null");
-
         this.relativeUri = relativeUri.getBytes(UTF_8);
         this.start = start;
         this.end = end;
@@ -113,7 +114,7 @@ public class InternalHiveSplit
         this.partitionInfo = partitionInfo;
         this.extraFileInfo = extraFileInfo;
         this.customSplitInfo = ImmutableMap
-            .copyOf(requireNonNull(customSplitInfo, "customSplitInfo is null"));
+                .copyOf(requireNonNull(customSplitInfo, "customSplitInfo is null"));
 
         ImmutableList.Builder<List<HostAddress>> addressesBuilder = ImmutableList.builder();
         blockEndOffsets = new long[blocks.size()];
@@ -127,6 +128,7 @@ public class InternalHiveSplit
         }
         blockAddresses = allAddressesEmpty ? ImmutableList.of() : addressesBuilder.build();
         this.encryptionInformation = encryptionInformation;
+        this.fileDeltaInfo = requireNonNull(fileDeltaInfo, "fileDeltaInfo is null");
     }
 
     public String getPath()
@@ -228,6 +230,11 @@ public class InternalHiveSplit
     public Optional<byte[]> getExtraFileInfo()
     {
         return extraFileInfo;
+    }
+
+    public Optional<byte[]> getFileDeltaInfo()
+    {
+        return fileDeltaInfo;
     }
 
     public Optional<EncryptionInformation> getEncryptionInformation()

@@ -512,7 +512,8 @@ class HiveSplitSource
                         internalSplit.getEncryptionInformation(),
                         internalSplit.getCustomSplitInfo(),
                         internalSplit.getPartitionInfo().getRedundantColumnDomains(),
-                        splitWeightProvider.weightForSplitSizeInBytes(splitBytes)));
+                        splitWeightProvider.weightForSplitSizeInBytes(splitBytes),
+                        internalSplit.getFileDeltaInfo()));
 
                 internalSplit.increaseStart(splitBytes);
 

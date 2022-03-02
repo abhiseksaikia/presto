@@ -308,7 +308,7 @@ public class StoragePartitionLoader
         }
 
         HiveDirectoryContext hiveDirectoryContext = new HiveDirectoryContext(recursiveDirWalkerEnabled ? RECURSE : IGNORED, cacheable);
-        return stream(directoryLister.list(fileSystem, table, path, namenodeStats, pathFilter, hiveDirectoryContext))
+        return stream(directoryLister.list(fileSystem, table, partition, namenodeStats, pathFilter, hiveDirectoryContext))
                 .map(status -> splitFactory.createInternalHiveSplit(status, splittable))
                 .filter(Optional::isPresent)
                 .map(Optional::get)

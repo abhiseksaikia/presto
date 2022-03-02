@@ -30,8 +30,9 @@ public class HiveFileInfo
     private final long length;
     private final long fileModifiedTime;
     private final Optional<byte[]> extraFileInfo;
+    private final Optional<byte[]> fileDeltaInfo;
 
-    public static HiveFileInfo createHiveFileInfo(LocatedFileStatus locatedFileStatus, Optional<byte[]> extraFileContext)
+    public static HiveFileInfo createHiveFileInfo(LocatedFileStatus locatedFileStatus, Optional<byte[]> extraFileContext, Optional<byte[]> fileDeltaInfo)
     {
         return new HiveFileInfo(
                 locatedFileStatus.getPath(),
@@ -39,10 +40,23 @@ public class HiveFileInfo
                 locatedFileStatus.getBlockLocations(),
                 locatedFileStatus.getLen(),
                 locatedFileStatus.getModificationTime(),
-                extraFileContext);
+                extraFileContext,
+                fileDeltaInfo);
     }
 
-    private HiveFileInfo(Path path, boolean isDirectory, BlockLocation[] blockLocations, long length, long fileModifiedTime, Optional<byte[]> extraFileInfo)
+    public static HiveFileInfo createHiveFileInfo(HiveFileInfo hiveFileInfo, Optional<byte[]> fileDeltaInfo)
+    {
+        return new HiveFileInfo(
+                hiveFileInfo.getPath(),
+                hiveFileInfo.isDirectory(),
+                hiveFileInfo.getBlockLocations(),
+                hiveFileInfo.getLength(),
+                hiveFileInfo.getFileModifiedTime(),
+                hiveFileInfo.getExtraFileInfo(),
+                fileDeltaInfo);
+    }
+
+    private HiveFileInfo(Path path, boolean isDirectory, BlockLocation[] blockLocations, long length, long fileModifiedTime, Optional<byte[]> extraFileInfo, Optional<byte[]> fileDeltaInfo)
     {
         this.path = requireNonNull(path, "path is null");
         this.isDirectory = isDirectory;
@@ -50,6 +64,7 @@ public class HiveFileInfo
         this.length = length;
         this.fileModifiedTime = fileModifiedTime;
         this.extraFileInfo = requireNonNull(extraFileInfo, "extraFileInfo is null");
+        this.fileDeltaInfo = requireNonNull(fileDeltaInfo, "extraFileInfo is null");
     }
 
     public Path getPath()
@@ -80,6 +95,11 @@ public class HiveFileInfo
     public Optional<byte[]> getExtraFileInfo()
     {
         return extraFileInfo;
+    }
+
+    public Optional<byte[]> getFileDeltaInfo()
+    {
+        return fileDeltaInfo;
     }
 
     @Override

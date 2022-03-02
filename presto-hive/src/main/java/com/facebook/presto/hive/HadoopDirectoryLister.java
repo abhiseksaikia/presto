@@ -69,7 +69,7 @@ public class HadoopDirectoryLister
         public HiveFileInfo next()
                 throws IOException
         {
-            return createHiveFileInfo(locatedFileStatusIterator.next(), Optional.empty());
+            return createHiveFileInfo(locatedFileStatusIterator.next(), Optional.empty(), Optional.empty());
         }
     }
 }

@@ -86,6 +86,7 @@ public class InternalHiveSplitFactory
 
     public Optional<InternalHiveSplit> createInternalHiveSplit(HiveFileInfo fileInfo, boolean splittable)
     {
+        //create a wrapper internal hive split. and return it from custom internal hive split factory. Now how to create a new type of hive split.
         return createInternalHiveSplit(fileInfo, OptionalInt.empty(), OptionalInt.empty(), splittable);
     }
 
@@ -110,7 +111,8 @@ public class InternalHiveSplitFactory
                 tableBucketNumber,
                 splittable,
                 fileInfo.getExtraFileInfo(),
-                ImmutableMap.of());
+                ImmutableMap.of(),
+                fileInfo.getFileDeltaInfo());
     }
 
     public Optional<InternalHiveSplit> createInternalHiveSplit(FileSplit split)
@@ -129,7 +131,8 @@ public class InternalHiveSplitFactory
                 OptionalInt.empty(),
                 false,
                 Optional.empty(),
-                customSplitInfo);
+                customSplitInfo,
+                Optional.empty());
     }
 
     private Optional<InternalHiveSplit> createInternalHiveSplit(
@@ -143,7 +146,8 @@ public class InternalHiveSplitFactory
             OptionalInt tableBucketNumber,
             boolean splittable,
             Optional<byte[]> extraFileInfo,
-            Map<String, String> customSplitInfo)
+            Map<String, String> customSplitInfo,
+            Optional<byte[]> deltaFileInfo)
     {
         String pathString = path.toString();
         if (!pathMatchesPredicate(pathDomain, pathString)) {
@@ -208,7 +212,8 @@ public class InternalHiveSplitFactory
                 partitionInfo,
                 extraFileInfo,
                 encryptionInformation,
-                customSplitInfo));
+                customSplitInfo,
+                deltaFileInfo));
     }
 
     private boolean needsHostAddresses(boolean forceLocalScheduling, List<HostAddress> addresses)

@@ -124,7 +124,7 @@ public class ManifestPartitionLoader
                 BlockLocation[] locations = new BlockLocation[] {new BlockLocation(BLOCK_LOCATION_NAMES, BLOCK_LOCATION_HOSTS, 0, fileSizes.get(i))};
 
                 // It is safe to set extraFileContext as empty because downstream code always checks if its present before proceeding.
-                fileListBuilder.add(HiveFileInfo.createHiveFileInfo(new LocatedFileStatus(fileStatus, locations), Optional.empty()));
+                fileListBuilder.add(HiveFileInfo.createHiveFileInfo(new LocatedFileStatus(fileStatus, locations), Optional.empty(), Optional.empty()));
             }
             catch (IOException e) {
                 throw new UncheckedIOException(e);

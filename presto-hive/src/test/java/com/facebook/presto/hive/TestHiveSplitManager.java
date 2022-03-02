@@ -638,6 +638,7 @@ public class TestHiveSplitManager
                                 new LocatedFileStatus(
                                         new FileStatus(0, false, 1, 0, 0, path),
                                         new BlockLocation[] {}),
+                                Optional.empty(),
                                 Optional.empty()))
                         .iterator();
             }

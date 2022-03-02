@@ -14,14 +14,28 @@
 package com.facebook.presto.hive;
 
 import com.facebook.presto.hive.filesystem.ExtendedFileSystem;
+import com.facebook.presto.hive.metastore.Partition;
 import com.facebook.presto.hive.metastore.Table;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.PathFilter;
 
 import java.util.Iterator;
+import java.util.Optional;
 
 public interface DirectoryLister
 {
+    default Iterator<HiveFileInfo> list(
+            ExtendedFileSystem fileSystem,
+            Table table,
+            Optional<Partition> partition,
+            NamenodeStats namenodeStats,
+            PathFilter pathFilter,
+            HiveDirectoryContext hiveDirectoryContext)
+    {
+        Path path = partition.isPresent() ? new Path(partition.get().getStorage().getLocation()) : new Path(table.getStorage().getLocation());
+        return list(fileSystem, table, path, namenodeStats, pathFilter, hiveDirectoryContext);
+    }
+
     Iterator<HiveFileInfo> list(
             ExtendedFileSystem fileSystem,
             Table table,

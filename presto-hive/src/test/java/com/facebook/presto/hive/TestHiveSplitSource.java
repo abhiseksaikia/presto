@@ -549,7 +549,8 @@ public class TestHiveSplitSource
                             ImmutableSet.of()),
                     Optional.empty(),
                     Optional.empty(),
-                    ImmutableMap.of());
+                    ImmutableMap.of(),
+                    Optional.empty());
         }
     }
 }
