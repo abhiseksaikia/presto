@@ -66,6 +66,7 @@ public class HiveSplit
     private final Map<String, String> customSplitInfo;
     private final Set<ColumnHandle> redundantColumnDomains;
     private final SplitWeight splitWeight;
+    private final Optional<CustomSplitDetails<?>> customSplitDetails;
 
     @JsonCreator
     public HiveSplit(
@@ -92,7 +93,8 @@ public class HiveSplit
             @JsonProperty("encryptionMetadata") Optional<EncryptionInformation> encryptionInformation,
             @JsonProperty("customSplitInfo") Map<String, String> customSplitInfo,
             @JsonProperty("redundantColumnDomains") Set<ColumnHandle> redundantColumnDomains,
-            @JsonProperty("splitWeight") SplitWeight splitWeight)
+            @JsonProperty("splitWeight") SplitWeight splitWeight,
+            @JsonProperty("customSplitDetails") Optional<CustomSplitDetails<?>> customSplitDetails)
     {
         checkArgument(start >= 0, "start must be positive");
         checkArgument(length >= 0, "length must be positive");
@@ -139,6 +141,7 @@ public class HiveSplit
         this.customSplitInfo = ImmutableMap.copyOf(requireNonNull(customSplitInfo, "customSplitInfo is null"));
         this.redundantColumnDomains = ImmutableSet.copyOf(redundantColumnDomains);
         this.splitWeight = requireNonNull(splitWeight, "splitWeight is null");
+        this.customSplitDetails = requireNonNull(customSplitDetails, "customSplitDetails is null");
     }
 
     @JsonProperty

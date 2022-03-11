@@ -155,7 +155,8 @@ public class TestDynamicPruning
                 Optional.empty(),
                 ImmutableMap.of(),
                 ImmutableSet.of(),
-                SplitWeight.standard());
+                SplitWeight.standard(),
+                Optional.empty());
 
         TableHandle tableHandle = new TableHandle(
                 new ConnectorId(HIVE_CATALOG),

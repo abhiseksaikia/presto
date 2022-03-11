@@ -78,7 +78,8 @@ public class TestRecordingHiveMetastore
                     Optional.empty())),
             true,
             ImmutableMap.of("param", "value2"),
-            ImmutableMap.of());
+            ImmutableMap.of(),
+            Optional.empty());
     private static final Table TABLE = new Table(
             "database",
             "table",

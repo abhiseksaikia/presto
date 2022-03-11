@@ -36,8 +36,8 @@ public class Storage
     private final boolean skewed;
     private final Map<String, String> serdeParameters;
     private final Map<String, String> parameters;
+    private final Optional<CustomStorageInfo<?>> customStorageInfo;
 
-    @JsonCreator
     public Storage(
             @JsonProperty("storageFormat") StorageFormat storageFormat,
             @JsonProperty("location") String location,
@@ -46,12 +46,26 @@ public class Storage
             @JsonProperty("serdeParameters") Map<String, String> serdeParameters,
             @JsonProperty("parameters") Map<String, String> parameters)
     {
+        this(storageFormat, location, bucketProperty, skewed, serdeParameters, parameters, Optional.empty());
+    }
+
+    @JsonCreator
+    public Storage(
+            @JsonProperty("storageFormat") StorageFormat storageFormat,
+            @JsonProperty("location") String location,
+            @JsonProperty("bucketProperty") Optional<HiveBucketProperty> bucketProperty,
+            @JsonProperty("skewed") boolean skewed,
+            @JsonProperty("serdeParameters") Map<String, String> serdeParameters,
+            @JsonProperty("parameters") Map<String, String> parameters,
+            @JsonProperty("customStorageInfo") Optional<CustomStorageInfo<?>> customStorageInfo)
+    {
         this.storageFormat = requireNonNull(storageFormat, "storageFormat is null");
         this.location = requireNonNull(location, "location is null");
         this.bucketProperty = requireNonNull(bucketProperty, "bucketProperty is null");
         this.skewed = skewed;
         this.serdeParameters = ImmutableMap.copyOf(requireNonNull(serdeParameters, "serdeParameters is null"));
         this.parameters = ImmutableMap.copyOf(requireNonNull(parameters, "parameters is null"));
+        this.customStorageInfo = requireNonNull(customStorageInfo, "customStorageInfo is null");
     }
 
     @JsonProperty
@@ -88,6 +102,12 @@ public class Storage
     public Map<String, String> getParameters()
     {
         return parameters;
+    }
+
+    @JsonProperty
+    public Optional<CustomStorageInfo<?>> getCustomStorageInfo()
+    {
+        return customStorageInfo;
     }
 
     @Override
@@ -146,6 +166,7 @@ public class Storage
         private boolean skewed;
         private Map<String, String> serdeParameters = ImmutableMap.of();
         private Map<String, String> parameters = ImmutableMap.of();
+        private Optional<CustomStorageInfo<?>> customStorageInfo = Optional.empty();
 
         private Builder()
         {
@@ -197,9 +218,15 @@ public class Storage
             return this;
         }
 
+        public Builder setCustomStorageInfo(Optional<CustomStorageInfo<?>> customStorageInfo)
+        {
+            this.customStorageInfo = customStorageInfo;
+            return this;
+        }
+
         public Storage build()
         {
-            return new Storage(storageFormat, location, bucketProperty, skewed, serdeParameters, parameters);
+            return new Storage(storageFormat, location, bucketProperty, skewed, serdeParameters, parameters, customStorageInfo);
         }
     }
 }

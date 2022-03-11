@@ -38,6 +38,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
@@ -512,7 +513,8 @@ class HiveSplitSource
                         internalSplit.getEncryptionInformation(),
                         internalSplit.getCustomSplitInfo(),
                         internalSplit.getPartitionInfo().getRedundantColumnDomains(),
-                        splitWeightProvider.weightForSplitSizeInBytes(splitBytes)));
+                        splitWeightProvider.weightForSplitSizeInBytes(splitBytes),
+                        internalSplit.getCustomSplitDetails().map(BinaryCustomSplitDetails::new)));
 
                 internalSplit.increaseStart(splitBytes);
 

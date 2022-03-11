@@ -101,7 +101,8 @@ public class TestHivePageSourceProvider
                 Optional.empty(),
                 ImmutableMap.of(),
                 ImmutableSet.of(),
-                SplitWeight.standard());
+                SplitWeight.standard(),
+                Optional.empty());
 
         CacheQuota cacheQuota = HivePageSourceProvider.generateCacheQuota(split);
         CacheQuota expectedCacheQuota = new CacheQuota(".", Optional.empty());
@@ -137,7 +138,8 @@ public class TestHivePageSourceProvider
                 Optional.empty(),
                 ImmutableMap.of(),
                 ImmutableSet.of(),
-                SplitWeight.standard());
+                SplitWeight.standard(),
+                Optional.empty());
 
         cacheQuota = HivePageSourceProvider.generateCacheQuota(split);
         expectedCacheQuota = new CacheQuota(SCHEMA_NAME + "." + TABLE_NAME + "." + PARTITION_NAME, Optional.of(DataSize.succinctDataSize(1, DataSize.Unit.MEGABYTE)));

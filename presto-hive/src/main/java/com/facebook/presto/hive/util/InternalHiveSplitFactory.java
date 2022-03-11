@@ -110,7 +110,8 @@ public class InternalHiveSplitFactory
                 tableBucketNumber,
                 splittable,
                 fileInfo.getExtraFileInfo(),
-                ImmutableMap.of());
+                ImmutableMap.of(),
+                fileInfo.getCustomSplitDetails());
     }
 
     public Optional<InternalHiveSplit> createInternalHiveSplit(FileSplit split)
@@ -129,7 +130,8 @@ public class InternalHiveSplitFactory
                 OptionalInt.empty(),
                 false,
                 Optional.empty(),
-                customSplitInfo);
+                customSplitInfo,
+                Optional.empty());
     }
 
     private Optional<InternalHiveSplit> createInternalHiveSplit(
@@ -143,7 +145,8 @@ public class InternalHiveSplitFactory
             OptionalInt tableBucketNumber,
             boolean splittable,
             Optional<byte[]> extraFileInfo,
-            Map<String, String> customSplitInfo)
+            Map<String, String> customSplitInfo,
+            Optional<byte[]> deltaFileInfo)
     {
         String pathString = path.toString();
         if (!pathMatchesPredicate(pathDomain, pathString)) {
@@ -208,7 +211,8 @@ public class InternalHiveSplitFactory
                 partitionInfo,
                 extraFileInfo,
                 encryptionInformation,
-                customSplitInfo));
+                customSplitInfo,
+                deltaFileInfo));
     }
 
     private boolean needsHostAddresses(boolean forceLocalScheduling, List<HostAddress> addresses)

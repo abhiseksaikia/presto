@@ -395,6 +395,10 @@ public class MetastoreUtil
         if (!partition.isPresent()) {
             return table.getStorage().getLocation();
         }
+        //FIXME check why location is coming as empty
+        if ("".equals(partition.get().getStorage().getLocation())) {
+            return table.getStorage().getLocation();
+        }
         return partition.get().getStorage().getLocation();
     }
 

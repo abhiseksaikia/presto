@@ -65,6 +65,7 @@ public class InternalHiveSplit
     private final boolean s3SelectPushdownEnabled;
     private final HiveSplitPartitionInfo partitionInfo;
     private final Optional<byte[]> extraFileInfo;
+    private final Optional<byte[]> customSplitDetails;
     private final Optional<EncryptionInformation> encryptionInformation;
     private final Map<String, String> customSplitInfo;
 
@@ -86,7 +87,8 @@ public class InternalHiveSplit
             HiveSplitPartitionInfo partitionInfo,
             Optional<byte[]> extraFileInfo,
             Optional<EncryptionInformation> encryptionInformation,
-            Map<String, String> customSplitInfo)
+            Map<String, String> customSplitInfo,
+            Optional<byte[]> customSplitDetails)
     {
         checkArgument(start >= 0, "start must be positive");
         checkArgument(end >= 0, "end must be positive");
@@ -127,6 +129,7 @@ public class InternalHiveSplit
         }
         blockAddresses = allAddressesEmpty ? ImmutableList.of() : addressesBuilder.build();
         this.encryptionInformation = encryptionInformation;
+        this.customSplitDetails = requireNonNull(customSplitDetails, "fileDeltaInfo is null");
     }
 
     public String getPath()
@@ -228,6 +231,11 @@ public class InternalHiveSplit
     public Optional<byte[]> getExtraFileInfo()
     {
         return extraFileInfo;
+    }
+
+    public Optional<byte[]> getCustomSplitDetails()
+    {
+        return customSplitDetails;
     }
 
     public Optional<EncryptionInformation> getEncryptionInformation()

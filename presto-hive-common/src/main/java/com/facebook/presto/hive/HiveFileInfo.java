@@ -30,8 +30,16 @@ public class HiveFileInfo
     private final long length;
     private final long fileModifiedTime;
     private final Optional<byte[]> extraFileInfo;
+    private final Optional<byte[]> customSplitDetails;
 
     public static HiveFileInfo createHiveFileInfo(LocatedFileStatus locatedFileStatus, Optional<byte[]> extraFileContext)
+    {
+        return createHiveFileInfo(
+                locatedFileStatus,
+                extraFileContext, Optional.empty());
+    }
+
+    public static HiveFileInfo createHiveFileInfo(LocatedFileStatus locatedFileStatus, Optional<byte[]> extraFileContext, Optional<byte[]> customSplitDetails)
     {
         return new HiveFileInfo(
                 locatedFileStatus.getPath(),
@@ -39,10 +47,10 @@ public class HiveFileInfo
                 locatedFileStatus.getBlockLocations(),
                 locatedFileStatus.getLen(),
                 locatedFileStatus.getModificationTime(),
-                extraFileContext);
+                extraFileContext, customSplitDetails);
     }
 
-    private HiveFileInfo(Path path, boolean isDirectory, BlockLocation[] blockLocations, long length, long fileModifiedTime, Optional<byte[]> extraFileInfo)
+    private HiveFileInfo(Path path, boolean isDirectory, BlockLocation[] blockLocations, long length, long fileModifiedTime, Optional<byte[]> extraFileInfo, Optional<byte[]> customSplitDetails)
     {
         this.path = requireNonNull(path, "path is null");
         this.isDirectory = isDirectory;
@@ -50,6 +58,7 @@ public class HiveFileInfo
         this.length = length;
         this.fileModifiedTime = fileModifiedTime;
         this.extraFileInfo = requireNonNull(extraFileInfo, "extraFileInfo is null");
+        this.customSplitDetails = requireNonNull(customSplitDetails, "extraFileInfo is null");
     }
 
     public Path getPath()
@@ -80,6 +89,11 @@ public class HiveFileInfo
     public Optional<byte[]> getExtraFileInfo()
     {
         return extraFileInfo;
+    }
+
+    public Optional<byte[]> getCustomSplitDetails()
+    {
+        return customSplitDetails;
     }
 
     @Override

@@ -117,7 +117,8 @@ public class TestHiveSplit
                         "test_provider"))),
                 customSplitInfo,
                 redundantColumnDomains,
-                SplitWeight.fromProportion(2.0)); // some non-standard value
+                SplitWeight.fromProportion(2.0),
+                Optional.empty()); // some non-standard value
 
         JsonCodec<HiveSplit> codec = getJsonCodec();
         String json = codec.toJson(expected);
