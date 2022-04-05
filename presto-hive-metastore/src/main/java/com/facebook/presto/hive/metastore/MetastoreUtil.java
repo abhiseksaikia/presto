@@ -142,6 +142,9 @@ public class MetastoreUtil
     public static final String PRESTO_VIEW_FLAG = "presto_view";
     public static final String PRESTO_MATERIALIZED_VIEW_FLAG = "presto_materialized_view";
     public static final String PRESTO_QUERY_ID_NAME = "presto_query_id";
+    public static final String PRESTO_USER_NAME = "presto_user_name";
+    public static final String PRESTO_CLIENT_INFO = "presto_client_info";
+    public static final String PRESTO_SOURCE = "presto_source";
     public static final String HIVE_DEFAULT_DYNAMIC_PARTITION = "__HIVE_DEFAULT_PARTITION__";
     public static final String USER_DEFINED_TYPE_ENCODING_ENABLED = "user_defined_type_encoding";
 
