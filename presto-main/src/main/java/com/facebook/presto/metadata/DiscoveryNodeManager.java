@@ -176,7 +176,8 @@ public final class DiscoveryNodeManager
                         isResourceManager(service),
                         isCatalogServer(service),
                         ALIVE,
-                        raftPort);
+                        raftPort,
+                        getPoolType(service));
 
                 if (node.getNodeIdentifier().equals(currentNodeId)) {
                     checkState(
@@ -189,6 +190,11 @@ public final class DiscoveryNodeManager
             }
         }
         throw new IllegalStateException("INVARIANT: current node not returned from service selector");
+    }
+
+    private static Optional<String> getPoolType(ServiceDescriptor service)
+    {
+        return Optional.ofNullable(service.getProperties().get("pool_type"));
     }
 
     @PostConstruct
@@ -300,7 +306,7 @@ public final class DiscoveryNodeManager
             boolean catalogServer = isCatalogServer(service);
             OptionalInt raftPort = getRaftPort(service);
             if (uri != null && nodeVersion != null) {
-                InternalNode node = new InternalNode(service.getNodeId(), uri, thriftPort, nodeVersion, coordinator, resourceManager, catalogServer, ALIVE, raftPort);
+                InternalNode node = new InternalNode(service.getNodeId(), uri, thriftPort, nodeVersion, coordinator, resourceManager, catalogServer, ALIVE, raftPort, getPoolType(service));
                 NodeState nodeState = getNodeState(node);
 
                 switch (nodeState) {
@@ -367,7 +373,7 @@ public final class DiscoveryNodeManager
                 InternalNode deadNode = nodes.get(nodeId);
                 Set<ConnectorId> deadNodeConnectorIds = connectorIdsByNodeId.get(nodeId);
                 for (ConnectorId id : deadNodeConnectorIds) {
-                    byConnectorIdBuilder.put(id, new InternalNode(deadNode.getNodeIdentifier(), deadNode.getInternalUri(), deadNode.getThriftPort(), deadNode.getNodeVersion(), deadNode.isCoordinator(), deadNode.isResourceManager(), deadNode.isCatalogServer(), DEAD, deadNode.getRaftPort()));
+                    byConnectorIdBuilder.put(id, new InternalNode(deadNode.getNodeIdentifier(), deadNode.getInternalUri(), deadNode.getThriftPort(), deadNode.getNodeVersion(), deadNode.isCoordinator(), deadNode.isResourceManager(), deadNode.isCatalogServer(), DEAD, deadNode.getRaftPort(), deadNode.getPoolType()));
                 }
             }
         }

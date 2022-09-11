@@ -18,6 +18,8 @@ import io.airlift.units.Duration;
 
 import javax.validation.constraints.NotNull;
 
+import java.util.Optional;
+
 import static java.util.concurrent.TimeUnit.MINUTES;
 
 public class ServerConfig
@@ -33,6 +35,7 @@ public class ServerConfig
     private Duration gracePeriod = new Duration(2, MINUTES);
     private boolean enhancedErrorReporting = true;
     private boolean queryResultsCompressionEnabled = true;
+    private Optional<String> poolType = Optional.empty();
 
     public boolean isResourceManager()
     {
@@ -169,6 +172,18 @@ public class ServerConfig
     public ServerConfig setQueryResultsCompressionEnabled(boolean queryResultsCompressionEnabled)
     {
         this.queryResultsCompressionEnabled = queryResultsCompressionEnabled;
+        return this;
+    }
+
+    public Optional<String> getPoolType()
+    {
+        return poolType;
+    }
+
+    @Config("pool_type")
+    public ServerConfig setPoolType(String poolType)
+    {
+        this.poolType = Optional.ofNullable(poolType);
         return this;
     }
 }

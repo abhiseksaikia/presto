@@ -91,6 +91,8 @@ import static java.util.stream.Collectors.toSet;
 
 public class SectionExecutionFactory
 {
+    //TODO move it to a proper place
+    private static final String LEAF_WORKER_POOL = "leaf";
     private final Metadata metadata;
     private final NodePartitioningManager nodePartitioningManager;
     private final NodeTaskMap nodeTaskMap;
@@ -282,8 +284,8 @@ public class SectionExecutionFactory
             if (isInternalSystemConnector(connectorId)) {
                 connectorId = null;
             }
-
-            NodeSelector nodeSelector = nodeScheduler.createNodeSelector(session, connectorId, maxTasksPerStage);
+            //filter nodes based on pool type, TODO make it configurable
+            NodeSelector nodeSelector = nodeScheduler.createNodeSelector(session, connectorId, maxTasksPerStage, Optional.of(node -> node.getPoolType().map(poolType -> LEAF_WORKER_POOL.equals(poolType)).orElse(true)));
             SplitPlacementPolicy placementPolicy = new DynamicSplitPlacementPolicy(nodeSelector, stageExecution::getAllTasks);
 
             checkArgument(!plan.getFragment().getStageExecutionDescriptor().isStageGroupedExecution());

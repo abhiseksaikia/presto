@@ -548,7 +548,7 @@ public class ServerMainModule
         binder.bind(ConnectorTypeSerdeManager.class).in(Scopes.SINGLETON);
 
         // connector metadata update handle json serde
-        binder.bind(new TypeLiteral<ConnectorTypeSerde<ConnectorMetadataUpdateHandle>>(){})
+        binder.bind(new TypeLiteral<ConnectorTypeSerde<ConnectorMetadataUpdateHandle>>() {})
                 .annotatedWith(ForJsonMetadataUpdateHandle.class)
                 .to(ConnectorMetadataUpdateHandleJsonSerde.class)
                 .in(Scopes.SINGLETON);
@@ -655,12 +655,12 @@ public class ServerMainModule
                 .addProperty("resource_manager", String.valueOf(serverConfig.isResourceManager()))
                 .addProperty("catalog_server", String.valueOf(serverConfig.isCatalogServer()))
                 .addProperty("connectorIds", nullToEmpty(serverConfig.getDataSources()));
+        serverConfig.getPoolType().ifPresent(poolType -> serviceAnnouncementBuilder.addProperty("pool_type", poolType));
 
         RaftConfig raftConfig = buildConfigObject(RaftConfig.class);
         if (serverConfig.isResourceManager() && raftConfig.isEnabled()) {
             serviceAnnouncementBuilder.addProperty("raftPort", String.valueOf(raftConfig.getPort()));
         }
-
         // server info resource
         jaxrsBinder(binder).bind(ServerInfoResource.class);
         jsonCodecBinder(binder).bindJsonCodec(ServerInfo.class);
