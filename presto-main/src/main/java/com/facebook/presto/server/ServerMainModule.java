@@ -18,6 +18,7 @@ import com.facebook.airlift.configuration.AbstractConfigurationAwareModule;
 import com.facebook.airlift.discovery.client.ServiceAnnouncement;
 import com.facebook.airlift.http.server.TheServlet;
 import com.facebook.airlift.json.JsonObjectMapperProvider;
+import com.facebook.airlift.node.NodeConfig;
 import com.facebook.airlift.stats.GcMonitor;
 import com.facebook.airlift.stats.JmxGcMonitor;
 import com.facebook.airlift.stats.PauseMeter;
@@ -273,7 +274,8 @@ public class ServerMainModule
     protected void setup(Binder binder)
     {
         ServerConfig serverConfig = buildConfigObject(ServerConfig.class);
-
+        NodeConfig nodeConfig = buildConfigObject(NodeConfig.class);
+        String nodeId = nodeConfig.getNodeId();
         if (serverConfig.isResourceManager()) {
             install(new ResourceManagerModule());
         }
@@ -548,7 +550,7 @@ public class ServerMainModule
         binder.bind(ConnectorTypeSerdeManager.class).in(Scopes.SINGLETON);
 
         // connector metadata update handle json serde
-        binder.bind(new TypeLiteral<ConnectorTypeSerde<ConnectorMetadataUpdateHandle>>(){})
+        binder.bind(new TypeLiteral<ConnectorTypeSerde<ConnectorMetadataUpdateHandle>>() {})
                 .annotatedWith(ForJsonMetadataUpdateHandle.class)
                 .to(ConnectorMetadataUpdateHandleJsonSerde.class)
                 .in(Scopes.SINGLETON);
@@ -654,13 +656,13 @@ public class ServerMainModule
                 .addProperty("coordinator", String.valueOf(serverConfig.isCoordinator()))
                 .addProperty("resource_manager", String.valueOf(serverConfig.isResourceManager()))
                 .addProperty("catalog_server", String.valueOf(serverConfig.isCatalogServer()))
+                .addProperty("pool_type", serverConfig.getPoolType().orElse(""))
                 .addProperty("connectorIds", nullToEmpty(serverConfig.getDataSources()));
 
         RaftConfig raftConfig = buildConfigObject(RaftConfig.class);
         if (serverConfig.isResourceManager() && raftConfig.isEnabled()) {
             serviceAnnouncementBuilder.addProperty("raftPort", String.valueOf(raftConfig.getPort()));
         }
-
         // server info resource
         jaxrsBinder(binder).bind(ServerInfoResource.class);
         jsonCodecBinder(binder).bindJsonCodec(ServerInfo.class);
