@@ -655,6 +655,8 @@ public class ServerMainModule
                 .addProperty("resource_manager", String.valueOf(serverConfig.isResourceManager()))
                 .addProperty("catalog_server", String.valueOf(serverConfig.isCatalogServer()))
                 .addProperty("connectorIds", nullToEmpty(serverConfig.getDataSources()));
+        //FIXME remove this
+        checkArgument(serverConfig.getPoolType().isPresent());
         serverConfig.getPoolType().ifPresent(poolType -> serviceAnnouncementBuilder.addProperty("pool_type", poolType));
 
         RaftConfig raftConfig = buildConfigObject(RaftConfig.class);

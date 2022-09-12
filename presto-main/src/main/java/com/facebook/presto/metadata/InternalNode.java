@@ -82,9 +82,9 @@ public class InternalNode
     }
 
     @ThriftConstructor
-    public InternalNode(String nodeIdentifier, URI internalUri, OptionalInt thriftPort, String nodeVersion, boolean coordinator, boolean resourceManager, boolean catalogServer)
+    public InternalNode(String nodeIdentifier, URI internalUri, OptionalInt thriftPort, String nodeVersion, boolean coordinator, boolean resourceManager, boolean catalogServer, Optional<String> poolType)
     {
-        this(nodeIdentifier, internalUri, thriftPort, new NodeVersion(nodeVersion), coordinator, resourceManager, catalogServer, ALIVE, OptionalInt.empty(), Optional.empty());
+        this(nodeIdentifier, internalUri, thriftPort, new NodeVersion(nodeVersion), coordinator, resourceManager, catalogServer, ALIVE, OptionalInt.empty(), poolType);
     }
 
     public InternalNode(String nodeIdentifier, URI internalUri, OptionalInt thriftPort, String nodeVersion, boolean coordinator, boolean resourceManager, OptionalInt raftPort, Optional<String> poolType)
@@ -204,6 +204,8 @@ public class InternalNode
         return raftPort;
     }
 
+    @ThriftField(9)
+    @Override
     public Optional<String> getPoolType()
     {
         return poolType;
@@ -240,6 +242,7 @@ public class InternalNode
                 .add("resourceManager", resourceManager)
                 .add("catalogServer", catalogServer)
                 .add("raftPort", raftPort)
+                .add("poolType", poolType)
                 .toString();
     }
 }

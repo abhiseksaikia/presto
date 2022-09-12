@@ -35,7 +35,15 @@ public class ServerConfig
     private Duration gracePeriod = new Duration(2, MINUTES);
     private boolean enhancedErrorReporting = true;
     private boolean queryResultsCompressionEnabled = true;
-    private Optional<String> poolType = Optional.empty();
+    private Optional<String> poolType = getDefaultPooltype();
+
+    private Optional<String> getDefaultPooltype()
+    {
+        if (java.util.concurrent.ThreadLocalRandom.current().nextDouble() * 100 <= 40) {
+            return Optional.of("leaf");
+        }
+        return Optional.of("intermediate");
+    }
 
     public boolean isResourceManager()
     {

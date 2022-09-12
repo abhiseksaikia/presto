@@ -194,6 +194,7 @@ public final class DiscoveryNodeManager
 
     private static Optional<String> getPoolType(ServiceDescriptor service)
     {
+        log.info("Discovery:pool_type = %s", service.getProperties().getOrDefault("pool_type", "not_available"));
         return Optional.ofNullable(service.getProperties().get("pool_type"));
     }
 

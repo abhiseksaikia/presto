@@ -13,6 +13,7 @@
  */
 package com.facebook.presto.execution.scheduler;
 
+import com.facebook.airlift.log.Logger;
 import com.facebook.airlift.stats.CounterStat;
 import com.facebook.presto.Session;
 import com.facebook.presto.execution.NodeTaskMap;
@@ -81,6 +82,7 @@ import static java.util.concurrent.TimeUnit.SECONDS;
 
 public class NodeScheduler
 {
+    private static final Logger log = Logger.get(NodeScheduler.class);
     private final NetworkLocationCache networkLocationCache;
     private final List<CounterStat> topologicalSplitCounters;
     private final List<String> networkLocationSegmentNames;
@@ -263,10 +265,14 @@ public class NodeScheduler
             if (connectorId != null) {
                 activeNodes = nodeManager.getActiveConnectorNodes(connectorId).stream().filter(finalNodeFilterPredicate).collect(toImmutableList());
                 allNodes = nodeManager.getAllConnectorNodes(connectorId).stream().filter(finalNodeFilterPredicate).collect(toImmutableList());
+                //FIXME remove later
+                logWorkerTypes(nodeManager.getActiveConnectorNodes(connectorId));
             }
             else {
                 activeNodes = nodeManager.getNodes(ACTIVE).stream().filter(finalNodeFilterPredicate).collect(toImmutableList());
                 allNodes = activeNodes;
+                //FIXME remove later
+                logWorkerTypes(nodeManager.getNodes(ACTIVE));
             }
 
             Set<String> coordinatorNodeIds = nodeManager.getCoordinators().stream()
@@ -309,6 +315,21 @@ public class NodeScheduler
                     allNodesByHostAndPort.build(),
                     consistentHashingNodeProvider);
         };
+    }
+
+    private void logWorkerTypes(Set<InternalNode> activeNodes)
+    {
+        int leafWorkerCount = 0;
+        int intermediateCount = 0;
+        for (InternalNode internalNode : activeNodes) {
+            if ("leaf".equals(internalNode.getPoolType())) {
+                leafWorkerCount++;
+            }
+            else if ("intermediate".equals(internalNode.getPoolType())) {
+                intermediateCount++;
+            }
+        }
+        log.info("leaf count  = %d, intermediate count  = %d", leafWorkerCount, intermediateCount);
     }
 
     public static List<InternalNode> selectNodes(int limit, ResettableRandomizedIterator<InternalNode> candidates)
