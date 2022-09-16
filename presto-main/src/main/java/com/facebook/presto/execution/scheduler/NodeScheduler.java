@@ -319,17 +319,16 @@ public class NodeScheduler
 
     private void logWorkerTypes(Set<InternalNode> activeNodes)
     {
-        int leafWorkerCount = 0;
-        int intermediateCount = 0;
+        Map<String, Integer> nodePoolCounter = new HashMap<>();
         for (InternalNode internalNode : activeNodes) {
-            if ("leaf".equals(internalNode.getPoolType())) {
-                leafWorkerCount++;
+            if (!internalNode.getPoolType().isPresent()) {
+                continue;
             }
-            else if ("intermediate".equals(internalNode.getPoolType())) {
-                intermediateCount++;
-            }
+
+            String poolType = internalNode.getPoolType().get();
+            nodePoolCounter.put(poolType, nodePoolCounter.getOrDefault(poolType, 0) + 1);
         }
-        log.info("leaf count  = %d, intermediate count  = %d", leafWorkerCount, intermediateCount);
+        log.info("worker types = %s", nodePoolCounter.toString());
     }
 
     public static List<InternalNode> selectNodes(int limit, ResettableRandomizedIterator<InternalNode> candidates)
