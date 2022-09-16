@@ -31,6 +31,7 @@ import com.facebook.presto.metadata.InternalNode;
 import com.facebook.presto.metadata.Metadata;
 import com.facebook.presto.operator.ForScheduler;
 import com.facebook.presto.spi.ConnectorId;
+import com.facebook.presto.spi.Node;
 import com.facebook.presto.spi.connector.ConnectorPartitionHandle;
 import com.facebook.presto.spi.plan.PlanNode;
 import com.facebook.presto.spi.plan.PlanNodeId;
@@ -70,6 +71,8 @@ import static com.facebook.presto.SystemSessionProperties.isOptimizedScaleWriter
 import static com.facebook.presto.execution.SqlStageExecution.createSqlStageExecution;
 import static com.facebook.presto.execution.scheduler.SourcePartitionedScheduler.newSourcePartitionedSchedulerAsStageScheduler;
 import static com.facebook.presto.execution.scheduler.TableWriteInfo.createTableWriteInfo;
+import static com.facebook.presto.server.ServerConfig.WORKER_POOL_TYPE_INTERMEDIATE;
+import static com.facebook.presto.server.ServerConfig.WORKER_POOL_TYPE_LEAF;
 import static com.facebook.presto.spi.ConnectorId.isInternalSystemConnector;
 import static com.facebook.presto.spi.StandardErrorCode.NO_NODES_AVAILABLE;
 import static com.facebook.presto.spi.connector.NotPartitionedPartitionHandle.NOT_PARTITIONED;
@@ -92,7 +95,6 @@ import static java.util.stream.Collectors.toSet;
 public class SectionExecutionFactory
 {
     //TODO move it to a proper place
-    private static final String LEAF_WORKER_POOL = "leaf";
     private final Metadata metadata;
     private final NodePartitioningManager nodePartitioningManager;
     private final NodeTaskMap nodeTaskMap;
@@ -273,9 +275,14 @@ public class SectionExecutionFactory
             TableWriteInfo tableWriteInfo,
             Set<SqlStageExecution> childStageExecutions)
     {
+        String workerPoolType = plan.getFragment().isLeaf() ? WORKER_POOL_TYPE_LEAF : WORKER_POOL_TYPE_INTERMEDIATE;
+        //Optional<Predicate<Node>> nodePredicate = Optional.of(node -> node.getPoolType().map(poolType -> workerPoolType.equals(poolType)).orElse(true));
+        Optional<Predicate<Node>> nodePredicate = Optional.empty();
+
         Map<PlanNodeId, SplitSource> splitSources = splitSourceFactory.createSplitSources(plan.getFragment(), session, tableWriteInfo);
         int maxTasksPerStage = getMaxTasksPerStage(session);
         if (partitioningHandle.equals(SOURCE_DISTRIBUTION)) {
+            nodePredicate = Optional.of(node -> node.getPoolType().map(poolType -> workerPoolType.equals(poolType)).orElse(true));
             // nodes are selected dynamically based on the constraints of the splits and the system load
             Map.Entry<PlanNodeId, SplitSource> entry = getOnlyElement(splitSources.entrySet());
             PlanNodeId planNodeId = entry.getKey();
@@ -285,7 +292,7 @@ public class SectionExecutionFactory
                 connectorId = null;
             }
             //filter nodes based on pool type, TODO make it configurable
-            NodeSelector nodeSelector = nodeScheduler.createNodeSelector(session, connectorId, maxTasksPerStage, Optional.of(node -> node.getPoolType().map(poolType -> LEAF_WORKER_POOL.equals(poolType)).orElse(true)));
+            NodeSelector nodeSelector = nodeScheduler.createNodeSelector(session, connectorId, maxTasksPerStage, nodePredicate);
             SplitPlacementPolicy placementPolicy = new DynamicSplitPlacementPolicy(nodeSelector, stageExecution::getAllTasks);
 
             checkArgument(!plan.getFragment().getStageExecutionDescriptor().isStageGroupedExecution());
@@ -306,7 +313,7 @@ public class SectionExecutionFactory
                     stageExecution,
                     sourceTasksProvider,
                     writerTasksProvider,
-                    nodeScheduler.createNodeSelector(session, null),
+                    nodeScheduler.createNodeSelector(session, null, nodePredicate),
                     scheduledExecutor,
                     getWriterMinSize(session),
                     isOptimizedScaleWriterProducerBuffer(session));
@@ -345,7 +352,7 @@ public class SectionExecutionFactory
                                 .collect(toImmutableList());
                     }
                     else {
-                        stageNodeList = new ArrayList<>(nodeScheduler.createNodeSelector(session, connectorId).selectRandomNodes(maxTasksPerStage));
+                        stageNodeList = new ArrayList<>(nodeScheduler.createNodeSelector(session, connectorId, nodePredicate).selectRandomNodes(maxTasksPerStage));
                     }
                 }
                 else {
@@ -370,7 +377,7 @@ public class SectionExecutionFactory
                         bucketNodeMap,
                         splitBatchSize,
                         getConcurrentLifespansPerNode(session),
-                        nodeScheduler.createNodeSelector(session, connectorId),
+                        nodeScheduler.createNodeSelector(session, connectorId, nodePredicate),
                         connectorPartitionHandles);
                 if (plan.getFragment().getStageExecutionDescriptor().isRecoverableGroupedExecution()) {
                     stageExecution.registerStageTaskRecoveryCallback(taskId -> {

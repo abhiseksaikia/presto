@@ -28,6 +28,8 @@ import static java.util.Objects.requireNonNull;
 public class PlanNodeId
 {
     private final String id;
+    //hack for prototype
+    private String nodeType;
 
     @JsonCreator
     @ThriftConstructor
@@ -41,6 +43,16 @@ public class PlanNodeId
     public String getId()
     {
         return id;
+    }
+
+    public String getNodeType()
+    {
+        return nodeType;
+    }
+
+    public void setNodeType(String nodeType)
+    {
+        this.nodeType = nodeType;
     }
 
     @Override

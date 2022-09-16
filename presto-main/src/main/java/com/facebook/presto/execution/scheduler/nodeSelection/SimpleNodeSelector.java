@@ -182,7 +182,7 @@ public class SimpleNodeSelector
             }
 
             if (candidateNodes.isEmpty()) {
-                log.debug("No nodes available to schedule %s. Available nodes %s", split, nodeMap.getActiveNodes());
+                log.error("No nodes available to schedule %s. Available nodes %s", split, nodeMap.getActiveNodes());
                 throw new PrestoException(NO_NODES_AVAILABLE, "No nodes available to run query");
             }
 

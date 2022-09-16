@@ -183,6 +183,11 @@ public class NodeScheduler
         return counters.build();
     }
 
+    public NodeSelector createNodeSelector(Session session, ConnectorId connectorId, Optional<Predicate<Node>> filterNodePredicate)
+    {
+        return createNodeSelector(session, connectorId, Integer.MAX_VALUE, filterNodePredicate);
+    }
+
     public NodeSelector createNodeSelector(Session session, ConnectorId connectorId)
     {
         return createNodeSelector(session, connectorId, Integer.MAX_VALUE);

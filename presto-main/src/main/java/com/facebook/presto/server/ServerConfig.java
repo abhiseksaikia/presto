@@ -24,6 +24,7 @@ import static java.util.concurrent.TimeUnit.MINUTES;
 
 public class ServerConfig
 {
+    public static final String LEAF = "L";
     private boolean resourceManager;
     private boolean resourceManagerEnabled;
     private boolean catalogServer;
@@ -35,14 +36,19 @@ public class ServerConfig
     private Duration gracePeriod = new Duration(2, MINUTES);
     private boolean enhancedErrorReporting = true;
     private boolean queryResultsCompressionEnabled = true;
+    //hack to bypass tupperware changes, ideally we will need to have 2 entitlement for worker deployment and based on it we can get the type of pool
     private Optional<String> poolType = getDefaultPooltype();
+    public static final String WORKER_POOL_TYPE_LEAF = "L";
+    public static final String WORKER_POOL_TYPE_INTERMEDIATE = "I";
+    public static final String COORDINATOR_POOL_TYPE = "C";
+    public static final String RM_POOL_TYPE = "R";
 
     private Optional<String> getDefaultPooltype()
     {
         if (java.util.concurrent.ThreadLocalRandom.current().nextDouble() * 100 <= 40) {
-            return Optional.of("leaf");
+            return Optional.of(WORKER_POOL_TYPE_LEAF);
         }
-        return Optional.of("intermediate");
+        return Optional.of(WORKER_POOL_TYPE_INTERMEDIATE);
     }
 
     public boolean isResourceManager()
@@ -185,6 +191,12 @@ public class ServerConfig
 
     public Optional<String> getPoolType()
     {
+        if (isCoordinator()) {
+            return Optional.of(COORDINATOR_POOL_TYPE);
+        }
+        else if (isResourceManager()) {
+            return Optional.of(RM_POOL_TYPE);
+        }
         return poolType;
     }
 
