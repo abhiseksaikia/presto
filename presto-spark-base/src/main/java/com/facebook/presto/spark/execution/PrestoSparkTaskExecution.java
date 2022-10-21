@@ -507,7 +507,7 @@ public class PrestoSparkTaskExecution
         @Override
         public ScheduledSplit getScheduledSplit()
         {
-            return partitionedSplit;
+            throw new UnsupportedOperationException(format("getScheduledSplit is not implemented for PrestoSparkTaskExecution"));
         }
     }
 }

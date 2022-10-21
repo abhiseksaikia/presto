@@ -13,6 +13,7 @@
  */
 package com.facebook.presto.execution.scheduler;
 
+import com.facebook.airlift.log.Logger;
 import com.facebook.airlift.stats.CounterStat;
 import com.facebook.presto.Session;
 import com.facebook.presto.execution.NodeTaskMap;
@@ -81,6 +82,7 @@ import static java.util.concurrent.TimeUnit.SECONDS;
 
 public class NodeScheduler
 {
+    private static final Logger log = Logger.get(NodeScheduler.class);
     private final NetworkLocationCache networkLocationCache;
     private final List<CounterStat> topologicalSplitCounters;
     private final List<String> networkLocationSegmentNames;
@@ -263,6 +265,7 @@ public class NodeScheduler
             ImmutableSetMultimap.Builder<InetAddress, InternalNode> allNodesByHost = ImmutableSetMultimap.builder();
             Predicate<Node> resourceManagerFilterPredicate = node -> !node.isResourceManager();
             Predicate<Node> finalNodeFilterPredicate = resourceManagerFilterPredicate.and(nodeFilterPredicate.orElse(node -> true));
+
             List<InternalNode> activeNodes;
             List<InternalNode> allNodes;
             if (connectorId != null) {

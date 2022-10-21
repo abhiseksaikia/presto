@@ -171,6 +171,7 @@ public final class DiscoveryNodeManager
             OptionalInt raftPort = getRaftPort(service);
             if (uri != null && nodeVersion != null) {
                 NodePoolType poolType = getPoolType(service);
+
                 InternalNode node = new InternalNode(
                         service.getNodeId(),
                         uri,
