@@ -13,6 +13,7 @@
  */
 package com.facebook.presto.execution.scheduler;
 
+import com.facebook.airlift.log.Logger;
 import com.facebook.presto.Session;
 import com.facebook.presto.execution.ForQueryExecution;
 import com.facebook.presto.execution.NodeTaskMap;
@@ -104,6 +105,7 @@ import static java.util.stream.Collectors.toSet;
 
 public class SectionExecutionFactory
 {
+    private static final Logger log = Logger.get(SectionExecutionFactory.class);
     public static final int SPLIT_RETRY_BATCH_SIZE = 100;
     private final Metadata metadata;
     private final NodePartitioningManager nodePartitioningManager;
@@ -302,6 +304,7 @@ public class SectionExecutionFactory
             if (isInternalSystemConnector(connectorId)) {
                 connectorId = null;
             }
+
             NodeSelector nodeSelector = nodeScheduler.createNodeSelector(session, connectorId, maxTasksPerStage, nodePredicate);
             SplitPlacementPolicy placementPolicy = new DynamicSplitPlacementPolicy(nodeSelector, stageExecution::getAllTasks);
 

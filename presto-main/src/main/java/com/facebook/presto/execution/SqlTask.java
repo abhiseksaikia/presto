@@ -35,6 +35,7 @@ import com.facebook.presto.operator.TaskExchangeClientManager;
 import com.facebook.presto.operator.TaskStats;
 import com.facebook.presto.spi.ConnectorId;
 import com.facebook.presto.spi.ConnectorMetadataUpdateHandle;
+import com.facebook.presto.spi.NodePoolType;
 import com.facebook.presto.spi.connector.ConnectorMetadataUpdater;
 import com.facebook.presto.spi.plan.PlanNodeId;
 import com.facebook.presto.sql.planner.PlanFragment;
@@ -74,6 +75,7 @@ public class SqlTask
     private static final Logger log = Logger.get(SqlTask.class);
 
     private final TaskId taskId;
+    private final NodePoolType poolType;
     private final TaskInstanceId taskInstanceId;
     private final URI location;
     private final String nodeId;
@@ -102,7 +104,8 @@ public class SqlTask
             Function<SqlTask, ?> onDone,
             DataSize maxBufferSize,
             CounterStat failedTasks,
-            SpoolingOutputBufferFactory spoolingOutputBufferFactory)
+            SpoolingOutputBufferFactory spoolingOutputBufferFactory,
+            NodePoolType poolType)
     {
         SqlTask sqlTask = new SqlTask(
                 taskId,
@@ -113,7 +116,8 @@ public class SqlTask
                 exchangeClientSupplier,
                 taskNotificationExecutor,
                 maxBufferSize,
-                spoolingOutputBufferFactory);
+                spoolingOutputBufferFactory,
+                poolType);
         sqlTask.initialize(onDone, failedTasks);
         return sqlTask;
     }
@@ -127,7 +131,8 @@ public class SqlTask
             ExchangeClientSupplier exchangeClientSupplier,
             ExecutorService taskNotificationExecutor,
             DataSize maxBufferSize,
-            SpoolingOutputBufferFactory spoolingOutputBufferFactory)
+            SpoolingOutputBufferFactory spoolingOutputBufferFactory,
+            NodePoolType poolType)
     {
         this.taskId = requireNonNull(taskId, "taskId is null");
         this.taskInstanceId = new TaskInstanceId(UUID.randomUUID());
@@ -135,6 +140,7 @@ public class SqlTask
         this.nodeId = requireNonNull(nodeId, "nodeId is null");
         this.queryContext = requireNonNull(queryContext, "queryContext is null");
         this.sqlTaskExecutionFactory = requireNonNull(sqlTaskExecutionFactory, "sqlTaskExecutionFactory is null");
+        this.poolType = requireNonNull(poolType, "poolType is null");
         requireNonNull(exchangeClientSupplier, "exchangeClientSupplier is null");
         requireNonNull(taskNotificationExecutor, "taskNotificationExecutor is null");
         requireNonNull(maxBufferSize, "maxBufferSize is null");
@@ -151,6 +157,7 @@ public class SqlTask
                 () -> queryContext.getTaskContextByTaskId(taskId).localSystemMemoryContext(),
                 spoolingOutputBufferFactory);
         taskStateMachine = new TaskStateMachine(taskId, taskNotificationExecutor);
+        taskStateMachine.setPoolType(poolType);
     }
 
     // this is a separate method to ensure that the `this` reference is not leaked during construction
