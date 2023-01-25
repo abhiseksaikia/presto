@@ -216,6 +216,7 @@ public class DistributedQueryRunner
                     NodePoolType workerPool = i % 2 == 0 ? LEAF : INTERMEDIATE;
                     Map<String, String> workerProperties = new HashMap<>(extraProperties);
                     workerProperties.put("pool-type", workerPool.name());
+
                     TestingPrestoServer worker = closer.register(createTestingPrestoServer(
                                     discoveryUrl,
                                     false,
