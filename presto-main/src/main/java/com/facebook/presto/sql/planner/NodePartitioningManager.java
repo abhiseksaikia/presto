@@ -113,12 +113,6 @@ public class NodePartitioningManager
                 session.toConnectorSession(),
                 partitioningHandle.getConnectorHandle());
     }
-
-    public NodePartitionMap getNodePartitioningMap(Session session, PartitioningHandle partitioningHandle, Optional<Predicate<Node>> nodePredicate)
-    {
-        return getNodePartitioningMap(session, partitioningHandle, Optional.empty());
-    }
-
     public NodePartitionMap getNodePartitioningMap(Session session, PartitioningHandle partitioningHandle, Optional<Predicate<Node>> nodePredicate)
     {
         requireNonNull(session, "session is null");
