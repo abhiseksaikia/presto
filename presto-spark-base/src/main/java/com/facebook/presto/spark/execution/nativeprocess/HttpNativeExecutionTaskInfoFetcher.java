@@ -85,7 +85,8 @@ public class HttpNativeExecutionTaskInfoFetcher
                 TASK_ERROR_MESSAGE,
                 maxErrorDuration,
                 errorRetryScheduledExecutor,
-                "getting taskInfo from native process");
+                "getting taskInfo from native process",
+                false);
         this.taskFinished = requireNonNull(taskFinished, "taskFinished is null");
     }
 
