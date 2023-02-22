@@ -139,6 +139,10 @@ public class RetryDriver
                 return callable.call();
             }
             catch (Exception e) {
+                log.error(e, "callable = %s , exception class = %s, ", callableName, e.getClass().getName());
+                if (e.getCause() != null) {
+                    log.error(e.getCause(), "callable = %s , exception causing class = %s, ", callableName, e.getCause().getClass().getName());
+                }
                 // Immediately stop retry attempts once an interrupt has been received
                 if (e instanceof InterruptedException || Thread.currentThread().isInterrupted()) {
                     addSuppressed(e, suppressedExceptions);
