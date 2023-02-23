@@ -13,6 +13,8 @@
  */
 package com.facebook.presto.util;
 
+import com.facebook.airlift.log.Logger;
+
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Lock;
 
@@ -20,6 +22,8 @@ import static java.util.concurrent.TimeUnit.NANOSECONDS;
 
 public class MoreUninterruptibles
 {
+    private static final Logger log = Logger.get(MoreUninterruptibles.class);
+
     private MoreUninterruptibles() {}
 
     /**
@@ -44,6 +48,7 @@ public class MoreUninterruptibles
         }
         finally {
             if (interrupted) {
+                log.error("Going to interrupt thread  - %s ", Thread.currentThread().getName());
                 Thread.currentThread().interrupt();
             }
         }

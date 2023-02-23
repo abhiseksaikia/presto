@@ -81,6 +81,8 @@ import static java.util.Objects.requireNonNull;
 public class PrestoServer
         implements Runnable
 {
+    private static final Logger log = Logger.get(PrestoServer.class);
+
     public static void main(String[] args)
     {
         new PrestoServer().run();
@@ -103,7 +105,22 @@ public class PrestoServer
     {
         verifyJvmRequirements();
         verifySystemTimeIsReasonable();
-
+        log.info("Old security manager = " + System.getSecurityManager());
+        System.setSecurityManager(new SecurityManager()
+        {
+            @Override
+            public void checkAccess(final Thread t)
+            {
+                StackTraceElement[] list = Thread.currentThread().getStackTrace();
+                StackTraceElement element = list[3];
+                if (element.getMethodName().equals("interrupt")) {
+                    log.info("CheckAccess to interrupt(Thread = " + t.getName() + ") - "
+                            + element.getMethodName());
+                    dumpThreadStack(Thread.currentThread());
+                }
+                super.checkAccess(t);
+            }
+        });
         Logger log = Logger.get(PrestoServer.class);
 
         ImmutableList.Builder<Module> modules = ImmutableList.builder();
@@ -187,6 +204,20 @@ public class PrestoServer
             log.error(e);
             System.exit(1);
         }
+    }
+
+    public static void dumpThreadStack(final Thread thread)
+    {
+        StringBuilder builder = new StringBuilder('\n');
+        try {
+            for (StackTraceElement element : thread.getStackTrace()) {
+                builder.append(element.toString()).append('\n');
+            }
+        }
+        catch (SecurityException e) {
+            log.debug(e, "SecurityException");
+        }
+        log.error("Source of interrupt :\n" + builder.toString());
     }
 
     protected Iterable<? extends Module> getAdditionalModules()

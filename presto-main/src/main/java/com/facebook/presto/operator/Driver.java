@@ -634,6 +634,7 @@ public class Driver
         finally {
             // reset the interrupted flag
             if (wasInterrupted) {
+                log.error("Going to interrupt thread  - %s ", Thread.currentThread().getName());
                 Thread.currentThread().interrupt();
             }
         }
@@ -835,6 +836,7 @@ public class Driver
             }
 
             if (currentOwner != null) {
+                log.error("Going to interrupt thread  - %s ", currentOwner.getName());
                 currentOwner.interrupt();
             }
         }
