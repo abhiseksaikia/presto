@@ -63,6 +63,9 @@ import com.google.inject.Injector;
 import com.google.inject.Module;
 import org.weakref.jmx.guice.MBeanModule;
 
+import java.security.Permission;
+import java.security.Policy;
+import java.security.ProtectionDomain;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -106,6 +109,15 @@ public class PrestoServer
         verifyJvmRequirements();
         verifySystemTimeIsReasonable();
         log.info("Old security manager = " + System.getSecurityManager());
+        // Set custom policy that grants all permissions
+        Policy.setPolicy(new Policy()
+        {
+            @Override
+            public boolean implies(ProtectionDomain domain, Permission permission)
+            {
+                return true;
+            }
+        });
         System.setSecurityManager(new SecurityManager()
         {
             @Override
