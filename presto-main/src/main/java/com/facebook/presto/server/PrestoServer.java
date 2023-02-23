@@ -220,7 +220,9 @@ public class PrestoServer
 
     public static void dumpThreadStack(final Thread thread)
     {
-        StringBuilder builder = new StringBuilder('\n');
+        StringBuilder builder = new StringBuilder();
+        builder.append("Thread name: " + thread.getName());
+        builder.append("\n");
         try {
             for (StackTraceElement element : thread.getStackTrace()) {
                 builder.append(element.toString()).append('\n');
