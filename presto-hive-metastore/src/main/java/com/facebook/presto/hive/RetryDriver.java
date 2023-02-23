@@ -139,7 +139,16 @@ public class RetryDriver
                 return callable.call();
             }
             catch (Exception e) {
+                log.error(e, "callable = %s , exception class = %s, ", callableName, e.getClass().getName());
+                if (e.getCause() != null) {
+                    log.error(e.getCause(), "callable = %s , exception causing class = %s, ", callableName, e.getCause().getClass().getName());
+                }
                 e = exceptionMapper.apply(e);
+
+                log.error(e, "exceptionMapper::callable = %s , exception class = %s, ", callableName, e.getClass().getName());
+                if (e.getCause() != null) {
+                    log.error(e.getCause(), "exceptionMapper::callable = %s , exception causing class = %s, ", callableName, e.getCause().getClass().getName());
+                }
                 for (Class<? extends Exception> clazz : exceptionWhiteList) {
                     if (clazz.isInstance(e)) {
                         addSuppressed(e, suppressedExceptions);
