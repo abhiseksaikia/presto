@@ -128,7 +128,7 @@ public class PrestoServer
                 if (element.getMethodName().equals("interrupt")) {
                     log.info("CheckAccess to interrupt(Thread = " + t.getName() + ") - "
                             + element.getMethodName());
-                    dumpThreadStack(Thread.currentThread());
+                    dumpThreadStack(Thread.currentThread(), element.getMethodName());
                 }
                 //super.checkAccess(t);
             }
@@ -218,10 +218,10 @@ public class PrestoServer
         }
     }
 
-    public static void dumpThreadStack(final Thread thread)
+    public static void dumpThreadStack(final Thread thread, String methodName)
     {
         StringBuilder builder = new StringBuilder();
-        builder.append("Thread name: " + thread.getName());
+        builder.append("Thread name: " + thread.getName() + " methodName =" + methodName);
         builder.append("\n");
         try {
             for (StackTraceElement element : thread.getStackTrace()) {
