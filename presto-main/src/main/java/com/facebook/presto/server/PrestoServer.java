@@ -118,7 +118,7 @@ public class PrestoServer
                             + element.getMethodName());
                     dumpThreadStack(Thread.currentThread());
                 }
-                super.checkAccess(t);
+                //super.checkAccess(t);
             }
         });
         Logger log = Logger.get(PrestoServer.class);
