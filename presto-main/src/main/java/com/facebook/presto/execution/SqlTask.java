@@ -35,6 +35,7 @@ import com.facebook.presto.operator.TaskExchangeClientManager;
 import com.facebook.presto.operator.TaskStats;
 import com.facebook.presto.spi.ConnectorId;
 import com.facebook.presto.spi.ConnectorMetadataUpdateHandle;
+import com.facebook.presto.spi.NodePoolType;
 import com.facebook.presto.spi.connector.ConnectorMetadataUpdater;
 import com.facebook.presto.spi.plan.PlanNodeId;
 import com.facebook.presto.sql.planner.PlanFragment;
@@ -74,7 +75,7 @@ public class SqlTask
     private static final Logger log = Logger.get(SqlTask.class);
 
     private final TaskId taskId;
-    private final Optional<String> poolType;
+    private final NodePoolType poolType;
     private final TaskInstanceId taskInstanceId;
     private final URI location;
     private final String nodeId;
@@ -104,7 +105,7 @@ public class SqlTask
             DataSize maxBufferSize,
             CounterStat failedTasks,
             SpoolingOutputBufferFactory spoolingOutputBufferFactory,
-            Optional<String> poolType)
+            NodePoolType poolType)
     {
         SqlTask sqlTask = new SqlTask(
                 taskId,
@@ -131,7 +132,7 @@ public class SqlTask
             ExecutorService taskNotificationExecutor,
             DataSize maxBufferSize,
             SpoolingOutputBufferFactory spoolingOutputBufferFactory,
-            Optional<String> poolType)
+            NodePoolType poolType)
     {
         this.taskId = requireNonNull(taskId, "taskId is null");
         this.taskInstanceId = new TaskInstanceId(UUID.randomUUID());

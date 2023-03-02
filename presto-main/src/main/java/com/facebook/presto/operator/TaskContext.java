@@ -28,6 +28,7 @@ import com.facebook.presto.memory.QueryContextVisitor;
 import com.facebook.presto.memory.VoidTraversingQueryContextVisitor;
 import com.facebook.presto.memory.context.LocalMemoryContext;
 import com.facebook.presto.memory.context.MemoryTrackingContext;
+import com.facebook.presto.spi.NodePoolType;
 import com.facebook.presto.spi.plan.AggregationNode;
 import com.facebook.presto.spi.plan.PlanNode;
 import com.facebook.presto.spi.plan.PlanNodeId;
@@ -221,9 +222,9 @@ public class TaskContext
         return taskStateMachine.getTaskId();
     }
 
-    public String getPoolType()
+    public NodePoolType getPoolType()
     {
-        return taskStateMachine.getPoolType().orElse("");
+        return taskStateMachine.getPoolType();
     }
 
     public PipelineContext addPipelineContext(int pipelineId, boolean inputPipeline, boolean outputPipeline, boolean partitioned)
