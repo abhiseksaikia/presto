@@ -86,6 +86,7 @@ import static com.facebook.presto.execution.scheduler.TableWriteInfo.createTable
 import static com.facebook.presto.spi.ConnectorId.isInternalSystemConnector;
 import static com.facebook.presto.spi.NodePoolType.INTERMEDIATE;
 import static com.facebook.presto.spi.NodePoolType.LEAF;
+import static com.facebook.presto.spi.StandardErrorCode.HOST_SHUTTING_DOWN;
 import static com.facebook.presto.spi.StandardErrorCode.NO_NODES_AVAILABLE;
 import static com.facebook.presto.spi.StandardErrorCode.REMOTE_TASK_ERROR;
 import static com.facebook.presto.spi.connector.NotPartitionedPartitionHandle.NOT_PARTITIONED;
@@ -313,6 +314,7 @@ public class SectionExecutionFactory
 
             if (plan.getFragment().isLeaf()) {
                 stageExecution.registerStageTaskRecoveryCallback(taskId -> {
+                    log.debug("Going to recover task - %s", taskId);
                     HttpRemoteTask remoteTask = stageExecution.getAllTasks().stream()
                             .filter(task -> task.getTaskId().equals(taskId))
                             .filter(task -> task instanceof HttpRemoteTask)
@@ -350,7 +352,7 @@ public class SectionExecutionFactory
                             }
                         }
                     }
-                });
+                }, ImmutableSet.of(HOST_SHUTTING_DOWN.toErrorCode()));
             }
 
             checkArgument(!plan.getFragment().getStageExecutionDescriptor().isStageGroupedExecution());
