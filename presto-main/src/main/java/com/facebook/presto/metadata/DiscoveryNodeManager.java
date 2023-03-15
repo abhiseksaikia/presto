@@ -25,6 +25,7 @@ import com.facebook.presto.connector.system.GlobalSystemConnector;
 import com.facebook.presto.failureDetector.FailureDetector;
 import com.facebook.presto.server.InternalCommunicationConfig;
 import com.facebook.presto.server.InternalCommunicationConfig.CommunicationProtocol;
+import com.facebook.presto.server.ServerConfig;
 import com.facebook.presto.server.thrift.ThriftServerInfoClient;
 import com.facebook.presto.spi.ConnectorId;
 import com.facebook.presto.spi.NodePoolType;
@@ -302,7 +303,7 @@ public final class DiscoveryNodeManager
         if (isMemoizeDeadNodesEnabled && this.connectorIdsByNodeId != null) {
             connectorIdsByNodeId.putAll(this.connectorIdsByNodeId);
         }
-
+        Map<String, String> activePools = new HashMap<>();
         for (ServiceDescriptor service : services) {
             URI uri = getHttpUri(service, httpsRequired);
             OptionalInt thriftPort = getThriftServerPort(service);
@@ -314,7 +315,8 @@ public final class DiscoveryNodeManager
             boolean catalogServer = isCatalogServer(service);
             OptionalInt raftPort = getRaftPort(service);
             if (uri != null && nodeVersion != null) {
-                InternalNode node = new InternalNode(service.getNodeId(), uri, thriftPort, nodeVersion, coordinator, resourceManager, catalogServer, ALIVE, raftPort, getPoolType(service));
+                NodePoolType poolType = getPoolType(service);
+                InternalNode node = new InternalNode(service.getNodeId(), uri, thriftPort, nodeVersion, coordinator, resourceManager, catalogServer, ALIVE, raftPort, poolType);
                 NodeState nodeState = getNodeState(node);
 
                 switch (nodeState) {
@@ -330,6 +332,7 @@ public final class DiscoveryNodeManager
                             catalogServersBuilder.add(node);
                         }
 
+                        activePools.put(service.getNodeId(), poolType.toString());
                         nodes.put(node.getNodeIdentifier(), node);
 
                         // record available active nodes organized by connector id
