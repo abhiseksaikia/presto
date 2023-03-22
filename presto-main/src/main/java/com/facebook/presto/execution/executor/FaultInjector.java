@@ -17,6 +17,7 @@ import com.facebook.airlift.log.Logger;
 import com.facebook.airlift.node.NodeInfo;
 import com.facebook.presto.server.GracefulShutdownHandler;
 import com.facebook.presto.server.ServerConfig;
+import com.facebook.presto.spi.NodePoolType;
 import com.facebook.presto.util.PeriodicTaskExecutor;
 import io.airlift.units.Duration;
 
@@ -68,7 +69,7 @@ public class FaultInjector
 
     private void refreshShutdownCriteria()
     {
-        if (!this.serverConfig.getPoolType().isPresent() || !ServerConfig.WORKER_POOL_TYPE_LEAF.equals(this.serverConfig.getPoolType().get())) {
+        if (this.serverConfig.getPoolType() != NodePoolType.LEAF) {
             return;
         }
         //don't launch shutdown handle other nodes
