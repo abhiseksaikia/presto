@@ -226,6 +226,7 @@ public class TaskContext
         return taskStateMachine.getPoolType().toString();
     }
 
+
     public PipelineContext addPipelineContext(int pipelineId, boolean inputPipeline, boolean outputPipeline, boolean partitioned)
     {
         PipelineContext pipelineContext = new PipelineContext(
