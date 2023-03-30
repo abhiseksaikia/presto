@@ -21,13 +21,12 @@ import com.facebook.presto.spi.NodePoolType;
 import com.facebook.presto.util.PeriodicTaskExecutor;
 import io.airlift.units.Duration;
 
-import javax.annotation.PostConstruct;
 import javax.annotation.PreDestroy;
 import javax.inject.Inject;
 
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static com.facebook.airlift.concurrent.Threads.daemonThreadsNamed;
 import static java.util.concurrent.Executors.newScheduledThreadPool;
@@ -41,8 +40,9 @@ public class FaultInjector
     private final PeriodicTaskExecutor gracefulShutdownExecutor;
     private Duration resourceGroupRunTimeInfoRefreshInterval = new Duration(100, TimeUnit.MILLISECONDS);
     private final TaskExecutor taskExecutor;
-    private static final AtomicReference<String> faultyNodeID = new AtomicReference<>();
     private static final Logger log = Logger.get(FaultInjector.class);
+    //try with one node going down, multiple node going down at the same time may have some corner case issues to be fixed
+    private final AtomicBoolean isShutDown = new AtomicBoolean(false);
 
     @Inject
     public FaultInjector(NodeInfo nodeInfo, ServerConfig serverConfig, GracefulShutdownHandler shutdownHandler, TaskExecutor taskExecutor)
@@ -54,7 +54,6 @@ public class FaultInjector
         this.serverConfig = serverConfig;
     }
 
-    @PostConstruct
     public void start()
     {
         gracefulShutdownExecutor.start();
@@ -72,19 +71,15 @@ public class FaultInjector
         if (this.serverConfig.getPoolType() != NodePoolType.LEAF) {
             return;
         }
-        //don't launch shutdown handle other nodes
-        if (!nodeInfo.getNodeId().startsWith("node-2")) {
+        if (isShutDown.get()) {
             return;
         }
         int queuedSplit = taskExecutor.getTaskList().stream().mapToInt(taskHandle -> taskHandle.getQueuedSplitSize()).sum();
         int runningLeafSplit = taskExecutor.getTaskList().stream().mapToInt(taskHandle -> taskHandle.getRunningLeafSplits()).sum();
-        if (queuedSplit > 5 && runningLeafSplit > 0) {
-            //pick one leaf worker node and make it a faulty one
-            faultyNodeID.compareAndSet(null, nodeInfo.getNodeId());
-            if (faultyNodeID.get().equals(nodeInfo.getNodeId())) {
-                log.debug("Shutting down node - %s", nodeInfo.getNodeId());
-                shutdownHandler.requestShutdown();
-            }
+        if (queuedSplit > 5 && runningLeafSplit > 0 && !isShutDown.get()) {
+            log.warn("Shutting down node - %s", nodeInfo.getNodeId());
+            shutdownHandler.requestShutdown();
+            isShutDown.set(true);
         }
     }
 }
