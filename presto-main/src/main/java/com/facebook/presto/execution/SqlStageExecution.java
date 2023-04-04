@@ -608,7 +608,7 @@ public final class SqlStageExecution
                         .orElse(new PrestoException(GENERIC_INTERNAL_ERROR, "A task failed for an unknown reason"));
                 if (isRecoverable(rewrittenFailures)) {
                     try {
-                        stageTaskRecoveryCallback.get().recover(taskId);
+                        stageTaskRecoveryCallback.get().recover(taskId, rewrittenFailures);
                         totalRetries.incrementAndGet();
                         finishedTasks.add(taskId);
                     }
@@ -749,7 +749,8 @@ public final class SqlStageExecution
                 executionFailureInfo.getErrorLocation(),
                 isLeaf ? REMOTE_HOST_GONE.toErrorCode() : REMOTE_HOST_GONE_INTERMEDIATE.toErrorCode(),
                 executionFailureInfo.getRemoteHost(),
-                executionFailureInfo.getErrorCause());
+                executionFailureInfo.getErrorCause(),
+                executionFailureInfo.getFailureDetectionTimeInNanos());
     }
 
     @Override
@@ -815,7 +816,7 @@ public final class SqlStageExecution
     @FunctionalInterface
     public interface StageTaskRecoveryCallback
     {
-        void recover(TaskId taskId);
+        void recover(TaskId taskId, List<ExecutionFailureInfo> executionFailureInfos);
     }
 
     private static class ListenerManager<T>
