@@ -25,7 +25,6 @@ import com.facebook.presto.connector.system.GlobalSystemConnector;
 import com.facebook.presto.failureDetector.FailureDetector;
 import com.facebook.presto.server.InternalCommunicationConfig;
 import com.facebook.presto.server.InternalCommunicationConfig.CommunicationProtocol;
-import com.facebook.presto.server.ServerConfig;
 import com.facebook.presto.server.thrift.ThriftServerInfoClient;
 import com.facebook.presto.spi.ConnectorId;
 import com.facebook.presto.spi.NodePoolType;

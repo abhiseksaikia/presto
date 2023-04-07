@@ -21,6 +21,7 @@ import com.facebook.presto.spi.NodePoolType;
 import com.facebook.presto.util.PeriodicTaskExecutor;
 import io.airlift.units.Duration;
 
+import javax.annotation.PostConstruct;
 import javax.annotation.PreDestroy;
 import javax.inject.Inject;
 
@@ -54,6 +55,7 @@ public class FaultInjector
         this.serverConfig = serverConfig;
     }
 
+//    @PostConstruct
     public void start()
     {
         gracefulShutdownExecutor.start();
@@ -71,6 +73,11 @@ public class FaultInjector
         if (this.serverConfig.getPoolType() != NodePoolType.LEAF) {
             return;
         }
+
+        //don't launch shutdown handle other nodes
+//        if (!nodeInfo.getNodeId().startsWith("node-2")) {
+//            return;
+//        }
         if (isShutDown.get()) {
             return;
         }
