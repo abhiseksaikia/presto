@@ -51,13 +51,16 @@ public class ExchangeClientFactory
     private final ScheduledExecutorService scheduler;
     private final ThreadPoolExecutorMBean executorMBean;
     private final ExecutorService pageBufferClientCallbackExecutor;
+    private final ExchangeClientStats exchangeClientStats;
+    private final boolean isPrioritizeShuttingDownNodes;
 
     @Inject
     public ExchangeClientFactory(
             ExchangeClientConfig config,
             @ForExchange HttpClient httpClient,
             @ForExchange DriftClient<ThriftTaskClient> driftClient,
-            @ForExchange ScheduledExecutorService scheduler)
+            @ForExchange ScheduledExecutorService scheduler,
+            ExchangeClientStats exchangeClientStats)
     {
         this(
                 config.getMaxBufferSize(),
@@ -70,7 +73,9 @@ public class ExchangeClientFactory
                 config.getResponseSizeExponentialMovingAverageDecayingAlpha(),
                 httpClient,
                 driftClient,
-                scheduler);
+                scheduler,
+                exchangeClientStats,
+                config.isPrioritizeShuttingDownNodes());
     }
 
     public ExchangeClientFactory(
@@ -84,7 +89,9 @@ public class ExchangeClientFactory
             double responseSizeExponentialMovingAverageDecayingAlpha,
             HttpClient httpClient,
             DriftClient<ThriftTaskClient> driftClient,
-            ScheduledExecutorService scheduler)
+            ScheduledExecutorService scheduler,
+            ExchangeClientStats exchangeClientStats,
+            boolean isPrioritizeShuttingDownNodes)
     {
         this.maxBufferedBytes = requireNonNull(maxBufferedBytes, "maxBufferedBytes is null");
         this.concurrentRequestMultiplier = concurrentRequestMultiplier;
@@ -93,7 +100,7 @@ public class ExchangeClientFactory
         this.asyncPageTransportEnabled = asyncPageTransportEnabled;
         this.httpClient = requireNonNull(httpClient, "httpClient is null");
         this.driftClient = requireNonNull(driftClient, "driftClient is null");
-
+        this.exchangeClientStats = requireNonNull(exchangeClientStats, "exchangeClientStats is null");
         // Use only 0.75 of the maxResponseSize to leave room for additional bytes from the encoding
         // TODO figure out a better way to compute the size of data that will be transferred over the network
         requireNonNull(maxResponseSize, "maxResponseSize is null");
@@ -106,7 +113,7 @@ public class ExchangeClientFactory
         this.executorMBean = new ThreadPoolExecutorMBean((ThreadPoolExecutor) pageBufferClientCallbackExecutor);
 
         this.responseSizeExponentialMovingAverageDecayingAlpha = responseSizeExponentialMovingAverageDecayingAlpha;
-
+        this.isPrioritizeShuttingDownNodes = isPrioritizeShuttingDownNodes;
         checkArgument(maxBufferedBytes.toBytes() > 0, "maxBufferSize must be at least 1 byte: %s", maxBufferedBytes);
         checkArgument(maxResponseSize.toBytes() > 0, "maxResponseSize must be at least 1 byte: %s", maxResponseSize);
         checkArgument(concurrentRequestMultiplier > 0, "concurrentRequestMultiplier must be at least 1: %s", concurrentRequestMultiplier);
@@ -141,6 +148,8 @@ public class ExchangeClientFactory
                 driftClient,
                 scheduler,
                 systemMemoryContext,
-                pageBufferClientCallbackExecutor);
+                pageBufferClientCallbackExecutor,
+                exchangeClientStats,
+                isPrioritizeShuttingDownNodes);
     }
 }
