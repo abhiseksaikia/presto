@@ -49,6 +49,7 @@ import com.facebook.presto.execution.scheduler.TableWriteInfo;
 import com.facebook.presto.metadata.FunctionAndTypeManager;
 import com.facebook.presto.metadata.HandleJsonModule;
 import com.facebook.presto.metadata.HandleResolver;
+import com.facebook.presto.metadata.InMemoryNodeManager;
 import com.facebook.presto.metadata.InternalNode;
 import com.facebook.presto.metadata.MetadataUpdates;
 import com.facebook.presto.metadata.Split;
@@ -350,7 +351,8 @@ public class TestHttpRemoteTask
                                 createTestMetadataManager(),
                                 new TestQueryManager(),
                                 new HandleResolver(),
-                                new ConnectorTypeSerdeManager(new ConnectorMetadataUpdateHandleJsonSerde()));
+                                new ConnectorTypeSerdeManager(new ConnectorMetadataUpdateHandleJsonSerde()),
+                                new InMemoryNodeManager());
                     }
                 });
         Injector injector = app

@@ -46,6 +46,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 import static com.facebook.airlift.http.client.HttpUriBuilder.uriBuilderFrom;
 import static com.facebook.airlift.http.client.Request.Builder.prepareGet;
@@ -93,6 +94,8 @@ class ContinuousTaskStatusFetcher
     @GuardedBy("this")
     private ListenableFuture<BaseResponse<TaskStatus>> future;
 
+    private final Supplier<Boolean> drainingNodeChecker;
+
     public ContinuousTaskStatusFetcher(
             Consumer<Throwable> onFail,
             TaskId taskId,
@@ -107,7 +110,8 @@ class ContinuousTaskStatusFetcher
             boolean binaryTransportEnabled,
             boolean thriftTransportEnabled,
             Protocol thriftProtocol,
-            boolean isLeaf)
+            boolean isLeaf,
+            Supplier<Boolean> drainingNodeChecker)
     {
         requireNonNull(initialTaskStatus, "initialTaskStatus is null");
 
@@ -127,6 +131,7 @@ class ContinuousTaskStatusFetcher
         this.thriftTransportEnabled = thriftTransportEnabled;
         this.thriftProtocol = requireNonNull(thriftProtocol, "thriftProtocol is null");
         this.isLeaf = isLeaf;
+        this.drainingNodeChecker = requireNonNull(drainingNodeChecker, "thriftProtocol is null");
     }
 
     public synchronized void start()
@@ -165,13 +170,16 @@ class ContinuousTaskStatusFetcher
         }
 
         // if throttled due to error, asynchronously wait for timeout and try again
-        /**  removing ex backoff temporarily for prototype
-        ListenableFuture<?> errorRateLimit = errorTracker.acquireRequestPermit();
-        if (!errorRateLimit.isDone()) {
-            errorRateLimit.addListener(this::scheduleNextRequest, executor);
-            return;
+        if (!drainingNodeChecker.get()) {
+            ListenableFuture<?> errorRateLimit = errorTracker.acquireRequestPermit();
+            if (!errorRateLimit.isDone()) {
+                errorRateLimit.addListener(this::scheduleNextRequest, executor);
+                return;
+            }
         }
-         */
+        else {
+            log.warn("drainingNodeChecker::avoid exp backoff");
+        }
 
         Request.Builder requestBuilder;
         ResponseHandler responseHandler;

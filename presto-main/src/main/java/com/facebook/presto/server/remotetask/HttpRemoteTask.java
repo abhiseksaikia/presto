@@ -48,6 +48,7 @@ import com.facebook.presto.execution.buffer.OutputBuffers;
 import com.facebook.presto.execution.buffer.PageBufferInfo;
 import com.facebook.presto.execution.scheduler.TableWriteInfo;
 import com.facebook.presto.metadata.HandleResolver;
+import com.facebook.presto.metadata.InternalNodeManager;
 import com.facebook.presto.metadata.MetadataManager;
 import com.facebook.presto.metadata.MetadataUpdates;
 import com.facebook.presto.metadata.Split;
@@ -123,6 +124,7 @@ import static com.facebook.presto.server.TaskResourceUtils.convertFromThriftTask
 import static com.facebook.presto.server.smile.AdaptingJsonResponseHandler.createAdaptingJsonResponseHandler;
 import static com.facebook.presto.server.smile.FullSmileResponseHandler.createFullSmileResponseHandler;
 import static com.facebook.presto.server.thrift.ThriftCodecWrapper.unwrapThriftCodec;
+import static com.facebook.presto.spi.NodeState.SHUTTING_DOWN;
 import static com.facebook.presto.spi.StandardErrorCode.EXCEEDED_TASK_UPDATE_SIZE_LIMIT;
 import static com.facebook.presto.spi.StandardErrorCode.GENERIC_INTERNAL_ERROR;
 import static com.facebook.presto.spi.StandardErrorCode.REMOTE_TASK_ERROR;
@@ -228,6 +230,7 @@ public final class HttpRemoteTask
     private final TableWriteInfo tableWriteInfo;
 
     private final DecayCounter taskUpdateRequestSize;
+    private final InternalNodeManager nodeManager;
 
     public HttpRemoteTask(
             Session session,
@@ -265,7 +268,8 @@ public final class HttpRemoteTask
             QueryManager queryManager,
             DecayCounter taskUpdateRequestSize,
             HandleResolver handleResolver,
-            ConnectorTypeSerdeManager connectorTypeSerdeManager)
+            ConnectorTypeSerdeManager connectorTypeSerdeManager,
+            InternalNodeManager nodeManager)
     {
         requireNonNull(session, "session is null");
         requireNonNull(taskId, "taskId is null");
@@ -321,6 +325,7 @@ public final class HttpRemoteTask
             this.tableWriteInfo = tableWriteInfo;
             this.maxTaskUpdateSizeInBytes = maxTaskUpdateSizeInBytes;
             this.maxUnacknowledgedSplits = getMaxUnacknowledgedSplitsPerTask(session);
+            this.nodeManager = requireNonNull(nodeManager, "nodeManager cannot be null");
             checkArgument(maxUnacknowledgedSplits > 0, "maxUnacknowledgedSplits must be > 0, found: %s", maxUnacknowledgedSplits);
 
             this.tableScanPlanNodeIds = ImmutableSet.copyOf(planFragment.getTableScanSchedulingOrder());
@@ -371,7 +376,8 @@ public final class HttpRemoteTask
                     binaryTransportEnabled,
                     thriftTransportEnabled,
                     thriftProtocol,
-                    planFragment.isLeaf());
+                    planFragment.isLeaf(),
+                    this::getNodePoolSelectionPredicate);
 
             this.taskInfoFetcher = new TaskInfoFetcher(
                     this::failTask,
@@ -410,6 +416,11 @@ public final class HttpRemoteTask
             updateTaskStats();
             updateSplitQueueSpace();
         }
+    }
+
+    private boolean getNodePoolSelectionPredicate()
+    {
+        return nodeManager.getNodes(SHUTTING_DOWN).stream().map(node -> node.getHost()).collect(toImmutableSet()).contains(getNodeId());
     }
 
     @Override

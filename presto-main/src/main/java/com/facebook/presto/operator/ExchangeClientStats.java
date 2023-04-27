@@ -15,8 +15,11 @@ package com.facebook.presto.operator;
 
 import org.weakref.jmx.Managed;
 
+import javax.annotation.concurrent.ThreadSafe;
+
 import java.util.concurrent.atomic.AtomicLong;
 
+@ThreadSafe
 public class ExchangeClientStats
 {
     private final AtomicLong retainedBytes = new AtomicLong();

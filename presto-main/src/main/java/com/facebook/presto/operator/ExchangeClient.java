@@ -515,11 +515,21 @@ public class ExchangeClient
     private synchronized void requestComplete(PageBufferClient client)
     {
         if (!queuedClients.contains(client)) {
-            if (client.isNodeShuttingdown()) {
+            if (client.isNodeShuttingdown() && !shuttingdownClients.contains(client)) {
+                log.warn("Adding shutting down client");
                 shuttingdownClients.add(client);
             }
             else {
                 queuedClients.add(client);
+            }
+        }
+        else {
+            if (client.isNodeShuttingdown()) {
+                queuedClients.remove(client);
+                if (!shuttingdownClients.contains(client)) {
+                    log.warn("Removing from queued client and adding to shutting down client");
+                    shuttingdownClients.add(client);
+                }
             }
         }
         scheduleRequestIfNecessary();
