@@ -108,6 +108,7 @@ import com.facebook.presto.metadata.StaticFunctionNamespaceStoreConfig;
 import com.facebook.presto.metadata.TablePropertyManager;
 import com.facebook.presto.operator.ExchangeClientConfig;
 import com.facebook.presto.operator.ExchangeClientFactory;
+import com.facebook.presto.operator.ExchangeClientStats;
 import com.facebook.presto.operator.ExchangeClientSupplier;
 import com.facebook.presto.operator.FileFragmentResultCacheConfig;
 import com.facebook.presto.operator.FileFragmentResultCacheManager;
@@ -536,8 +537,12 @@ public class ServerMainModule
         thriftCodecBinder(binder).bindThriftCodec(TaskInfo.class);
         jaxrsBinder(binder).bind(PagesResponseWriter.class);
 
+        binder.bind(ExchangeClientStats.class).in(Scopes.SINGLETON);
+        newExporter(binder).export(ExchangeClientStats.class).withGeneratedName();
         // exchange client
         binder.bind(ExchangeClientSupplier.class).to(ExchangeClientFactory.class).in(Scopes.SINGLETON);
+        binder.bind(ExchangeClientSupplier.class).to(ExchangeClientFactory.class).in(Scopes.SINGLETON);
+
         httpClientBinder(binder).bindHttpClient("exchange", ForExchange.class)
                 .withTracing()
                 .withFilter(GenerateTraceTokenRequestFilter.class)

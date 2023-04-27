@@ -43,6 +43,7 @@ public class TestExchangeClientConfig
                 .setClientThreads(25)
                 .setAcknowledgePages(true)
                 .setResponseSizeExponentialMovingAverageDecayingAlpha(0.1)
+                .setPrioritizeShuttingDownNodes(true)
                 .setAsyncPageTransportEnabled(true));
     }
 
@@ -61,6 +62,7 @@ public class TestExchangeClientConfig
                 .put("exchange.acknowledge-pages", "false")
                 .put("exchange.response-size-exponential-moving-average-decaying-alpha", "0.42")
                 .put("exchange.async-page-transport-enabled", "false")
+                .put("exchange.prioritize-shuttingdown-nodes", "false")
                 .build();
 
         ExchangeClientConfig expected = new ExchangeClientConfig()
@@ -74,6 +76,7 @@ public class TestExchangeClientConfig
                 .setPageBufferClientMaxCallbackThreads(16)
                 .setAcknowledgePages(false)
                 .setResponseSizeExponentialMovingAverageDecayingAlpha(0.42)
+                .setPrioritizeShuttingDownNodes(false)
                 .setAsyncPageTransportEnabled(false);
 
         assertFullMapping(properties, expected);

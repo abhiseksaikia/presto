@@ -129,6 +129,8 @@ public class ExchangeClient
 
     private final LocalMemoryContext systemMemoryContext;
     private final Executor pageBufferClientCallbackExecutor;
+    private final ExchangeClientStats exchangeClientStats;
+    private final boolean isPrioritizeShuttingDownNodes;
 
     // ExchangeClientStatus.mergeWith assumes all clients have the same bufferCapacity.
     // Please change that method accordingly when this assumption becomes not true.
@@ -146,7 +148,9 @@ public class ExchangeClient
             DriftClient<ThriftTaskClient> driftClient,
             ScheduledExecutorService scheduler,
             LocalMemoryContext systemMemoryContext,
-            Executor pageBufferClientCallbackExecutor)
+            Executor pageBufferClientCallbackExecutor,
+            ExchangeClientStats exchangeClientStats,
+            boolean isPrioritizeShuttingDownNodes)
     {
         checkArgument(responseSizeExponentialMovingAverageDecayingAlpha >= 0.0 && responseSizeExponentialMovingAverageDecayingAlpha <= 1.0, "responseSizeExponentialMovingAverageDecayingAlpha must be between 0 and 1: %s", responseSizeExponentialMovingAverageDecayingAlpha);
         this.sinkMaxBufferSize = sinkMaxBufferSize;
@@ -164,6 +168,8 @@ public class ExchangeClient
         this.maxBufferRetainedSizeInBytes = Long.MIN_VALUE;
         this.pageBufferClientCallbackExecutor = requireNonNull(pageBufferClientCallbackExecutor, "pageBufferClientCallbackExecutor is null");
         this.responseSizeExponentialMovingAverage = new ExponentialMovingAverage(responseSizeExponentialMovingAverageDecayingAlpha, DEFAULT_MAX_PAGE_SIZE_IN_BYTES);
+        this.exchangeClientStats = exchangeClientStats;
+        this.isPrioritizeShuttingDownNodes = isPrioritizeShuttingDownNodes;
     }
 
     public ExchangeClientStatus getStatus()
@@ -319,7 +325,9 @@ public class ExchangeClient
 
         synchronized (this) {
             if (!closed.get()) {
-                bufferRetainedSizeInBytes -= page.getRetainedSizeInBytes();
+                long retainedSizeInBytes = page.getRetainedSizeInBytes();
+                bufferRetainedSizeInBytes -= retainedSizeInBytes;
+                exchangeClientStats.removeRetainedBytes(retainedSizeInBytes);
                 systemMemoryContext.setBytes(bufferRetainedSizeInBytes);
             }
             scheduleRequestIfNecessary();
@@ -472,6 +480,7 @@ public class ExchangeClient
                 pageBuffer.addAll(pages);
 
                 bufferRetainedSizeInBytes += pagesRetainedSizeInBytes;
+                exchangeClientStats.addRetainedBytes(pagesRetainedSizeInBytes);
                 maxBufferRetainedSizeInBytes = max(maxBufferRetainedSizeInBytes, bufferRetainedSizeInBytes);
                 systemMemoryContext.setBytes(bufferRetainedSizeInBytes);
 
@@ -654,5 +663,15 @@ public class ExchangeClient
         {
             return (long) oldValue;
         }
+    }
+
+    public long getBufferRetainedSizeInBytes()
+    {
+        return bufferRetainedSizeInBytes;
+    }
+
+    public long getMaxBufferRetainedSizeInBytes()
+    {
+        return maxBufferRetainedSizeInBytes;
     }
 }

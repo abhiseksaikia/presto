@@ -39,6 +39,7 @@ public class ExchangeClientConfig
     private boolean acknowledgePages = true;
     private double responseSizeExponentialMovingAverageDecayingAlpha = 0.1;
     private boolean asyncPageTransportEnabled = true;
+    private boolean prioritizeShuttingDownNodes = true;
 
     @NotNull
     public DataSize getMaxBufferSize()
@@ -180,6 +181,18 @@ public class ExchangeClientConfig
     public ExchangeClientConfig setAsyncPageTransportEnabled(boolean asyncPageTransportEnabled)
     {
         this.asyncPageTransportEnabled = asyncPageTransportEnabled;
+        return this;
+    }
+
+    public boolean isPrioritizeShuttingDownNodes()
+    {
+        return prioritizeShuttingDownNodes;
+    }
+
+    @Config("exchange.prioritize-shuttingdown-nodes")
+    public ExchangeClientConfig setPrioritizeShuttingDownNodes(boolean prioritizeShuttingDownNodes)
+    {
+        this.prioritizeShuttingDownNodes = prioritizeShuttingDownNodes;
         return this;
     }
 }
