@@ -63,6 +63,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalInt;
+import java.util.OptionalLong;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -789,7 +790,7 @@ public class OptimizedPartitionedOutputOperator
             }
 
             SerializedPage serializedPage = serde.serialize(output.slice(), bufferedRowCount);
-            outputBuffer.enqueue(lifespan, partition, ImmutableList.of(serializedPage));
+            outputBuffer.enqueue(lifespan, partition, OptionalLong.empty(), ImmutableList.of(serializedPage));
             pagesAdded.incrementAndGet();
             rowsAdded.addAndGet(bufferedRowCount);
             operatorContext.recordOutput(totalSizeInBytes, bufferedRowCount);

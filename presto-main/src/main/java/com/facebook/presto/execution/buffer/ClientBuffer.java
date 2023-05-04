@@ -30,8 +30,10 @@ import java.util.Collection;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Consumer;
 
 import static com.facebook.presto.execution.buffer.BufferResult.emptyResults;
 import static com.facebook.presto.execution.buffer.SerializedPageReference.dereferencePages;
@@ -49,6 +51,7 @@ class ClientBuffer
     private final String taskInstanceId;
     private final OutputBufferId bufferId;
     private final PagesReleasedListener onPagesReleased;
+    private final SerializedPageReference.SplitDrainedListener onSplitDrained;
 
     private final AtomicLong rowsAdded = new AtomicLong();
     private final AtomicLong pagesAdded = new AtomicLong();
@@ -72,11 +75,16 @@ class ClientBuffer
     @GuardedBy("this")
     private PendingRead pendingRead;
 
-    public ClientBuffer(String taskInstanceId, OutputBufferId bufferId, PagesReleasedListener onPagesReleased)
+
+    private volatile Consumer<Long> gracefulDrainingCompletionCallback;
+    private boolean gracefulShutdown;
+
+    public ClientBuffer(String taskInstanceId, OutputBufferId bufferId, PagesReleasedListener onPagesReleased, SerializedPageReference.SplitDrainedListener onSplitDrained)
     {
         this.taskInstanceId = requireNonNull(taskInstanceId, "taskInstanceId is null");
         this.bufferId = requireNonNull(bufferId, "bufferId is null");
         this.onPagesReleased = requireNonNull(onPagesReleased, "onPagesReleased is null");
+        this.onSplitDrained = requireNonNull(onSplitDrained, "onSplitDrained is null");
     }
 
     public BufferInfo getInfo()
@@ -111,6 +119,11 @@ class ClientBuffer
     public boolean isEmptyPages()
     {
         return pages.isEmpty();
+    }
+
+    public boolean isAnyPageAdded()
+    {
+        return pagesAdded.get() > 0;
     }
 
     public void destroy()
@@ -182,6 +195,7 @@ class ClientBuffer
         return getPages(sequenceId, maxSize, Optional.empty());
     }
 
+
     public ListenableFuture<BufferResult> getPages(long sequenceId, DataSize maxSize, Optional<PagesSupplier> pagesSupplier)
     {
         // acknowledge pages first, out side of locks to not trigger callbacks while holding the lock
@@ -215,6 +229,11 @@ class ClientBuffer
                 oldPendingRead.completeResultFutureWithEmpty();
             }
         }
+    }
+
+    public void setGracefulShutdown()
+    {
+        this.gracefulShutdown = true;
     }
 
     public void setNoMorePages()
@@ -368,15 +387,41 @@ class ClientBuffer
         List<SerializedPage> result = new ArrayList<>();
         long bytes = 0;
 
-        for (SerializedPageReference page : pages) {
-            bytes += page.getRetainedSizeInBytes();
-            // break (and don't add) if this page would exceed the limit
-            if (!result.isEmpty() && bytes > maxBytes) {
-                break;
+        long nextToken;
+        if (gracefulShutdown) {
+            Set<Long> halfTransmittedSplitIDs = onSplitDrained.getTransmittedSplitIDs();
+
+            int offset = 0;
+            for (SerializedPageReference page : pages) {
+                // only read the
+                if (page.getSplitID().isPresent() && halfTransmittedSplitIDs.contains(page.getSplitID().getAsLong())) {
+                    bytes += page.getRetainedSizeInBytes();
+                    // break (and don't add) if this page would exceed the limit
+                    if (!result.isEmpty() && bytes > maxBytes) {
+                        break;
+                    }
+                    result.add(page.getSerializedPage());
+                    onSplitDrained.addTransmittedSplit(page.getSplitID().getAsLong());
+                }
+
+                offset += 1;
             }
-            result.add(page.getSerializedPage());
+
+            nextToken = sequenceId + offset;
+        } else {
+            for (SerializedPageReference page : pages) {
+                bytes += page.getRetainedSizeInBytes();
+                // break (and don't add) if this page would exceed the limit
+                if (!result.isEmpty() && bytes > maxBytes) {
+                    break;
+                }
+                result.add(page.getSerializedPage());
+            }
+
+            nextToken = sequenceId + result.size();
         }
-        return new BufferResult(taskInstanceId, sequenceId, sequenceId + result.size(), false, false, result);
+
+        return new BufferResult(taskInstanceId, sequenceId, nextToken, false, false, result);
     }
 
     /**
@@ -409,6 +454,7 @@ class ClientBuffer
             long bytesRemoved = 0;
             for (int i = 0; i < pagesToRemove; i++) {
                 SerializedPageReference removedPage = pages.removeFirst();
+                onSplitDrained.onSplitDrained(removedPage.getSplitID(), 1);
                 removedPages.add(removedPage);
                 bytesRemoved += removedPage.getRetainedSizeInBytes();
             }

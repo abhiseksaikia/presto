@@ -48,6 +48,7 @@ import javax.annotation.concurrent.NotThreadSafe;
 import javax.annotation.concurrent.ThreadSafe;
 
 import java.lang.ref.WeakReference;
+import java.net.SocketException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -249,6 +250,7 @@ public class SqlTaskExecution
 
             outputBuffer.addStateChangeListener(new CheckTaskCompletionOnBufferFinish(SqlTaskExecution.this));
             outputBuffer.registerLifespanCompletionCallback(status::checkLifespanCompletion);
+            outputBuffer.registerGracefulDrainingCompletionCallback(status::onSplitCompletion);
         }
     }
 
@@ -267,7 +269,13 @@ public class SqlTaskExecution
                 getSplitConcurrencyAdjustmentInterval(taskContext.getSession()),
                 getMaxDriversPerTask(taskContext.getSession()),
                 Optional.of(
-                        taskID -> taskStateMachine.failed(new HostShuttingDownException("killing pending tasks due to host being shutting down", System.nanoTime()))),
+                        (taskID, recovery) -> {
+                            if (recovery) {
+                                taskStateMachine.failed(new HostShuttingDownException("killing pending tasks due to host being shutting down", System.nanoTime()));
+                            } else {
+                                taskStateMachine.failed(new SocketException("Simulated Socket Error"));
+                            }
+                        }),
                 Optional.of(outputBuffer));
         taskStateMachine.addStateChangeListener(state -> {
             if (state.isDone()) {
@@ -575,7 +583,10 @@ public class SqlTaskExecution
                         checkTaskCompletion();
 
                         if (result != null) {
-                            taskContext.addCompletedSplit(result);
+                            ScheduledSplit split = splitRunner.getScheduledSplit();
+                            if (split != null) {
+                                outputBuffer.setNoMorePagesForSplit(split.getSequenceId());
+                            }
                         }
 
                         splitMonitor.splitCompletedEvent(taskId, getDriverStats());
@@ -1325,6 +1336,11 @@ public class SqlTaskExecution
             List<Lifespan> result = ImmutableList.copyOf(per(pipelineId).unacknowledgedLifespansWithNoMoreDrivers);
             per(pipelineId).unacknowledgedLifespansWithNoMoreDrivers.clear();
             return result;
+        }
+
+        private void onSplitCompletion(Long splitID)
+        {
+            taskContext.addCompletedSplit(splitID);
         }
 
         private void checkLifespanCompletion(Lifespan lifespan)

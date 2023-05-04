@@ -31,6 +31,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.OptionalLong;
 import java.util.concurrent.ScheduledExecutorService;
 
 import static com.facebook.airlift.concurrent.Threads.daemonThreadsNamed;
@@ -1002,7 +1003,7 @@ public class TestArbitraryOutputBuffer
 
     private static ListenableFuture<?> enqueuePage(OutputBuffer buffer, Page page)
     {
-        buffer.enqueue(Lifespan.taskWide(), ImmutableList.of(PAGES_SERDE.serialize(page)));
+        buffer.enqueue(Lifespan.taskWide(), OptionalLong.empty(), ImmutableList.of(PAGES_SERDE.serialize(page)));
         ListenableFuture<?> future = buffer.isFull();
         assertFalse(future.isDone());
         return future;
@@ -1010,7 +1011,7 @@ public class TestArbitraryOutputBuffer
 
     private static void addPage(OutputBuffer buffer, Page page)
     {
-        buffer.enqueue(Lifespan.taskWide(), ImmutableList.of(PAGES_SERDE.serialize(page)));
+        buffer.enqueue(Lifespan.taskWide(), OptionalLong.empty(), ImmutableList.of(PAGES_SERDE.serialize(page)));
         assertTrue(buffer.isFull().isDone(), "Expected add page to not block");
     }
 

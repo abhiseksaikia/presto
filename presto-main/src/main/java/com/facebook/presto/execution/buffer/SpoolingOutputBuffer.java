@@ -48,6 +48,7 @@ import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.Queue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
@@ -117,6 +118,8 @@ public class SpoolingOutputBuffer
 
     @GuardedBy("this")
     private PendingRead pendingRead;
+
+    private boolean gracefulShutdown;
 
     public SpoolingOutputBuffer(
             TaskId taskId,
@@ -209,7 +212,7 @@ public class SpoolingOutputBuffer
     }
 
     @Override
-    public void enqueue(Lifespan lifespan, List<SerializedPage> pages)
+    public void enqueue(Lifespan lifespan, OptionalLong splitID, List<SerializedPage> pages)
     {
         if (!state.get().canAddPages()) {
             return;
@@ -246,10 +249,10 @@ public class SpoolingOutputBuffer
     }
 
     @Override
-    public synchronized void enqueue(Lifespan lifespan, int partition, List<SerializedPage> pages)
+    public synchronized void enqueue(Lifespan lifespan, int partition, OptionalLong splitID, List<SerializedPage> pages)
     {
         checkState(partition == 0, "Expected partition number to be zero");
-        enqueue(lifespan, pages);
+        enqueue(lifespan, splitID, pages);
     }
 
     private synchronized void flush()
@@ -285,6 +288,11 @@ public class SpoolingOutputBuffer
         totalStorageBytesAdded.addAndGet(bytes);
         totalStoragePagesAdded.addAndGet(pageCount);
         totalInMemoryBytes.set(0);
+    }
+    @Override
+    public void setGracefulShutdown()
+    {
+        this.gracefulShutdown = true;
     }
 
     @Override
@@ -774,8 +782,24 @@ public class SpoolingOutputBuffer
     }
 
     @Override
-    public boolean isAllPagesConsumed()
+    public boolean isAnyPagesAdded()
+    {
+        return totalPagesAdded.get() > 0;
+    }
+
+    @Override
+    public boolean isGracefulDrained()
     {
         return pages.isEmpty();
+    }
+
+    @Override
+    public void setNoMorePagesForSplit(Long splitID)
+    {
+    }
+
+    @Override
+    public void registerGracefulDrainingCompletionCallback(Consumer<Long> callback)
+    {
     }
 }

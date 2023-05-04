@@ -25,6 +25,7 @@ import com.google.common.util.concurrent.ListenableFuture;
 import io.airlift.units.DataSize;
 
 import java.util.List;
+import java.util.OptionalLong;
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
@@ -49,11 +50,14 @@ public class PartitionedOutputBuffer
     private final OutputBuffers outputBuffers;
     private final OutputBufferMemoryManager memoryManager;
     private final LifespanSerializedPageTracker pageTracker;
+    private final SplitSerializedPageTracker splitPageTracker;
 
     private final List<ClientBuffer> partitions;
 
     private final AtomicLong totalPagesAdded = new AtomicLong();
     private final AtomicLong totalRowsAdded = new AtomicLong();
+
+    private boolean gracefulShutdown;
 
     public PartitionedOutputBuffer(
             String taskInstanceId,
@@ -75,10 +79,11 @@ public class PartitionedOutputBuffer
                 requireNonNull(systemMemoryContextSupplier, "systemMemoryContextSupplier is null"),
                 requireNonNull(notificationExecutor, "notificationExecutor is null"));
         this.pageTracker = new LifespanSerializedPageTracker(memoryManager);
+        this.splitPageTracker = new SplitSerializedPageTracker();
 
         ImmutableList.Builder<ClientBuffer> partitions = ImmutableList.builder();
         for (OutputBufferId bufferId : outputBuffers.getBuffers().keySet()) {
-            ClientBuffer partition = new ClientBuffer(taskInstanceId, bufferId, pageTracker);
+            ClientBuffer partition = new ClientBuffer(taskInstanceId, bufferId, pageTracker, splitPageTracker);
             partitions.add(partition);
         }
         this.partitions = partitions.build();
@@ -171,14 +176,14 @@ public class PartitionedOutputBuffer
     }
 
     @Override
-    public void enqueue(Lifespan lifespan, List<SerializedPage> pages)
+    public void enqueue(Lifespan lifespan, OptionalLong splitID, List<SerializedPage> pages)
     {
         checkState(partitions.size() == 1, "Expected exactly one partition");
-        enqueue(lifespan, 0, pages);
+        enqueue(lifespan, 0, splitID, pages);
     }
 
     @Override
-    public void enqueue(Lifespan lifespan, int partitionNumber, List<SerializedPage> pages)
+    public void enqueue(Lifespan lifespan, int partitionNumber, OptionalLong splitID, List<SerializedPage> pages)
     {
         requireNonNull(lifespan, "lifespan is null");
         requireNonNull(pages, "pages is null");
@@ -198,7 +203,7 @@ public class PartitionedOutputBuffer
             bytesAdded += retainedSize;
             rowCount += page.getPositionCount();
             // create page reference counts with an initial single reference
-            references.add(new SerializedPageReference(page, 1, lifespan));
+            references.add(new SerializedPageReference(page, 1, lifespan, splitID));
         }
         List<SerializedPageReference> serializedPageReferences = references.build();
 
@@ -209,6 +214,7 @@ public class PartitionedOutputBuffer
         totalRowsAdded.addAndGet(rowCount);
         totalPagesAdded.addAndGet(serializedPageReferences.size());
         pageTracker.incrementLifespanPageCount(lifespan, serializedPageReferences.size());
+        splitPageTracker.incrementSplitPageCount(splitID, pages.size());
 
         // add pages to the buffer (this will increase the reference count by one)
         partitions.get(partitionNumber).enqueuePages(serializedPageReferences);
@@ -320,13 +326,38 @@ public class PartitionedOutputBuffer
     }
 
     @Override
-    public boolean isAllPagesConsumed()
+    public boolean isAnyPagesAdded()
     {
         for (ClientBuffer partition : partitions) {
-            if (!partition.isEmptyPages()) {
-                return false;
+            if (partition.isAnyPageAdded()) {
+                return true;
             }
         }
-        return true;
+        return false;
+    }
+
+    @Override
+    public boolean isGracefulDrained()
+    {
+        return splitPageTracker.isGracefulDrained();
+    }
+
+    @Override
+    public void setNoMorePagesForSplit(Long splitID)
+    {
+        splitPageTracker.setNoMorePagesForSplit(splitID);
+    }
+
+    @Override
+    public void registerGracefulDrainingCompletionCallback(Consumer<Long> callback)
+    {
+        splitPageTracker.registerSplitDrainedCallback(callback);
+    }
+
+    @Override
+    public void setGracefulShutdown()
+    {
+        this.gracefulShutdown = true;
+        partitions.forEach(ClientBuffer::setGracefulShutdown);
     }
 }

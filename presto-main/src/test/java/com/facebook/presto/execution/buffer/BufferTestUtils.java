@@ -28,6 +28,7 @@ import io.airlift.units.Duration;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.concurrent.Future;
 import java.util.stream.Collectors;
 
@@ -109,7 +110,7 @@ public final class BufferTestUtils
 
     static ListenableFuture<?> enqueuePage(OutputBuffer buffer, Page page)
     {
-        buffer.enqueue(Lifespan.taskWide(), ImmutableList.of(PAGES_SERDE.serialize(page)));
+        buffer.enqueue(Lifespan.taskWide(), OptionalLong.empty(), ImmutableList.of(PAGES_SERDE.serialize(page)));
         ListenableFuture<?> future = buffer.isFull();
         assertFalse(future.isDone());
         return future;
@@ -117,7 +118,7 @@ public final class BufferTestUtils
 
     static ListenableFuture<?> enqueuePage(OutputBuffer buffer, Page page, int partition)
     {
-        buffer.enqueue(Lifespan.taskWide(), partition, ImmutableList.of(PAGES_SERDE.serialize(page)));
+        buffer.enqueue(Lifespan.taskWide(), partition, OptionalLong.empty(), ImmutableList.of(PAGES_SERDE.serialize(page)));
         ListenableFuture<?> future = buffer.isFull();
         assertFalse(future.isDone());
         return future;
@@ -129,18 +130,18 @@ public final class BufferTestUtils
         List<SerializedPage> serializedPages = pages.stream()
                 .map(PAGES_SERDE::serialize)
                 .collect(toImmutableList());
-        buffer.enqueue(Lifespan.taskWide(), serializedPages);
+        buffer.enqueue(Lifespan.taskWide(), OptionalLong.empty(), serializedPages);
     }
 
     public static void addPage(OutputBuffer buffer, Page page)
     {
-        buffer.enqueue(Lifespan.taskWide(), ImmutableList.of(PAGES_SERDE.serialize(page)));
+        buffer.enqueue(Lifespan.taskWide(), OptionalLong.empty(), ImmutableList.of(PAGES_SERDE.serialize(page)));
         assertTrue(buffer.isFull().isDone(), "Expected add page to not block");
     }
 
     public static void addPage(OutputBuffer buffer, Page page, int partition)
     {
-        buffer.enqueue(Lifespan.taskWide(), partition, ImmutableList.of(PAGES_SERDE.serialize(page)));
+        buffer.enqueue(Lifespan.taskWide(), partition, OptionalLong.empty(), ImmutableList.of(PAGES_SERDE.serialize(page)));
         assertTrue(buffer.isFull().isDone(), "Expected add page to not block");
     }
 

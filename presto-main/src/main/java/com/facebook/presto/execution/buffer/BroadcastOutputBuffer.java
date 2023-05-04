@@ -34,6 +34,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicLong;
@@ -60,6 +61,7 @@ public class BroadcastOutputBuffer
     private final StateMachine<BufferState> state;
     private final OutputBufferMemoryManager memoryManager;
     private final LifespanSerializedPageTracker pageTracker;
+    private final SplitSerializedPageTracker splitPageTracker;
 
     @GuardedBy("this")
     private OutputBuffers outputBuffers = OutputBuffers.createInitialEmptyOutputBuffers(BROADCAST);
@@ -73,6 +75,8 @@ public class BroadcastOutputBuffer
     private final AtomicLong totalPagesAdded = new AtomicLong();
     private final AtomicLong totalRowsAdded = new AtomicLong();
     private final AtomicLong totalBufferedPages = new AtomicLong();
+
+    private boolean gracefulShutdown;
 
     public BroadcastOutputBuffer(
             String taskInstanceId,
@@ -90,6 +94,7 @@ public class BroadcastOutputBuffer
         this.pageTracker = new LifespanSerializedPageTracker(memoryManager, Optional.of((lifespan, releasedPageCount, releasedSizeInBytes) -> {
             checkState(totalBufferedPages.addAndGet(-releasedPageCount) >= 0);
         }));
+        this.splitPageTracker = new SplitSerializedPageTracker();
     }
 
     @Override
@@ -200,7 +205,7 @@ public class BroadcastOutputBuffer
     }
 
     @Override
-    public void enqueue(Lifespan lifespan, List<SerializedPage> pages)
+    public void enqueue(Lifespan lifespan, OptionalLong splitID, List<SerializedPage> pages)
     {
         checkState(!Thread.holdsLock(this), "Can not enqueue pages while holding a lock on this");
         requireNonNull(pages, "pages is null");
@@ -228,7 +233,8 @@ public class BroadcastOutputBuffer
                 .map(pageSplit -> new SerializedPageReference(
                         pageSplit,
                         1,
-                        lifespan))
+                        lifespan,
+                        splitID))
                 .collect(toImmutableList());
 
         // if we can still add buffers, remember the pages for the future buffers
@@ -244,17 +250,20 @@ public class BroadcastOutputBuffer
         }
 
         // add pages to all existing buffers (each buffer will increment the reference count)
-        buffers.forEach(partition -> partition.enqueuePages(serializedPageReferences));
+        buffers.forEach(partition -> {
+            partition.enqueuePages(serializedPageReferences);
+            splitPageTracker.incrementSplitPageCount(splitID, serializedPageReferences.size());
+        });
 
         // drop the initial reference
         dereferencePages(serializedPageReferences, pageTracker);
     }
 
     @Override
-    public void enqueue(Lifespan lifespan, int partitionNumber, List<SerializedPage> pages)
+    public void enqueue(Lifespan lifespan, int partitionNumber, OptionalLong splitID, List<SerializedPage> pages)
     {
         checkState(partitionNumber == 0, "Expected partition number to be zero");
-        enqueue(lifespan, pages);
+        enqueue(lifespan, splitID, pages);
     }
 
     @Override
@@ -366,12 +375,17 @@ public class BroadcastOutputBuffer
 
         // NOTE: buffers are allowed to be created before they are explicitly declared by setOutputBuffers
         // When no-more-buffers is set, we verify that all created buffers have been declared
-        buffer = new ClientBuffer(taskInstanceId, id, pageTracker);
+        buffer = new ClientBuffer(taskInstanceId, id, pageTracker, splitPageTracker);
 
         // do not setup the new buffer if we are already failed
         if (state != FAILED) {
             // add initial pages
-            buffer.enqueuePages(initialPagesForNewBuffers);
+
+            for (SerializedPageReference page: initialPagesForNewBuffers) {
+                List<SerializedPageReference> l = new ArrayList<>();
+                l.add(page);
+                buffer.enqueuePages(l);
+            }
 
             // update state
             if (!state.canAddPages()) {
@@ -431,7 +445,19 @@ public class BroadcastOutputBuffer
     }
 
     @Override
-    public boolean isAllPagesConsumed()
+    public boolean isAnyPagesAdded()
+    {
+        for (ClientBuffer partition : buffers.values()) {
+            if (partition.isAnyPageAdded()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+
+    @Override
+    public boolean isGracefulDrained()
     {
         for (ClientBuffer partition : buffers.values()) {
             if (!partition.isEmptyPages()) {
@@ -439,5 +465,22 @@ public class BroadcastOutputBuffer
             }
         }
         return true;
+    }
+
+    @Override
+    public void setNoMorePagesForSplit(Long splitID)
+    {
+    }
+
+    @Override
+    public void registerGracefulDrainingCompletionCallback(Consumer<Long> callback)
+    {
+    }
+
+    @Override
+    public void setGracefulShutdown()
+    {
+        this.gracefulShutdown = true;
+        buffers.values().forEach(ClientBuffer::setGracefulShutdown);
     }
 }

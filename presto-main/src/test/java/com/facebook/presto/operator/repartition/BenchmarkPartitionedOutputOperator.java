@@ -61,6 +61,7 @@ import org.testng.annotations.Test;
 import java.util.List;
 import java.util.Optional;
 import java.util.OptionalInt;
+import java.util.OptionalLong;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ScheduledExecutorService;
@@ -382,7 +383,7 @@ public class BenchmarkPartitionedOutputOperator
 
             // Use a dummy enqueue method to avoid OutOfMemory error
             @Override
-            public void enqueue(Lifespan lifespan, int partitionNumber, List<SerializedPage> pages)
+            public void enqueue(Lifespan lifespan, int partitionNumber, OptionalLong splitID, List<SerializedPage> pages)
             {
             }
         }

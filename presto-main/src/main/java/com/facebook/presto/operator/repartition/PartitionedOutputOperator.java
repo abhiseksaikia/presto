@@ -26,6 +26,7 @@ import com.facebook.presto.operator.Operator;
 import com.facebook.presto.operator.OperatorContext;
 import com.facebook.presto.operator.OperatorFactory;
 import com.facebook.presto.operator.OutputFactory;
+import com.facebook.presto.operator.OutputOperator;
 import com.facebook.presto.operator.PartitionFunction;
 import com.facebook.presto.spi.page.PagesSerde;
 import com.facebook.presto.spi.page.SerializedPage;
@@ -44,6 +45,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalInt;
+import java.util.OptionalLong;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -56,7 +58,7 @@ import static java.lang.Math.min;
 import static java.util.Objects.requireNonNull;
 
 public class PartitionedOutputOperator
-        implements Operator
+        implements OutputOperator
 {
     public static class PartitionedOutputFactory
             implements OutputFactory
@@ -225,6 +227,12 @@ public class PartitionedOutputOperator
     }
 
     @Override
+    public void annotateSplitSequenceID(long splitID)
+    {
+        this.partitionFunction.annotateSplitSequenceID(splitID);
+    }
+
+    @Override
     public void finish()
     {
         finished = true;
@@ -298,6 +306,8 @@ public class PartitionedOutputOperator
         private boolean hasAnyRowBeenReplicated;
         private final OperatorContext operatorContext;
         private final LocalMemoryContext systemMemoryContext;
+
+        private OptionalLong splitID;
 
         public PagePartitioner(
                 PartitionFunction partitionFunction,
@@ -482,11 +492,16 @@ public class PartitionedOutputOperator
 
                     operatorContext.recordOutput(pagePartition.getSizeInBytes(), pagePartition.getPositionCount());
 
-                    outputBuffer.enqueue(operatorContext.getDriverContext().getLifespan(), partition, splitAndSerializePage(pagePartition));
+                    outputBuffer.enqueue(operatorContext.getDriverContext().getLifespan(), partition, splitID, splitAndSerializePage(pagePartition));
                     pagesAdded.incrementAndGet();
                     rowsAdded.addAndGet(pagePartition.getPositionCount());
                 }
             }
+        }
+
+        public void annotateSplitSequenceID(long splitID)
+        {
+            this.splitID = OptionalLong.of(splitID);
         }
 
         private List<SerializedPage> splitAndSerializePage(Page pagePartition)

@@ -35,6 +35,7 @@ final class LifespanSerializedPageTracker
     @Nullable
     private final PagesReleasedListener childListener;
     private final ConcurrentMap<Lifespan, AtomicLong> outstandingPageCountPerLifespan = new ConcurrentHashMap<>();
+
     private final Set<Lifespan> noMorePagesForLifespan = ConcurrentHashMap.newKeySet();
     private volatile Consumer<Lifespan> lifespanCompletionCallback;
 

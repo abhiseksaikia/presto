@@ -70,6 +70,7 @@ import org.testng.annotations.Test;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.function.Consumer;
@@ -236,6 +237,8 @@ public class TestLocalExecutionPlanner
     private static class TestingOutputBuffer
             implements OutputBuffer
     {
+        private boolean gracefulShutdown;
+
         @Override
         public OutputBufferInfo getInfo()
         {
@@ -297,13 +300,13 @@ public class TestLocalExecutionPlanner
         }
 
         @Override
-        public void enqueue(Lifespan lifespan, List<SerializedPage> pages)
+        public void enqueue(Lifespan lifespan, OptionalLong splitID, List<SerializedPage> pages)
         {
             throw new UnsupportedOperationException();
         }
 
         @Override
-        public void enqueue(Lifespan lifespan, int partition, List<SerializedPage> pages)
+        public void enqueue(Lifespan lifespan, int partition, OptionalLong splitID, List<SerializedPage> pages)
         {
             throw new UnsupportedOperationException();
         }
@@ -348,6 +351,22 @@ public class TestLocalExecutionPlanner
         public long getPeakMemoryUsage()
         {
             throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public void registerGracefulDrainingCompletionCallback(Consumer<Long> callback)
+        {
+        }
+
+        @Override
+        public void setNoMorePagesForSplit(Long splitID)
+        {
+        }
+
+        @Override
+        public void setGracefulShutdown()
+        {
+            this.gracefulShutdown = true;
         }
     }
 
