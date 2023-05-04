@@ -79,6 +79,7 @@ import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongSet;
 import org.joda.time.DateTime;
+import org.openjdk.jol.info.ClassLayout;
 
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.GuardedBy;
@@ -177,6 +178,8 @@ public final class HttpRemoteTask
     private final SetMultimap<PlanNodeId, ScheduledSplit> pendingSplits = HashMultimap.create();
     @GuardedBy("this")
     private final Map<PlanNodeId, Long2ObjectMap<ScheduledSplit>> unprocessedSplits = new HashMap<>();
+
+    private long retainedUnprocessSplitSize = ClassLayout.parseClass(HashMap.class).instanceSize();
     @GuardedBy("this")
     private volatile int pendingSourceSplitCount;
     @GuardedBy("this")
@@ -338,6 +341,12 @@ public final class HttpRemoteTask
                 ScheduledSplit scheduledSplit = new ScheduledSplit(nextSplitId.getAndIncrement(), entry.getKey(), entry.getValue());
                 pendingSplits.put(entry.getKey(), scheduledSplit);
                 if (tableScanPlanNodeIds.contains(entry.getKey())) {
+                    retainedUnprocessSplitSize += 8 + ClassLayout.parseClass(ScheduledSplit.class).instanceSize();
+                    if (!unprocessedSplits.containsKey(entry.getKey())) {
+                        retainedUnprocessSplitSize += 8 + ClassLayout.parseClass(Long2ObjectOpenHashMap.class).instanceSize();
+                    }
+                    log.warn("retainedUnprocessSplitSize = %d", retainedUnprocessSplitSize);
+
                     unprocessedSplits
                             .computeIfAbsent(entry.getKey(), (k) -> new Long2ObjectOpenHashMap<>())
                             .put(scheduledSplit.getSequenceId(), scheduledSplit);
@@ -495,6 +504,12 @@ public final class HttpRemoteTask
                 ScheduledSplit scheduledSplit = new ScheduledSplit(nextSplitId.getAndIncrement(), sourceId, split);
                 if (pendingSplits.put(sourceId, scheduledSplit)) {
                     if (isTableScanSource) {
+                        retainedUnprocessSplitSize += 8 + ClassLayout.parseClass(ScheduledSplit.class).instanceSize();
+                        if (!unprocessedSplits.containsKey(entry.getKey())) {
+                            retainedUnprocessSplitSize += 8 + ClassLayout.parseClass(Long2ObjectOpenHashMap.class).instanceSize();
+                        }
+                        log.warn("retainedUnprocessSplitSize = %d", retainedUnprocessSplitSize);
+
                         unprocessedSplits
                                 .computeIfAbsent(entry.getKey(), (k) -> new Long2ObjectOpenHashMap<>())
                                 .put(scheduledSplit.getSequenceId(), scheduledSplit);

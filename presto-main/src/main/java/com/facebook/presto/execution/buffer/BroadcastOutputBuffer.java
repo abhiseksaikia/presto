@@ -440,4 +440,15 @@ public class BroadcastOutputBuffer
         }
         return true;
     }
+
+    @Override
+    public boolean isAnyPagesAdded()
+    {
+        for (ClientBuffer partition : buffers.values()) {
+            if (partition.isAnyPageAdded()) {
+                return true;
+            }
+        }
+        return false;
+    }
 }
