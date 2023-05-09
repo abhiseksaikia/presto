@@ -778,4 +778,10 @@ public class SpoolingOutputBuffer
     {
         return pages.isEmpty();
     }
+
+    @Override
+    public boolean isAnyPagesAdded()
+    {
+        return totalPagesAdded.get() > 0;
+    }
 }

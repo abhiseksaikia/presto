@@ -142,4 +142,9 @@ public interface OutputBuffer
     {
         return false;
     }
+
+    default boolean isAnyPagesAdded()
+    {
+        return false;
+    }
 }

@@ -329,4 +329,15 @@ public class PartitionedOutputBuffer
         }
         return true;
     }
+
+    @Override
+    public boolean isAnyPagesAdded()
+    {
+        for (ClientBuffer partition : partitions) {
+            if (partition.isAnyPageAdded()) {
+                return true;
+            }
+        }
+        return false;
+    }
 }
