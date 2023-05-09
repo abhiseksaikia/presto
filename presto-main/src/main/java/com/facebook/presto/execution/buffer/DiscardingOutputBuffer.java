@@ -21,6 +21,7 @@ import com.google.common.util.concurrent.ListenableFuture;
 import io.airlift.units.DataSize;
 
 import java.util.List;
+import java.util.OptionalLong;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 
@@ -125,7 +126,7 @@ public class DiscardingOutputBuffer
     }
 
     @Override
-    public void enqueue(Lifespan lifespan, List<SerializedPage> pages)
+    public void enqueue(Lifespan lifespan, OptionalLong splitID, List<SerializedPage> pages)
     {
         // update stats
         long rowCount = pages.stream().mapToLong(SerializedPage::getPositionCount).sum();
@@ -134,10 +135,10 @@ public class DiscardingOutputBuffer
     }
 
     @Override
-    public void enqueue(Lifespan lifespan, int partition, List<SerializedPage> pages)
+    public void enqueue(Lifespan lifespan, int partition, OptionalLong splitID, List<SerializedPage> pages)
     {
         checkState(partition == 0, "Expected partition number to be zero");
-        enqueue(lifespan, pages);
+        enqueue(lifespan, splitID, pages);
     }
 
     @Override
@@ -181,4 +182,23 @@ public class DiscardingOutputBuffer
     {
         return 0;
     }
+
+    @Override
+    public void setNoMorePagesForSplit(Long splitID)
+    {
+    }
+
+    @Override
+    public boolean isAnyPagesAdded()
+    {
+        return false;
+    }
+
+    @Override
+    public void registerGracefulDrainingCompletionCallback(Consumer<Long> callback)
+    {
+    }
+
+    @Override
+    public void setGracefulShutdown() {}
 }

@@ -56,6 +56,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalInt;
+import java.util.OptionalLong;
 import java.util.Random;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
@@ -968,7 +969,7 @@ public class TestOptimizedPartitionedOutputOperator
         }
 
         @Override
-        public void enqueue(Lifespan lifespan, int partitionNumber, List<SerializedPage> pages)
+        public void enqueue(Lifespan lifespan, int partitionNumber, OptionalLong splitID, List<SerializedPage> pages)
         {
             this.pages.computeIfAbsent(partitionNumber, k -> new ArrayList<>());
             pages.stream().map(PAGES_SERDE::deserialize).forEach(this.pages.get(partitionNumber)::add);

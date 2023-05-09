@@ -33,6 +33,7 @@ import java.util.ArrayList;
 import java.util.Deque;
 import java.util.List;
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static com.facebook.presto.common.type.BigintType.BIGINT;
@@ -59,11 +60,12 @@ public class TestClientBuffer
     private static final OutputBufferId BUFFER_ID = new OutputBufferId(33);
     private static final String INVALID_SEQUENCE_ID = "Invalid sequence id";
     private static final PagesReleasedListener NOOP_RELEASE_LISTENER = (lifespan, releasedPagesCount, releasedSizeInBytes) -> {};
+    private static final SerializedPageReference.SplitDrainedListener NOOP_SPLIT_LISTENER = new SplitSerializedPageTracker();
 
     @Test
     public void testSimplePushBuffer()
     {
-        ClientBuffer buffer = new ClientBuffer(TASK_INSTANCE_ID, BUFFER_ID, NOOP_RELEASE_LISTENER);
+        ClientBuffer buffer = new ClientBuffer(TASK_INSTANCE_ID, BUFFER_ID, NOOP_RELEASE_LISTENER, NOOP_SPLIT_LISTENER);
 
         // add three pages to the buffer
         for (int i = 0; i < 3; i++) {
@@ -117,7 +119,7 @@ public class TestClientBuffer
     @Test
     public void testSimplePullBuffer()
     {
-        ClientBuffer buffer = new ClientBuffer(TASK_INSTANCE_ID, BUFFER_ID, NOOP_RELEASE_LISTENER);
+        ClientBuffer buffer = new ClientBuffer(TASK_INSTANCE_ID, BUFFER_ID, NOOP_RELEASE_LISTENER, NOOP_SPLIT_LISTENER);
 
         // create a page supplier with 3 initial pages
         TestingPagesSupplier supplier = new TestingPagesSupplier();
@@ -181,7 +183,7 @@ public class TestClientBuffer
     @Test
     public void testDuplicateRequests()
     {
-        ClientBuffer buffer = new ClientBuffer(TASK_INSTANCE_ID, BUFFER_ID, NOOP_RELEASE_LISTENER);
+        ClientBuffer buffer = new ClientBuffer(TASK_INSTANCE_ID, BUFFER_ID, NOOP_RELEASE_LISTENER, NOOP_SPLIT_LISTENER);
 
         // add three pages
         for (int i = 0; i < 3; i++) {
@@ -211,7 +213,7 @@ public class TestClientBuffer
     @Test
     public void testAddAfterNoMorePages()
     {
-        ClientBuffer buffer = new ClientBuffer(TASK_INSTANCE_ID, BUFFER_ID, NOOP_RELEASE_LISTENER);
+        ClientBuffer buffer = new ClientBuffer(TASK_INSTANCE_ID, BUFFER_ID, NOOP_RELEASE_LISTENER, NOOP_SPLIT_LISTENER);
         buffer.setNoMorePages();
         addPage(buffer, createPage(0));
         addPage(buffer, createPage(0));
@@ -221,7 +223,7 @@ public class TestClientBuffer
     @Test
     public void testAddAfterDestroy()
     {
-        ClientBuffer buffer = new ClientBuffer(TASK_INSTANCE_ID, BUFFER_ID, NOOP_RELEASE_LISTENER);
+        ClientBuffer buffer = new ClientBuffer(TASK_INSTANCE_ID, BUFFER_ID, NOOP_RELEASE_LISTENER, NOOP_SPLIT_LISTENER);
         buffer.destroy();
         addPage(buffer, createPage(0));
         addPage(buffer, createPage(0));
@@ -231,7 +233,7 @@ public class TestClientBuffer
     @Test
     public void testDestroy()
     {
-        ClientBuffer buffer = new ClientBuffer(TASK_INSTANCE_ID, BUFFER_ID, NOOP_RELEASE_LISTENER);
+        ClientBuffer buffer = new ClientBuffer(TASK_INSTANCE_ID, BUFFER_ID, NOOP_RELEASE_LISTENER, NOOP_SPLIT_LISTENER);
 
         // add 5 pages the buffer
         for (int i = 0; i < 5; i++) {
@@ -253,7 +255,7 @@ public class TestClientBuffer
     @Test
     public void testNoMorePagesFreesReader()
     {
-        ClientBuffer buffer = new ClientBuffer(TASK_INSTANCE_ID, BUFFER_ID, NOOP_RELEASE_LISTENER);
+        ClientBuffer buffer = new ClientBuffer(TASK_INSTANCE_ID, BUFFER_ID, NOOP_RELEASE_LISTENER, NOOP_SPLIT_LISTENER);
 
         // attempt to get a page
         ListenableFuture<BufferResult> future = buffer.getPages(0, sizeOfPages(10));
@@ -282,7 +284,7 @@ public class TestClientBuffer
     @Test
     public void testDestroyFreesReader()
     {
-        ClientBuffer buffer = new ClientBuffer(TASK_INSTANCE_ID, BUFFER_ID, NOOP_RELEASE_LISTENER);
+        ClientBuffer buffer = new ClientBuffer(TASK_INSTANCE_ID, BUFFER_ID, NOOP_RELEASE_LISTENER, NOOP_SPLIT_LISTENER);
 
         // attempt to get a page
         ListenableFuture<BufferResult> future = buffer.getPages(0, sizeOfPages(10));
@@ -315,7 +317,7 @@ public class TestClientBuffer
     @Test
     public void testInvalidTokenFails()
     {
-        ClientBuffer buffer = new ClientBuffer(TASK_INSTANCE_ID, BUFFER_ID, NOOP_RELEASE_LISTENER);
+        ClientBuffer buffer = new ClientBuffer(TASK_INSTANCE_ID, BUFFER_ID, NOOP_RELEASE_LISTENER, NOOP_SPLIT_LISTENER);
         addPage(buffer, createPage(0));
         addPage(buffer, createPage(1));
         buffer.getPages(1, sizeOfPages(10)).cancel(true);
@@ -337,7 +339,7 @@ public class TestClientBuffer
         PagesReleasedListener onPagesReleased = (lifespan, releasedPagesCount, releasedSizeInBytes) -> {
             releasedPages.addAndGet(releasedPagesCount);
         };
-        ClientBuffer buffer = new ClientBuffer(TASK_INSTANCE_ID, BUFFER_ID, onPagesReleased);
+        ClientBuffer buffer = new ClientBuffer(TASK_INSTANCE_ID, BUFFER_ID, onPagesReleased, NOOP_SPLIT_LISTENER);
 
         // add 2 pages and verify they are referenced
         addPage(buffer, createPage(0));
@@ -391,7 +393,7 @@ public class TestClientBuffer
 
     private static void addPage(ClientBuffer buffer, Page page, PagesReleasedListener onPagesReleased)
     {
-        SerializedPageReference serializedPageReference = new SerializedPageReference(PAGES_SERDE.serialize(page), 1, Lifespan.taskWide());
+        SerializedPageReference serializedPageReference = new SerializedPageReference(PAGES_SERDE.serialize(page), 1, Lifespan.taskWide(), OptionalLong.empty());
         buffer.enqueuePages(ImmutableList.of(serializedPageReference));
         dereferencePages(ImmutableList.of(serializedPageReference), onPagesReleased);
     }
@@ -463,7 +465,7 @@ public class TestClientBuffer
         {
             requireNonNull(page, "page is null");
             checkState(!noMorePages);
-            buffer.add(new SerializedPageReference(PAGES_SERDE.serialize(page), 1, Lifespan.taskWide()));
+            buffer.add(new SerializedPageReference(PAGES_SERDE.serialize(page), 1, Lifespan.taskWide(), OptionalLong.empty()));
         }
 
         @Override

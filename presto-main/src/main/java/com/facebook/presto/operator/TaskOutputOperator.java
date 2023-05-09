@@ -163,7 +163,7 @@ public class TaskOutputOperator
                 .map(serde::serialize)
                 .collect(toImmutableList());
 
-        outputBuffer.enqueue(operatorContext.getDriverContext().getLifespan(), serializedPages);
+        outputBuffer.enqueue(operatorContext.getDriverContext().getLifespan(), operatorContext.getDriverContext().getSplitID(), serializedPages);
         operatorContext.recordOutput(page.getSizeInBytes(), page.getPositionCount());
     }
 

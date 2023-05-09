@@ -32,6 +32,7 @@ import javax.annotation.concurrent.GuardedBy;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.OptionalLong;
 import java.util.Set;
 import java.util.concurrent.Executor;
 import java.util.function.Consumer;
@@ -68,6 +69,8 @@ public class LazyOutputBuffer
 
     @GuardedBy("this")
     private final List<PendingRead> pendingReads = new ArrayList<>();
+
+    private boolean gracefulShutdown;
 
     public LazyOutputBuffer(
             TaskId taskId,
@@ -258,17 +261,17 @@ public class LazyOutputBuffer
     }
 
     @Override
-    public void enqueue(Lifespan lifespan, List<SerializedPage> pages)
+    public void enqueue(Lifespan lifespan, OptionalLong splitID, List<SerializedPage> pages)
     {
         OutputBuffer outputBuffer = getDelegateOutputBufferOrFail();
-        outputBuffer.enqueue(lifespan, pages);
+        outputBuffer.enqueue(lifespan, splitID, pages);
     }
 
     @Override
-    public void enqueue(Lifespan lifespan, int partition, List<SerializedPage> pages)
+    public void enqueue(Lifespan lifespan, int partition, OptionalLong splitID, List<SerializedPage> pages)
     {
         OutputBuffer outputBuffer = getDelegateOutputBufferOrFail();
-        outputBuffer.enqueue(lifespan, partition, pages);
+        outputBuffer.enqueue(lifespan, partition, splitID, pages);
     }
 
     @Override
@@ -409,8 +412,31 @@ public class LazyOutputBuffer
     }
 
     @Override
-    public boolean isAllPagesConsumed()
+    public boolean isAnyPagesAdded()
     {
-        return delegate.isAllPagesConsumed();
+        return delegate.isAnyPagesAdded();
+    }
+
+    @Override
+    public boolean isGracefulDrained()
+    {
+        return delegate.isGracefulDrained();
+    }
+
+    @Override
+    public void setNoMorePagesForSplit(Long splitID)
+    {
+    }
+
+    @Override
+    public void registerGracefulDrainingCompletionCallback(Consumer<Long> callback)
+    {
+    }
+
+
+    @Override
+    public void setGracefulShutdown()
+    {
+        delegate.setGracefulShutdown();
     }
 }

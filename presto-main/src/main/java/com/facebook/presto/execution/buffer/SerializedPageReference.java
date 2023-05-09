@@ -19,7 +19,9 @@ import com.facebook.presto.spi.page.SerializedPage;
 import javax.annotation.concurrent.ThreadSafe;
 
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
+import java.util.OptionalLong;
 
 import static com.google.common.base.MoreObjects.toStringHelper;
 import static com.google.common.base.Preconditions.checkArgument;
@@ -34,12 +36,14 @@ final class SerializedPageReference
     private final SerializedPage serializedPage;
     private final Lifespan lifespan;
     private volatile int referenceCount;
+    private final OptionalLong splitID;
 
-    public SerializedPageReference(SerializedPage serializedPage, int referenceCount, Lifespan lifespan)
+    public SerializedPageReference(SerializedPage serializedPage, int referenceCount, Lifespan lifespan, OptionalLong splitID)
     {
         this.serializedPage = requireNonNull(serializedPage, "page is null");
         this.lifespan = requireNonNull(lifespan, "lifespan is null");
         this.referenceCount = referenceCount;
+        this.splitID = splitID;
         checkArgument(referenceCount > 0, "referenceCount must be at least 1");
     }
 
@@ -52,6 +56,11 @@ final class SerializedPageReference
     public SerializedPage getSerializedPage()
     {
         return serializedPage;
+    }
+
+    public OptionalLong getSplitID()
+    {
+        return splitID;
     }
 
     public int getPositionCount()
@@ -112,5 +121,13 @@ final class SerializedPageReference
     interface PagesReleasedListener
     {
         void onPagesReleased(Lifespan lifespan, int releasedPagesCount, long releasedMemorySizeInBytes);
+    }
+
+    interface SplitDrainedListener
+    {
+        void onSplitDrained(OptionalLong splitID,  int releasedPageCount);
+        Set<Long> getTransmittedSplitIDs();
+
+        void addTransmittedSplit(Long splitID);
     }
 }

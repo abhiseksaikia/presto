@@ -262,16 +262,21 @@ public class Driver
         for (ScheduledSplit newSplit : newSplits) {
             Split split = newSplit.getSplit();
 
-            if (fragmentResultCacheContext.get().isPresent() && !(split.getConnectorSplit() instanceof RemoteSplit)) {
-                checkState(!this.cachedResult.get().isPresent());
-                this.fragmentResultCacheContext.set(this.fragmentResultCacheContext.get().map(context -> context.updateRuntimeInformation(split.getConnectorSplit())));
-                Optional<Iterator<Page>> pages = fragmentResultCacheContext.get().get()
-                        .getFragmentResultCacheManager()
-                        .get(fragmentResultCacheContext.get().get().getHashedCanonicalPlanFragment(), split);
-                sourceOperator.getOperatorContext().getRuntimeStats().addMetricValue(
-                        pages.isPresent() ? FRAGMENT_RESULT_CACHE_HIT : FRAGMENT_RESULT_CACHE_MISS, NONE, 1);
-                this.cachedResult.set(pages);
-                this.split.set(split);
+            if (!(split.getConnectorSplit() instanceof RemoteSplit)) {
+                if (fragmentResultCacheContext.get().isPresent()) {
+                    checkState(!this.cachedResult.get().isPresent());
+                    this.fragmentResultCacheContext.set(this.fragmentResultCacheContext.get().map(context -> context.updateRuntimeInformation(split.getConnectorSplit())));
+                    Optional<Iterator<Page>> pages = fragmentResultCacheContext.get().get()
+                            .getFragmentResultCacheManager()
+                            .get(fragmentResultCacheContext.get().get().getHashedCanonicalPlanFragment(), split);
+                    sourceOperator.getOperatorContext().getRuntimeStats().addMetricValue(
+                            pages.isPresent() ? FRAGMENT_RESULT_CACHE_HIT : FRAGMENT_RESULT_CACHE_MISS, NONE, 1);
+                    this.cachedResult.set(pages);
+                    this.split.set(split);
+                }
+
+                OutputOperator outputOperator = (OutputOperator) activeOperators.get(activeOperators.size() - 1);
+                outputOperator.annotateSplitSequenceID(newSplit.getSequenceId());
             }
 
             Supplier<Optional<UpdatablePageSource>> pageSource = sourceOperator.addSplit(newSplit);

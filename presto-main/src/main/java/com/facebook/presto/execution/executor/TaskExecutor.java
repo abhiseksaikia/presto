@@ -212,36 +212,49 @@ public class TaskExecutor
         //before killing the tasks,  make sure output buffer data is consumed.
         CountDownLatch latch = new CountDownLatch(tasks.size());
         log.warn("GracefulShutdown:: Going to shutdown %s tasks", tasks.size());
+
+        Set<TaskHandle> tasksToKill = new HashSet<>();
+        blockedSplits.keySet().stream().map(PrioritizedSplitRunner::getTaskHandle).forEach(tasksToKill::add);
+        tasksToKill.addAll(waitingSplits.getTaskHandles());
+
         for (TaskHandle taskHandle : tasks) {
             taskShutdownExecutor.execute(
                     () -> {
-                        //wait for running splits to be over
-                        long waitTimeMillis = 5; // Wait for 10 milliseconds between checks to avoid cpu spike
-                        long startTime = System.nanoTime();
-                        while (runningSplits.size() > 0) {
-                            try {
-                                log.info("queued leaf split = %s, running leaf splits = %s,  waiting for running split to be over to kill the task - %s", taskHandle.queuedLeafSplits.size(), runningSplits.size(), taskHandle.getTaskId());
-                                Thread.sleep(waitTimeMillis);
+                        if (tasksToKill.contains(taskHandle)) {
+                            if (taskHandle.isAnyPageAdded()) {
+                                taskHandle.handleShutDown(false);
+                            } else {
+                                taskHandle.handleShutDown(true);
                             }
-                            catch (InterruptedException e) {
-                                log.error("GracefulShutdown got interrupted while waiting for running splits", e);
+                        } else {
+                            //wait for running splits to be over
+                            long waitTimeMillis = 5; // Wait for 10 milliseconds between checks to avoid cpu spike
+                            long startTime = System.nanoTime();
+                            while (runningSplits.size() > 0) {
+                                try {
+                                    log.info("queued leaf split = %s, running leaf splits = %s,  waiting for running split to be over to kill the task - %s", taskHandle.queuedLeafSplits.size(), runningSplits.size(), taskHandle.getTaskId());
+                                    Thread.sleep(waitTimeMillis);
+                                }
+                                catch (InterruptedException e) {
+                                    log.error("GracefulShutdown got interrupted while waiting for running splits", e);
+                                }
                             }
+                            waitForRunningSplitTime.add(Duration.nanosSince(startTime));
+                            //wait for output buffer to be empty
+                            startTime = System.nanoTime();
+                            while (!taskHandle.isOutputBufferGracefulDrained()) {
+                                try {
+                                    log.warn("GracefulShutdown:: Waiting for output buffer to be empty for task- %s, outputbuffer type = %s", taskHandle.getTaskId(), taskHandle.getOutputBuffer().get().getClass());
+                                    Thread.sleep(waitTimeMillis);
+                                }
+                                catch (InterruptedException e) {
+                                    log.error("GracefulShutdown got interrupted", e);
+                                }
+                            }
+                            outputBufferEmptyWaitTime.add(Duration.nanosSince(startTime));
+                            log.warn("GracefulShutdown:: calling handleShutDown for task- %s", taskHandle.getTaskId());
+                            taskHandle.handleShutDown(true);
                         }
-                        waitForRunningSplitTime.add(Duration.nanosSince(startTime));
-                        //wait for output buffer to be empty
-                        startTime = System.nanoTime();
-                        while (!taskHandle.isOutputBufferEmpty()) {
-                            try {
-                                log.warn("GracefulShutdown:: Waiting for output buffer to be empty for task- %s, outputbuffer type = %s", taskHandle.getTaskId(), taskHandle.getOutputBuffer().get().getClass());
-                                Thread.sleep(waitTimeMillis);
-                            }
-                            catch (InterruptedException e) {
-                                log.error("GracefulShutdown got interrupted", e);
-                            }
-                        }
-                        outputBufferEmptyWaitTime.add(Duration.nanosSince(startTime));
-                        log.warn("GracefulShutdown:: calling handleShutDown for task- %s", taskHandle.getTaskId());
-                        taskHandle.handleShutDown();
 
                         latch.countDown();
                     });

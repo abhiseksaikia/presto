@@ -30,6 +30,7 @@ import io.airlift.units.DataSize;
 import io.airlift.units.Duration;
 import org.joda.time.DateTime;
 
+import java.util.OptionalLong;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -83,6 +84,7 @@ public class DriverContext
 
     private final List<OperatorContext> operatorContexts = new CopyOnWriteArrayList<>();
     private final Lifespan lifespan;
+    private final OptionalLong splitID;
     private final Optional<FragmentResultCacheContext> fragmentResultCacheContext;
     private final long splitWeight;
     //node type->operatorcontext->operatorstats
@@ -104,6 +106,7 @@ public class DriverContext
         this.fragmentResultCacheContext = requireNonNull(fragmentResultCacheContext, "fragmentResultCacheContext is null");
         this.yieldSignal = new DriverYieldSignal();
         this.splitWeight = splitWeight;
+        this.splitID = OptionalLong.empty();
         checkArgument(splitWeight >= 0, "splitWeight must be >= 0, found: %s", splitWeight);
     }
 
@@ -428,6 +431,11 @@ public class DriverContext
     public Lifespan getLifespan()
     {
         return lifespan;
+    }
+
+    public OptionalLong getSplitID()
+    {
+        return splitID;
     }
 
     public Optional<FragmentResultCacheContext> getFragmentResultCacheContext()

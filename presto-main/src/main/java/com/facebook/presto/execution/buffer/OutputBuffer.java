@@ -21,6 +21,7 @@ import com.google.common.util.concurrent.ListenableFuture;
 import io.airlift.units.DataSize;
 
 import java.util.List;
+import java.util.OptionalLong;
 import java.util.function.Consumer;
 
 public interface OutputBuffer
@@ -88,13 +89,13 @@ public interface OutputBuffer
      * Adds a split-up page to an unpartitioned buffer. If no-more-pages has been set, the enqueue
      * page call is ignored.  This can happen with limit queries.
      */
-    void enqueue(Lifespan lifespan, List<SerializedPage> pages);
+    void enqueue(Lifespan lifespan, OptionalLong splitID, List<SerializedPage> pages);
 
     /**
      * Adds a split-up page to a specific partition.  If no-more-pages has been set, the enqueue
      * page call is ignored.  This can happen with limit queries.
      */
-    void enqueue(Lifespan lifespan, int partition, List<SerializedPage> pages);
+    void enqueue(Lifespan lifespan, int partition, OptionalLong splitID, List<SerializedPage> pages);
 
     /**
      * Notify buffer that no more pages will be added. Any future calls to enqueue a
@@ -126,6 +127,7 @@ public interface OutputBuffer
      */
     void registerLifespanCompletionCallback(Consumer<Lifespan> callback);
 
+
     /**
      * A buffer is finished for the given lifespan once no-more-pages has been set for that lifespan
      * and all pages has been acknowledged.
@@ -138,8 +140,23 @@ public interface OutputBuffer
      */
     long getPeakMemoryUsage();
 
-    default boolean isAllPagesConsumed()
+    default boolean isAnyPagesAdded()
     {
         return false;
     }
+
+    default boolean isGracefulDrained()
+    {
+        return false;
+    }
+
+    void setNoMorePagesForSplit(Long splitID);
+
+    /**
+     * Register a callback which get called once a buffer is finished for draining.
+     * This method should be called exactly once after the page contents for the splits completed.
+     */
+    void registerGracefulDrainingCompletionCallback(Consumer<Long> callback);
+
+    void setGracefulShutdown();
 }

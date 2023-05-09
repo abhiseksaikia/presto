@@ -26,8 +26,10 @@ import javax.inject.Inject;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
 import java.util.PriorityQueue;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.Condition;
@@ -289,6 +291,24 @@ public class MultilevelSplitQueue
         return levelMinPriority[level].get();
     }
 
+    public Set<TaskHandle> getTaskHandles()
+    {
+        lock.lock();
+        try {
+            Set<TaskHandle> tasks = new HashSet<>();
+            for (PriorityQueue<PrioritizedSplitRunner> level : levelWaitingSplits) {
+                for (PrioritizedSplitRunner split : level) {
+                    tasks.add(split.getTaskHandle());
+                }
+            }
+
+            return tasks;
+        }
+        finally {
+            lock.unlock();
+        }
+    }
+    
     public int size()
     {
         lock.lock();
