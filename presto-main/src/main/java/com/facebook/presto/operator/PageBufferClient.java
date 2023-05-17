@@ -106,6 +106,9 @@ public final class PageBufferClient
     private boolean completed;
     @GuardedBy("this")
     private boolean isNodeShuttingdown;
+
+    @GuardedBy("this")
+    private DataSize shuttingDownSlurpSize;
     @GuardedBy("this")
     private String taskInstanceId;
 
@@ -201,6 +204,11 @@ public final class PageBufferClient
     public synchronized boolean isNodeShuttingdown()
     {
         return isNodeShuttingdown;
+    }
+
+    public synchronized DataSize getShuttingDownSlurpSize()
+    {
+        return shuttingDownSlurpSize;
     }
 
     @Override
@@ -361,6 +369,7 @@ public final class PageBufferClient
                     }
                     if (result.isNodeShuttingdown()) {
                         isNodeShuttingdown = true;
+                        shuttingDownSlurpSize = result.getShuttingDownSlurpSize();
                     }
                     if (future == resultFuture) {
                         future = null;
@@ -506,14 +515,14 @@ public final class PageBufferClient
 
     public static class PagesResponse
     {
-        public static PagesResponse createPagesResponse(String taskInstanceId, long token, long nextToken, Iterable<SerializedPage> pages, boolean complete, boolean isNodeShuttingdown)
+        public static PagesResponse createPagesResponse(String taskInstanceId, long token, long nextToken, Iterable<SerializedPage> pages, boolean complete, boolean isNodeShuttingdown, DataSize shuttingDownSlurpSize)
         {
-            return new PagesResponse(taskInstanceId, token, nextToken, pages, complete, isNodeShuttingdown);
+            return new PagesResponse(taskInstanceId, token, nextToken, pages, complete, isNodeShuttingdown, shuttingDownSlurpSize);
         }
 
-        public static PagesResponse createEmptyPagesResponse(String taskInstanceId, long token, long nextToken, boolean complete, boolean isNodeShuttingdown)
+        public static PagesResponse createEmptyPagesResponse(String taskInstanceId, long token, long nextToken, boolean complete, boolean isNodeShuttingdown, DataSize shuttingDownSlurpSize)
         {
-            return new PagesResponse(taskInstanceId, token, nextToken, ImmutableList.of(), complete, isNodeShuttingdown);
+            return new PagesResponse(taskInstanceId, token, nextToken, ImmutableList.of(), complete, isNodeShuttingdown, shuttingDownSlurpSize);
         }
 
         private final String taskInstanceId;
@@ -522,8 +531,9 @@ public final class PageBufferClient
         private final List<SerializedPage> pages;
         private final boolean clientComplete;
         private final boolean isNodeShuttingdown;
+        private final DataSize shuttingDownSlurpSize;
 
-        private PagesResponse(String taskInstanceId, long token, long nextToken, Iterable<SerializedPage> pages, boolean clientComplete, boolean isNodeShuttingdown)
+        private PagesResponse(String taskInstanceId, long token, long nextToken, Iterable<SerializedPage> pages, boolean clientComplete, boolean isNodeShuttingdown, DataSize shuttingDownSlurpSize)
         {
             this.taskInstanceId = taskInstanceId;
             this.token = token;
@@ -531,6 +541,7 @@ public final class PageBufferClient
             this.pages = ImmutableList.copyOf(pages);
             this.clientComplete = clientComplete;
             this.isNodeShuttingdown = isNodeShuttingdown;
+            this.shuttingDownSlurpSize = shuttingDownSlurpSize;
         }
 
         public long getToken()
@@ -561,6 +572,11 @@ public final class PageBufferClient
         public boolean isNodeShuttingdown()
         {
             return isNodeShuttingdown;
+        }
+
+        public DataSize getShuttingDownSlurpSize()
+        {
+            return shuttingDownSlurpSize;
         }
 
         @Override

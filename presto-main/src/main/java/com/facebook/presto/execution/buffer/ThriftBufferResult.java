@@ -19,6 +19,7 @@ import com.facebook.drift.annotations.ThriftStruct;
 import com.facebook.presto.spi.page.SerializedPage;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
+import io.airlift.units.DataSize;
 
 import java.util.List;
 import java.util.Objects;
@@ -112,6 +113,14 @@ public class ThriftBufferResult
     {
         return nodeShuttingdown;
     }
+
+    @ThriftField(7)
+    public DataSize getShuttingDownSlurpSize()
+    {
+        // TODO: a placeholder for now.
+        return DataSize.valueOf("32MB");
+    }
+
 
     public List<SerializedPage> getSerializedPages()
     {
