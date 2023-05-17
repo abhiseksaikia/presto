@@ -432,9 +432,8 @@ public class ExchangeClient
                 continue;
             }
 
-            DataSize max = new DataSize(min(averageResponseSize * 2, maxResponseSize.toBytes()), BYTE);
             log.warn("Handling shutting down node, client: %s", i);
-            client.scheduleRequest(max);
+            client.scheduleRequest(client.getShuttingDownSlurpSize());
             i++;
         }
     }

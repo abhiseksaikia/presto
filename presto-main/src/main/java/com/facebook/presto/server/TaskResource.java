@@ -85,6 +85,7 @@ import static com.facebook.presto.client.PrestoHeaders.PRESTO_PAGE_NEXT_TOKEN;
 import static com.facebook.presto.client.PrestoHeaders.PRESTO_PAGE_TOKEN;
 import static com.facebook.presto.client.PrestoHeaders.PRESTO_TASK_INSTANCE_ID;
 import static com.facebook.presto.client.PrestoHeaders.PRESTO_WORKER_SHUTTING_DOWN;
+import static com.facebook.presto.client.PrestoHeaders.PRESTO_WORKER_SHUTTING_DOWN_SLURP_SIZE;
 import static com.facebook.presto.server.TaskResourceUtils.convertToThriftTaskInfo;
 import static com.facebook.presto.server.TaskResourceUtils.isThriftRequest;
 import static com.facebook.presto.server.security.RoleType.INTERNAL;
@@ -363,6 +364,7 @@ public class TaskResource
                     .header(PRESTO_PAGE_NEXT_TOKEN, result.getNextToken())
                     .header(PRESTO_BUFFER_COMPLETE, result.isBufferComplete())
                     .header(PRESTO_WORKER_SHUTTING_DOWN, gracefulShutdownHandler.isShutdownRequested())
+                    .header(PRESTO_WORKER_SHUTTING_DOWN_SLURP_SIZE, taskManager.getMaxBufferSize())
                     .build();
         }, directExecutor());
 
@@ -376,6 +378,7 @@ public class TaskResource
                                 .header(PRESTO_PAGE_NEXT_TOKEN, token)
                                 .header(PRESTO_BUFFER_COMPLETE, false)
                                 .header(PRESTO_WORKER_SHUTTING_DOWN, gracefulShutdownHandler.isShutdownRequested())
+                                .header(PRESTO_WORKER_SHUTTING_DOWN_SLURP_SIZE, taskManager.getMaxBufferSize())
                                 .build());
 
         responseFuture.addListener(() -> readFromOutputBufferTime.add(Duration.nanosSince(start)), directExecutor());

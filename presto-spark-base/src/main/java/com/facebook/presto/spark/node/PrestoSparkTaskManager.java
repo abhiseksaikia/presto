@@ -131,4 +131,10 @@ public class PrestoSparkTaskManager
     {
         throw new UnsupportedOperationException();
     }
+
+    @Override
+    public DataSize getMaxBufferSize()
+    {
+        throw new UnsupportedOperationException();
+    }
 }

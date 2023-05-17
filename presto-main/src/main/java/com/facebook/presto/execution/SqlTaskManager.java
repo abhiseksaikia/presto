@@ -129,6 +129,8 @@ public class SqlTaskManager
 
     private final CounterStat failedTasks = new CounterStat();
 
+    private final DataSize maxBufferSize;
+
     @Inject
     public SqlTaskManager(
             LocalExecutionPlanner planner,
@@ -158,6 +160,7 @@ public class SqlTaskManager
         clientTimeout = config.getClientTimeout();
 
         DataSize maxBufferSize = config.getSinkMaxBufferSize();
+        this.maxBufferSize = maxBufferSize;
 
         taskNotificationExecutor = newFixedThreadPool(config.getTaskNotificationThreads(), threadsNamed("task-notification-%s"));
         taskNotificationExecutorMBean = new ThreadPoolExecutorMBean((ThreadPoolExecutor) taskNotificationExecutor);
@@ -230,6 +233,12 @@ public class SqlTaskManager
                 maxQuerySpillPerNode,
                 localSpillManager.getSpillSpaceTracker(),
                 memoryReservationSummaryJsonCodec);
+    }
+
+    @Override
+    public DataSize getMaxBufferSize()
+    {
+        return maxBufferSize;
     }
 
     @Override
