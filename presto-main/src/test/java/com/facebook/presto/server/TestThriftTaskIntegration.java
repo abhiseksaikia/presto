@@ -280,6 +280,12 @@ public class TestThriftTaskIntegration
                 {
                     throw new UnsupportedOperationException();
                 }
+
+                @Override
+                public DataSize getMaxBufferSize()
+                {
+                    throw new UnsupportedOperationException();
+                }
             };
         }
     }
