@@ -47,6 +47,7 @@ import com.facebook.presto.split.SplitSource;
 import com.facebook.presto.sql.planner.NodePartitionMap;
 import com.facebook.presto.sql.planner.NodePartitioningManager;
 import com.facebook.presto.sql.planner.PartitioningHandle;
+import com.facebook.presto.sql.planner.PlanFragment;
 import com.facebook.presto.sql.planner.SplitSourceFactory;
 import com.facebook.presto.sql.planner.optimizations.PlanNodeSearcher;
 import com.facebook.presto.sql.planner.plan.PlanFragmentId;
@@ -487,7 +488,20 @@ public class SectionExecutionFactory
             log.info("skipping node pool based selection for grouped execution");
             return Optional.empty();
         }
-        String workerPoolType = plan.getFragment().isLeaf() ? WORKER_POOL_TYPE_LEAF : WORKER_POOL_TYPE_INTERMEDIATE;
+
+        String workerPoolType;
+        if (plan.getFragment().isLeaf()) {
+            if (PlanFragment.containLocalExchange(plan.getFragment().getRoot())) {
+                workerPoolType = WORKER_POOL_TYPE_INTERMEDIATE;
+            }
+            else {
+                workerPoolType = WORKER_POOL_TYPE_LEAF;
+            }
+        }
+        else {
+            workerPoolType = WORKER_POOL_TYPE_INTERMEDIATE;
+        }
+
         return Optional.of(node -> node.getPoolType().map(poolType -> workerPoolType.equals(poolType)).orElse(true));
     }
 
