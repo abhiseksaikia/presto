@@ -21,7 +21,6 @@ import com.facebook.presto.spi.NodePoolType;
 import com.facebook.presto.util.PeriodicTaskExecutor;
 import io.airlift.units.Duration;
 
-import javax.annotation.PostConstruct;
 import javax.annotation.PreDestroy;
 import javax.inject.Inject;
 
