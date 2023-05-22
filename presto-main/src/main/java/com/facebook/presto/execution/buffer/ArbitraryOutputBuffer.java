@@ -535,6 +535,17 @@ public class ArbitraryOutputBuffer
     }
 
     @Override
+    public boolean isAnyPagesAdded()
+    {
+        for (ClientBuffer partition : buffers.values()) {
+            if (partition.isAnyPageAdded()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    @Override
     public boolean isAllPagesConsumed()
     {
         for (ClientBuffer partition : buffers.values()) {
