@@ -178,6 +178,7 @@ public class TaskExecutor
     // shared between SplitRunners
     private final CounterStat globalCpuTimeMicros = new CounterStat();
     private final CounterStat globalScheduledTimeMicros = new CounterStat();
+    private final CounterStat noPageAdded = new CounterStat();
 
     private final TimeStat blockedQuantaWallTime = new TimeStat(MICROSECONDS);
     private final TimeStat unblockedQuantaWallTime = new TimeStat(MICROSECONDS);
@@ -209,30 +210,48 @@ public class TaskExecutor
         long shutdownStartTime = System.nanoTime();
         waitingSplits.shutDown();
         tasks.stream().forEach(taskHandle -> taskHandle.gracefulShutdown());
-        //before killing the tasks,  make sure output buffer data is consumed.
-        CountDownLatch latch = new CountDownLatch(tasks.size());
-        log.warn("GracefulShutdown:: Going to shutdown %s tasks", tasks.size());
+
+        Set<TaskHandle> tasksToDrain = new HashSet<>();
         for (TaskHandle taskHandle : tasks) {
+            if (!taskHandle.isAnyPageAdded()) {
+                noPageAdded.update(1);
+                taskHandle.handleShutDown(true);
+            }
+            else if (!taskHandle.runningLeafSplits.isEmpty()) {
+                taskHandle.handleShutDown(false);
+
+                for (PrioritizedSplitRunner s : taskHandle.runningLeafSplits) {
+                    runningSplits.remove(s);
+                }
+            }
+            else {
+                tasksToDrain.add(taskHandle);
+            }
+        }
+
+        //before killing the tasks,  make sure output buffer data is consumed.
+        CountDownLatch latch = new CountDownLatch(tasksToDrain.size());
+        log.warn("GracefulShutdown:: Going to shutdown %s tasks", tasksToDrain.size());
+        for (TaskHandle taskHandle : tasksToDrain) {
             taskShutdownExecutor.execute(
                     () -> {
                         //wait for running splits to be over
                         long waitTimeMillis = 5; // Wait for 10 milliseconds between checks to avoid cpu spike
                         long startTime = System.nanoTime();
-                        while (runningSplits.size() > 0) {
+                        while (!runningSplits.isEmpty()) {
                             try {
-                                log.info("queued leaf split = %s, running leaf splits = %s,  waiting for running split to be over to kill the task - %s", taskHandle.queuedLeafSplits.size(), runningSplits.size(), taskHandle.getTaskId());
                                 Thread.sleep(waitTimeMillis);
                             }
                             catch (InterruptedException e) {
                                 log.error("GracefulShutdown got interrupted while waiting for running splits", e);
                             }
                         }
+
                         waitForRunningSplitTime.add(Duration.nanosSince(startTime));
                         //wait for output buffer to be empty
                         startTime = System.nanoTime();
                         while (!taskHandle.isOutputBufferEmpty()) {
                             try {
-                                log.warn("GracefulShutdown:: Waiting for output buffer to be empty for task- %s, outputbuffer type = %s", taskHandle.getTaskId(), taskHandle.getOutputBuffer().get().getClass());
                                 Thread.sleep(waitTimeMillis);
                             }
                             catch (InterruptedException e) {
@@ -240,8 +259,7 @@ public class TaskExecutor
                             }
                         }
                         outputBufferEmptyWaitTime.add(Duration.nanosSince(startTime));
-                        log.warn("GracefulShutdown:: calling handleShutDown for task- %s", taskHandle.getTaskId());
-                        taskHandle.handleShutDown();
+                        taskHandle.handleShutDown(true);
 
                         latch.countDown();
                     });
@@ -1004,6 +1022,13 @@ public class TaskExecutor
     public CounterStat getGlobalCpuTimeMicros()
     {
         return globalCpuTimeMicros;
+    }
+
+    @Managed
+    @Nested
+    public CounterStat getNoPageAdded()
+    {
+        return noPageAdded;
     }
 
     @Managed

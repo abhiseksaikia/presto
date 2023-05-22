@@ -25,6 +25,7 @@ import com.facebook.presto.operator.DriverContext;
 import com.facebook.presto.operator.DriverFactory;
 import com.facebook.presto.operator.DriverStats;
 import com.facebook.presto.operator.HostShuttingDownException;
+import com.facebook.presto.operator.KillByHostShuttingDownException;
 import com.facebook.presto.operator.PipelineContext;
 import com.facebook.presto.operator.PipelineExecutionStrategy;
 import com.facebook.presto.operator.StageExecutionDescriptor;
@@ -267,7 +268,14 @@ public class SqlTaskExecution
                 getSplitConcurrencyAdjustmentInterval(taskContext.getSession()),
                 getMaxDriversPerTask(taskContext.getSession()),
                 Optional.of(
-                        taskID -> taskStateMachine.failed(new HostShuttingDownException("killing pending tasks due to host being shutting down", System.nanoTime()))),
+                        (taskID, recovery) -> {
+                            if (recovery) {
+                                taskStateMachine.failed(new KillByHostShuttingDownException("hard killing pending tasks due to host being shutting down", System.nanoTime()));
+                            }
+                            else {
+                                taskStateMachine.failed(new HostShuttingDownException("killing pending tasks due to host being shutting down", System.nanoTime()));
+                            }
+                        }),
                 Optional.of(outputBuffer));
         taskStateMachine.addStateChangeListener(state -> {
             if (state.isDone()) {
