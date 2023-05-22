@@ -15,7 +15,7 @@ package com.facebook.presto.operator;
 
 import com.facebook.presto.spi.PrestoException;
 
-import static com.facebook.presto.spi.StandardErrorCode.HOST_SHUTTING_DOWN;
+import static com.facebook.presto.spi.StandardErrorCode.KILL_BY_HOST_SHUTTING_DOWN;
 
 public class KillByHostShuttingDownException
         extends PrestoException
@@ -24,7 +24,7 @@ public class KillByHostShuttingDownException
 
     public KillByHostShuttingDownException(String message, long shutdownTimeInNanos)
     {
-        super(HOST_SHUTTING_DOWN, message);
+        super(KILL_BY_HOST_SHUTTING_DOWN, message);
         this.shutdownTimeInNanos = shutdownTimeInNanos;
     }
 

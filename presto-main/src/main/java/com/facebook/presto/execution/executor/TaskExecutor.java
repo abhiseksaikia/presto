@@ -180,6 +180,8 @@ public class TaskExecutor
     private final CounterStat globalScheduledTimeMicros = new CounterStat();
     private final CounterStat noPageAdded = new CounterStat();
 
+    private final CounterStat tasksToDrainCounter = new CounterStat();
+
     private final TimeStat blockedQuantaWallTime = new TimeStat(MICROSECONDS);
     private final TimeStat unblockedQuantaWallTime = new TimeStat(MICROSECONDS);
     private final TimeStat taskExecutorShutdownTime = new TimeStat(NANOSECONDS);
@@ -211,67 +213,100 @@ public class TaskExecutor
         waitingSplits.shutDown();
         tasks.stream().forEach(taskHandle -> taskHandle.gracefulShutdown());
 
+        Set<PrioritizedSplitRunner> waitingInMultiLevelSplitsQueue = waitingSplits.getWaitingSplits();
         Set<TaskHandle> tasksToDrain = new HashSet<>();
         for (TaskHandle taskHandle : tasks) {
             if (!taskHandle.isAnyPageAdded()) {
+                // if the task hasn't had any page added to the outputBuffer, it is safe to have it retried.
                 noPageAdded.update(1);
                 taskHandle.handleShutDown(true);
             }
-            else if (!taskHandle.runningLeafSplits.isEmpty()) {
-                taskHandle.handleShutDown(false);
+            else {
+                if (taskHandle.runningIntermediateSplits.isEmpty()) {
+                    // if the task doesn't have any intermediate splits, it is a simple query without localexchange etc
+                    boolean hasRunningSplitBlockedOrWaited = false;
+                    for (PrioritizedSplitRunner split : taskHandle.runningLeafSplits) {
+                        if (blockedSplits.containsKey(split) || waitingInMultiLevelSplitsQueue.contains(split)) {
+                            // if any of the runningLeafSplits is not in the running state, it means they are either blocked or waiting in the MLSQ
+                            // kill them instead.
+                            hasRunningSplitBlockedOrWaited = true;
+                            break;
+                        }
+                    }
 
-                for (PrioritizedSplitRunner s : taskHandle.runningLeafSplits) {
-                    runningSplits.remove(s);
+                    if (hasRunningSplitBlockedOrWaited) {
+                        // remove them from the runningSplits so that we don't have to wait for them to be drained.
+                        for (PrioritizedSplitRunner s : taskHandle.runningLeafSplits) {
+                            runningSplits.remove(s);
+                        }
+
+                        // kill the query
+                        taskHandle.handleShutDown(false);
+                    }
+                    else {
+                        tasksToDrain.add(taskHandle);
+                    }
+                }
+                else {
+                    if (!taskHandle.runningLeafSplits.isEmpty()) {
+                        // kill the query
+                        taskHandle.handleShutDown(false);
+                    }
+                    else {
+                        // There are intermediate splits
+                        tasksToDrain.add(taskHandle);
+                    }
                 }
             }
-            else {
-                tasksToDrain.add(taskHandle);
+        }
+
+        if (!tasksToDrain.isEmpty()) {
+            tasksToDrainCounter.update(tasksToDrain.size());
+            //before killing the tasks,  make sure output buffer data is consumed.
+            CountDownLatch latch = new CountDownLatch(tasksToDrain.size());
+            log.warn("GracefulShutdown:: Going to shutdown %s tasks", tasksToDrain.size());
+            for (TaskHandle taskHandle : tasksToDrain) {
+                taskShutdownExecutor.execute(
+                        () -> {
+                            //wait for running splits to be over
+                            long waitTimeMillis = 5; // Wait for 10 milliseconds between checks to avoid cpu spike
+                            long startTime = System.nanoTime();
+                            while (!runningSplits.isEmpty()) {
+                                try {
+                                    Thread.sleep(waitTimeMillis);
+                                }
+                                catch (InterruptedException e) {
+                                    log.error("GracefulShutdown got interrupted while waiting for running splits", e);
+                                }
+                            }
+
+                            waitForRunningSplitTime.add(Duration.nanosSince(startTime));
+                            //wait for output buffer to be empty
+                            startTime = System.nanoTime();
+                            while (!taskHandle.isOutputBufferEmpty()) {
+                                try {
+                                    Thread.sleep(waitTimeMillis);
+                                }
+                                catch (InterruptedException e) {
+                                    log.error("GracefulShutdown got interrupted", e);
+                                }
+                            }
+                            outputBufferEmptyWaitTime.add(Duration.nanosSince(startTime));
+                            taskHandle.handleShutDown(true);
+
+                            latch.countDown();
+                        });
+            }
+
+            try {
+                log.info("Waiting for shutdown of all tasks");
+                latch.await();
+            }
+            catch (InterruptedException e) {
+                // TODO Handle interruption
             }
         }
 
-        //before killing the tasks,  make sure output buffer data is consumed.
-        CountDownLatch latch = new CountDownLatch(tasksToDrain.size());
-        log.warn("GracefulShutdown:: Going to shutdown %s tasks", tasksToDrain.size());
-        for (TaskHandle taskHandle : tasksToDrain) {
-            taskShutdownExecutor.execute(
-                    () -> {
-                        //wait for running splits to be over
-                        long waitTimeMillis = 5; // Wait for 10 milliseconds between checks to avoid cpu spike
-                        long startTime = System.nanoTime();
-                        while (!runningSplits.isEmpty()) {
-                            try {
-                                Thread.sleep(waitTimeMillis);
-                            }
-                            catch (InterruptedException e) {
-                                log.error("GracefulShutdown got interrupted while waiting for running splits", e);
-                            }
-                        }
-
-                        waitForRunningSplitTime.add(Duration.nanosSince(startTime));
-                        //wait for output buffer to be empty
-                        startTime = System.nanoTime();
-                        while (!taskHandle.isOutputBufferEmpty()) {
-                            try {
-                                Thread.sleep(waitTimeMillis);
-                            }
-                            catch (InterruptedException e) {
-                                log.error("GracefulShutdown got interrupted", e);
-                            }
-                        }
-                        outputBufferEmptyWaitTime.add(Duration.nanosSince(startTime));
-                        taskHandle.handleShutDown(true);
-
-                        latch.countDown();
-                    });
-        }
-
-        try {
-            log.info("Waiting for shutdown of all tasks");
-            latch.await();
-        }
-        catch (InterruptedException e) {
-            // TODO Handle interruption
-        }
         //TODO wait for coordinator to receive callback for failed tasks?
         Duration shutdownTime = Duration.nanosSince(shutdownStartTime);
         log.info("Waiting for shutdown of all tasks over in %s milli sec", shutdownTime.toMillis());
