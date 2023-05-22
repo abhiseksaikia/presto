@@ -17,5 +17,5 @@ import com.facebook.presto.execution.TaskId;
 
 public interface HostShutDownListener
 {
-    void handleShutdown(TaskId taskId);
+    void handleShutdown(TaskId taskId, boolean recovery);
 }

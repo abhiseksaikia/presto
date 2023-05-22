@@ -113,6 +113,11 @@ class ClientBuffer
         return pages.isEmpty();
     }
 
+    public boolean isAnyPageAdded()
+    {
+        return pagesAdded.get() > 0;
+    }
+
     public void destroy()
     {
         List<SerializedPageReference> removedPages;

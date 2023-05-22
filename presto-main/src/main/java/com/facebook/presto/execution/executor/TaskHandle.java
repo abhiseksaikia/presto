@@ -188,12 +188,17 @@ public class TaskHandle
         isShuttingDown.set(true);
     }
 
-    public void handleShutDown()
+    public void handleShutDown(boolean recovery)
     {
         if (!hostShutDownListener.isPresent()) {
             return;
         }
-        hostShutDownListener.get().handleShutdown(taskId);
+        hostShutDownListener.get().handleShutdown(taskId, recovery);
+    }
+
+    public boolean isAnyPageAdded()
+    {
+        return outputBuffer.get().isAnyPagesAdded();
     }
 
     public synchronized int getQueuedSplitSize()
