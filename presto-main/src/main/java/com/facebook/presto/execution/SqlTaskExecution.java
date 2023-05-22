@@ -270,10 +270,10 @@ public class SqlTaskExecution
                 Optional.of(
                         (taskID, recovery) -> {
                             if (recovery) {
-                                taskStateMachine.failed(new KillByHostShuttingDownException("hard killing pending tasks due to host being shutting down", System.nanoTime()));
+                                taskStateMachine.failed(new HostShuttingDownException("killing pending tasks due to host being shutting down", System.nanoTime()));
                             }
                             else {
-                                taskStateMachine.failed(new HostShuttingDownException("killing pending tasks due to host being shutting down", System.nanoTime()));
+                                taskStateMachine.failed(new KillByHostShuttingDownException("hard killing pending tasks due to host being shutting down", System.nanoTime()));
                             }
                         }),
                 Optional.of(outputBuffer));
