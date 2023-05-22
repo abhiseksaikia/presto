@@ -320,6 +320,17 @@ public class PartitionedOutputBuffer
     }
 
     @Override
+    public boolean isAnyPagesAdded()
+    {
+        for (ClientBuffer partition : partitions) {
+            if (partition.isAnyPageAdded()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    @Override
     public boolean isAllPagesConsumed()
     {
         for (ClientBuffer partition : partitions) {

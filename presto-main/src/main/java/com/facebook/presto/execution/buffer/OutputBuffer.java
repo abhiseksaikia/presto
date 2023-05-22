@@ -138,6 +138,10 @@ public interface OutputBuffer
      */
     long getPeakMemoryUsage();
 
+    default boolean isAnyPagesAdded()
+    {
+        return false;
+    }
     default boolean isAllPagesConsumed()
     {
         return false;
