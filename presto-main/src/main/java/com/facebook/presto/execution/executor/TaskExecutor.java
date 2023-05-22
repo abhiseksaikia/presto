@@ -232,7 +232,6 @@ public class TaskExecutor
                         long startTime = System.nanoTime();
                         while (runningSplits.size() > 0) {
                             try {
-                                log.info("queued leaf split = %s, running leaf splits = %s,  waiting for running split to be over to kill the task - %s", taskHandle.queuedLeafSplits.size(), runningSplits.size(), taskHandle.getTaskId());
                                 Thread.sleep(waitTimeMillis);
                             }
                             catch (InterruptedException e) {
@@ -244,7 +243,6 @@ public class TaskExecutor
                         startTime = System.nanoTime();
                         while (!taskHandle.isOutputBufferEmpty()) {
                             try {
-                                log.warn("GracefulShutdown:: Waiting for output buffer to be empty for task- %s, outputbuffer type = %s", taskHandle.getTaskId(), taskHandle.getOutputBuffer().get().getClass());
                                 Thread.sleep(waitTimeMillis);
                             }
                             catch (InterruptedException e) {
@@ -252,7 +250,6 @@ public class TaskExecutor
                             }
                         }
                         outputBufferEmptyWaitTime.add(Duration.nanosSince(startTime));
-                        log.warn("GracefulShutdown:: calling handleShutDown for task- %s", taskHandle.getTaskId());
                         taskHandle.handleShutDown(true);
 
                         latch.countDown();
