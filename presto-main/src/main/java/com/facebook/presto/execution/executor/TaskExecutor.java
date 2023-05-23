@@ -229,49 +229,52 @@ public class TaskExecutor
             }
         }
 
-        //before killing the tasks,  make sure output buffer data is consumed.
-        CountDownLatch latch = new CountDownLatch(tasksToDrain.size());
-        log.warn("GracefulShutdown:: Going to shutdown %s tasks", tasksToDrain.size());
-        for (TaskHandle taskHandle : tasksToDrain) {
-            taskShutdownExecutor.execute(
-                    () -> {
-                        //wait for running splits to be over
-                        long waitTimeMillis = 5; // Wait for 10 milliseconds between checks to avoid cpu spike
-                        long startTime = System.nanoTime();
-                        while (!runningSplits.isEmpty()) {
-                            try {
-                                Thread.sleep(waitTimeMillis);
+        if (!tasksToDrain.isEmpty()) {
+            //before killing the tasks,  make sure output buffer data is consumed.
+            CountDownLatch latch = new CountDownLatch(tasksToDrain.size());
+            log.warn("GracefulShutdown:: Going to shutdown %s tasks", tasksToDrain.size());
+            for (TaskHandle taskHandle : tasksToDrain) {
+                taskShutdownExecutor.execute(
+                        () -> {
+                            //wait for running splits to be over
+                            long waitTimeMillis = 5; // Wait for 10 milliseconds between checks to avoid cpu spike
+                            long startTime = System.nanoTime();
+                            while (!runningSplits.isEmpty()) {
+                                try {
+                                    Thread.sleep(waitTimeMillis);
+                                }
+                                catch (InterruptedException e) {
+                                    log.error("GracefulShutdown got interrupted while waiting for running splits", e);
+                                }
                             }
-                            catch (InterruptedException e) {
-                                log.error("GracefulShutdown got interrupted while waiting for running splits", e);
-                            }
-                        }
 
-                        waitForRunningSplitTime.add(Duration.nanosSince(startTime));
-                        //wait for output buffer to be empty
-                        startTime = System.nanoTime();
-                        while (!taskHandle.isOutputBufferEmpty()) {
-                            try {
-                                Thread.sleep(waitTimeMillis);
+                            waitForRunningSplitTime.add(Duration.nanosSince(startTime));
+                            //wait for output buffer to be empty
+                            startTime = System.nanoTime();
+                            while (!taskHandle.isOutputBufferEmpty()) {
+                                try {
+                                    Thread.sleep(waitTimeMillis);
+                                }
+                                catch (InterruptedException e) {
+                                    log.error("GracefulShutdown got interrupted", e);
+                                }
                             }
-                            catch (InterruptedException e) {
-                                log.error("GracefulShutdown got interrupted", e);
-                            }
-                        }
-                        outputBufferEmptyWaitTime.add(Duration.nanosSince(startTime));
-                        taskHandle.handleShutDown(true);
+                            outputBufferEmptyWaitTime.add(Duration.nanosSince(startTime));
+                            taskHandle.handleShutDown(true);
 
-                        latch.countDown();
-                    });
+                            latch.countDown();
+                        });
+            }
+
+            try {
+                log.info("Waiting for shutdown of all tasks");
+                latch.await();
+            }
+            catch (InterruptedException e) {
+                // TODO Handle interruption
+            }
         }
 
-        try {
-            log.info("Waiting for shutdown of all tasks");
-            latch.await();
-        }
-        catch (InterruptedException e) {
-            // TODO Handle interruption
-        }
         //TODO wait for coordinator to receive callback for failed tasks?
         Duration shutdownTime = Duration.nanosSince(shutdownStartTime);
         log.info("Waiting for shutdown of all tasks over in %s milli sec", shutdownTime.toMillis());
