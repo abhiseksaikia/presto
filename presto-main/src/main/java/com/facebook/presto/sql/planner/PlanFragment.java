@@ -199,7 +199,7 @@ public class PlanFragment
         if ((node instanceof ExchangeNode) && ((ExchangeNode) node).getScope() == ExchangeNode.Scope.LOCAL) {
             return true;
         }
-        return node.getSources().stream().allMatch(PlanFragment::containsLocalExchangeNode);
+        return node.getSources().stream().anyMatch(PlanFragment::containsLocalExchangeNode);
     }
 
     public List<RemoteSourceNode> getRemoteSourceNodes()
