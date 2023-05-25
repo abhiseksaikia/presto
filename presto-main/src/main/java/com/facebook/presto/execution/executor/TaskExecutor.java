@@ -19,11 +19,13 @@ import com.facebook.airlift.log.Logger;
 import com.facebook.airlift.stats.CounterStat;
 import com.facebook.airlift.stats.TimeDistribution;
 import com.facebook.airlift.stats.TimeStat;
+import com.facebook.presto.client.OutputBufferShutdownState;
 import com.facebook.presto.execution.SplitRunner;
 import com.facebook.presto.execution.TaskId;
 import com.facebook.presto.execution.TaskManagerConfig;
 import com.facebook.presto.execution.TaskManagerConfig.TaskPriorityTracking;
 import com.facebook.presto.execution.buffer.OutputBuffer;
+import com.facebook.presto.execution.buffer.OutputBufferInfo;
 import com.facebook.presto.operator.scalar.JoniRegexpFunctions;
 import com.facebook.presto.server.ServerConfig;
 import com.facebook.presto.spi.PrestoException;
@@ -64,11 +66,13 @@ import java.util.concurrent.Future;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicLongArray;
 import java.util.function.DoubleSupplier;
 import java.util.function.Function;
 import java.util.function.Predicate;
+import java.util.stream.Collectors;
 
 import static com.facebook.airlift.concurrent.Threads.daemonThreadsNamed;
 import static com.facebook.airlift.concurrent.Threads.threadsNamed;
@@ -178,18 +182,25 @@ public class TaskExecutor
     // shared between SplitRunners
     private final CounterStat globalCpuTimeMicros = new CounterStat();
     private final CounterStat globalScheduledTimeMicros = new CounterStat();
-    private final CounterStat noPageAdded = new CounterStat();
 
     private final CounterStat tasksToDrainCounter = new CounterStat();
 
     private final TimeStat blockedQuantaWallTime = new TimeStat(MICROSECONDS);
     private final TimeStat unblockedQuantaWallTime = new TimeStat(MICROSECONDS);
-    private final TimeStat taskExecutorShutdownTime = new TimeStat(NANOSECONDS);
-    private final TimeStat outputBufferEmptyWaitTime = new TimeStat(NANOSECONDS);
-    private final TimeStat waitForRunningSplitTime = new TimeStat(NANOSECONDS);
 
     private volatile boolean closed;
     private final ExecutorService taskShutdownExecutor = newCachedThreadPool(daemonThreadsNamed("task-shutdown-%s"));
+
+    private Set<TaskHandle> tasksToDrain = new HashSet<>();
+    private int taskNumNoPageAdded;
+    private final AtomicInteger taskNumToDrain = new AtomicInteger();
+    private final AtomicInteger taskNumBeKilled = new AtomicInteger();
+    private long shutdownStartTime;
+    private long shutdownFinishKill;
+    private long shutdownStartDrainTime;
+    private long shutdownFinishDrainTime;
+
+    private long shutdownFinishRunningSplitsTime;
 
     @Inject
     public TaskExecutor(TaskManagerConfig config, EmbedVersion embedVersion, MultilevelSplitQueue splitQueue)
@@ -209,16 +220,15 @@ public class TaskExecutor
 
     public void gracefulShutdown()
     {
-        long shutdownStartTime = System.nanoTime();
+        shutdownStartTime = System.currentTimeMillis();
         waitingSplits.shutDown();
         tasks.stream().forEach(taskHandle -> taskHandle.gracefulShutdown());
 
         Set<PrioritizedSplitRunner> waitingInMultiLevelSplitsQueue = waitingSplits.getWaitingSplits();
-        Set<TaskHandle> tasksToDrain = new HashSet<>();
         for (TaskHandle taskHandle : tasks) {
             if (!taskHandle.isAnyPageAdded()) {
                 // if the task hasn't had any page added to the outputBuffer, it is safe to have it retried.
-                noPageAdded.update(1);
+                taskNumNoPageAdded += 1;
                 taskHandle.handleShutDown(true);
             }
             else {
@@ -242,47 +252,54 @@ public class TaskExecutor
 
                         // kill the query
                         taskHandle.handleShutDown(false);
+                        taskNumBeKilled.incrementAndGet();
                     }
                     else {
                         tasksToDrain.add(taskHandle);
+                        taskNumToDrain.incrementAndGet();
                     }
                 }
                 else {
                     if (!taskHandle.runningLeafSplits.isEmpty()) {
                         // kill the query
                         taskHandle.handleShutDown(false);
+                        taskNumBeKilled.incrementAndGet();
                     }
                     else {
                         // There are intermediate splits
                         tasksToDrain.add(taskHandle);
+                        taskNumToDrain.incrementAndGet();
                     }
                 }
             }
         }
 
+        shutdownFinishKill = System.currentTimeMillis();
         if (!tasksToDrain.isEmpty()) {
+            shutdownStartDrainTime = System.currentTimeMillis();
             tasksToDrainCounter.update(tasksToDrain.size());
             //before killing the tasks,  make sure output buffer data is consumed.
+
+            //wait for running splits to be over
+            long waitTimeMillis = 5; // Wait for 10 milliseconds between checks to avoid cpu spike
+            long startTime = System.nanoTime();
+            while (!runningSplits.isEmpty()) {
+                try {
+                    Thread.sleep(waitTimeMillis);
+                }
+                catch (InterruptedException e) {
+                    log.error("GracefulShutdown got interrupted while waiting for running splits", e);
+                }
+            }
+
+            shutdownFinishRunningSplitsTime = System.currentTimeMillis();
+
             CountDownLatch latch = new CountDownLatch(tasksToDrain.size());
             log.warn("GracefulShutdown:: Going to shutdown %s tasks", tasksToDrain.size());
             for (TaskHandle taskHandle : tasksToDrain) {
                 taskShutdownExecutor.execute(
                         () -> {
-                            //wait for running splits to be over
-                            long waitTimeMillis = 5; // Wait for 10 milliseconds between checks to avoid cpu spike
-                            long startTime = System.nanoTime();
-                            while (!runningSplits.isEmpty()) {
-                                try {
-                                    Thread.sleep(waitTimeMillis);
-                                }
-                                catch (InterruptedException e) {
-                                    log.error("GracefulShutdown got interrupted while waiting for running splits", e);
-                                }
-                            }
-
-                            waitForRunningSplitTime.add(Duration.nanosSince(startTime));
                             //wait for output buffer to be empty
-                            startTime = System.nanoTime();
                             while (!taskHandle.isOutputBufferEmpty()) {
                                 try {
                                     Thread.sleep(waitTimeMillis);
@@ -291,9 +308,9 @@ public class TaskExecutor
                                     log.error("GracefulShutdown got interrupted", e);
                                 }
                             }
-                            outputBufferEmptyWaitTime.add(Duration.nanosSince(startTime));
-                            taskHandle.handleShutDown(true);
 
+                            taskHandle.handleShutDown(true);
+                            taskNumToDrain.decrementAndGet();
                             latch.countDown();
                         });
             }
@@ -301,16 +318,13 @@ public class TaskExecutor
             try {
                 log.info("Waiting for shutdown of all tasks");
                 latch.await();
+                shutdownFinishDrainTime = System.currentTimeMillis();
             }
             catch (InterruptedException e) {
                 // TODO Handle interruption
             }
+            log.info("Shutdown of all tasks complete");
         }
-
-        //TODO wait for coordinator to receive callback for failed tasks?
-        Duration shutdownTime = Duration.nanosSince(shutdownStartTime);
-        log.info("Waiting for shutdown of all tasks over in %s milli sec", shutdownTime.toMillis());
-        taskExecutorShutdownTime.add(shutdownTime);
     }
 
     @VisibleForTesting
@@ -1059,34 +1073,6 @@ public class TaskExecutor
         return globalCpuTimeMicros;
     }
 
-    @Managed
-    @Nested
-    public CounterStat getNoPageAdded()
-    {
-        return noPageAdded;
-    }
-
-    @Managed
-    @Nested
-    public TimeStat getTaskExecutorShutdownTime()
-    {
-        return taskExecutorShutdownTime;
-    }
-
-    @Managed
-    @Nested
-    public TimeStat getOutputBufferEmptyWaitTime()
-    {
-        return outputBufferEmptyWaitTime;
-    }
-
-    @Managed
-    @Nested
-    public TimeStat getWaitForRunningSplitTime()
-    {
-        return waitForRunningSplitTime;
-    }
-
     private synchronized int getRunningTasksForLevel(int level)
     {
         int count = 0;
@@ -1144,6 +1130,61 @@ public class TaskExecutor
             }
         }
         return count;
+    }
+
+    public int getTaskNumNoPageAdded()
+    {
+        return taskNumNoPageAdded;
+    }
+
+    public int getTaskNumToDrain()
+    {
+        return taskNumToDrain.get();
+    }
+
+    public int getTaskNumBeKilled()
+    {
+        return taskNumBeKilled.get();
+    }
+
+    public long getShutdownStartTime()
+    {
+        return shutdownStartTime;
+    }
+
+    public long getShutdownFinishKillTime()
+    {
+        return shutdownFinishKill;
+    }
+
+    public long getShutdownStartDrainTime()
+    {
+        return shutdownStartDrainTime;
+    }
+
+    public long getShutdownFinishDrainTime()
+    {
+        return shutdownFinishDrainTime;
+    }
+
+    public long getShutdownFinishRunningSplitsTime()
+    {
+        return shutdownFinishRunningSplitsTime;
+    }
+
+    public Set<OutputBufferShutdownState> getOutputBufferShutdownStates()
+    {
+        Set<OutputBufferShutdownState> shutdownStates = new HashSet<>();
+        for (TaskHandle task : tasksToDrain) {
+            Optional<OutputBuffer> optionalOutputBuffer = task.getOutputBuffer();
+            if (optionalOutputBuffer.isPresent()) {
+                OutputBuffer outputBuffer = optionalOutputBuffer.get();
+                OutputBufferInfo info = outputBuffer.getInfo();
+                shutdownStates.add(new OutputBufferShutdownState(info.getType(), info.getTotalBufferedBytes(), info.getTotalBufferedPages(), info.getTotalPagesSent(), info.getBuffers().stream().map(x -> x.getBufferedPages()).collect(Collectors.toList())));
+            }
+        }
+
+        return shutdownStates;
     }
 
     private static class RunningSplitInfo
