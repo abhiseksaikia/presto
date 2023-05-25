@@ -17,6 +17,7 @@ import com.facebook.airlift.bootstrap.LifeCycleManager;
 import com.facebook.airlift.log.Logger;
 import com.facebook.airlift.stats.CounterStat;
 import com.facebook.airlift.stats.TimeStat;
+import com.facebook.presto.client.ShutdownSnapshot;
 import com.facebook.presto.execution.QueryManager;
 import com.facebook.presto.execution.QueryManagerConfig;
 import com.facebook.presto.execution.TaskInfo;
@@ -227,6 +228,11 @@ public class GracefulShutdownHandler
     public boolean isShutdownRequested()
     {
         return shutdownRequested.get();
+    }
+
+    public ShutdownSnapshot getShutdownSnapshot()
+    {
+        return new ShutdownSnapshot(taskExecutor.getTaskNumNoPageAdded(), taskExecutor.getTaskNumToDrain(), taskExecutor.getTaskNumBeKilled(), taskExecutor.getShutdownStartTime(), taskExecutor.getShutdownFinishKillTime(), taskExecutor.getShutdownStartDrainTime(), taskExecutor.getShutdownFinishDrainTime(), taskExecutor.getShutdownFinishRunningSplitsTime(), taskExecutor.getOutputBufferShutdownStates());
     }
 
     @Managed

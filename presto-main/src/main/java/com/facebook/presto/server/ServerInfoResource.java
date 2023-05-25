@@ -16,6 +16,7 @@ package com.facebook.presto.server;
 import com.facebook.airlift.node.NodeInfo;
 import com.facebook.presto.client.NodeVersion;
 import com.facebook.presto.client.ServerInfo;
+import com.facebook.presto.client.ShutdownSnapshot;
 import com.facebook.presto.execution.executor.FaultInjector;
 import com.facebook.presto.metadata.StaticCatalogStore;
 import com.facebook.presto.spi.NodeState;
@@ -115,6 +116,15 @@ public class ServerInfoResource
     }
 
     @GET
+    @Path("shutdown/snapshot")
+    @Produces(APPLICATION_JSON)
+    @RolesAllowed(ADMIN)
+    public ShutdownSnapshot getShutdownSnapshot()
+    {
+        return shutdownHandler.getShutdownSnapshot();
+    }
+
+    @GET
     @Path("state")
     @Produces({APPLICATION_JSON, APPLICATION_THRIFT_BINARY, APPLICATION_THRIFT_COMPACT, APPLICATION_THRIFT_FB_COMPACT})
     @RolesAllowed(ADMIN)
@@ -130,7 +140,6 @@ public class ServerInfoResource
             return nodeState;
         }
     }
-
     @GET
     @Path("coordinator")
     @Produces(TEXT_PLAIN)
