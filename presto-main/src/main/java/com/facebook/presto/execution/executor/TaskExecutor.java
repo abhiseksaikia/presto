@@ -292,14 +292,6 @@ public class TaskExecutor
                 }
             }
 
-            for (TaskHandle task : tasksToDrain) {
-                Optional<OutputBuffer> optionalOutputBuffer = task.getOutputBuffer();
-                if (optionalOutputBuffer.isPresent()) {
-                    OutputBuffer outputBuffer = optionalOutputBuffer.get();
-                    outputBuffer.setNoMorePages();
-                }
-            }
-
             shutdownFinishRunningSplitsTime = System.currentTimeMillis();
 
             CountDownLatch latch = new CountDownLatch(tasksToDrain.size());
