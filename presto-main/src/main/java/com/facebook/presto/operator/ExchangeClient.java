@@ -505,14 +505,15 @@ public class ExchangeClient
 
     private synchronized void requestComplete(PageBufferClient client)
     {
-        if (!queuedClients.contains(client)) {
-            if (client.isNodeShuttingdown()) {
+        if (client.isNodeShuttingdown()) {
+            if (!shuttingdownClients.contains(client)) {
                 shuttingdownClients.add(client);
             }
-            else {
-                queuedClients.add(client);
-            }
         }
+        else if (!queuedClients.contains(client)) {
+            queuedClients.add(client);
+        }
+
         scheduleRequestIfNecessary();
     }
 
