@@ -1046,7 +1046,8 @@ public class TestResourceGroups
                         "1",
                         false,
                         false,
-                        false));
+                        false,
+                        Optional.empty()));
         internalNodeManager.addNode(
                 new ConnectorId("dummy"),
                 new InternalNode(
@@ -1056,7 +1057,8 @@ public class TestResourceGroups
                         "1",
                         false,
                         false,
-                        false));
+                        false,
+                        Optional.empty()));
         internalNodeManager.addNode(
                 new ConnectorId("dummy"),
                 new InternalNode(
@@ -1066,7 +1068,8 @@ public class TestResourceGroups
                         "1",
                         false,
                         false,
-                        false));
+                        false,
+                        Optional.empty()));
         return internalNodeManager;
     }
 }
