@@ -62,7 +62,7 @@ public class TestTaskExecutor
         ticker.increment(20, MILLISECONDS);
 
         try {
-            TaskId taskId = new TaskId("test", 0, 0, 0);
+            TaskId taskId = new TaskId("test", 0, 0, 0, 0);
             TaskHandle taskHandle = taskExecutor.addTask(taskId, () -> 0, 10, new Duration(1, MILLISECONDS), OptionalInt.empty());
 
             Phaser beginPhase = new Phaser();
