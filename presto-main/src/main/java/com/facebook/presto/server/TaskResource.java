@@ -339,8 +339,7 @@ public class TaskResource
                     .header(PRESTO_PAGE_NEXT_TOKEN, result.getNextToken())
                     .header(PRESTO_BUFFER_COMPLETE, result.isBufferComplete())
                     .header(PRESTO_WORKER_SHUTTING_DOWN, gracefulShutdownHandler.isShutdownRequested())
-                    .build()
-            );
+                    .build());
             Duration waitTime = randomizeWaitTime(DEFAULT_MAX_WAIT_TIME);
             Duration timeout = new Duration(waitTime.toMillis() + ADDITIONAL_WAIT_TIME.toMillis(), MILLISECONDS);
             bindAsyncResponse(asyncResponse, responseFuture, responseExecutor)
