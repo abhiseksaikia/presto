@@ -330,52 +330,77 @@ public class TaskResource
         requireNonNull(taskId, "taskId is null");
         requireNonNull(bufferId, "bufferId is null");
 
-        long start = System.nanoTime();
-        ListenableFuture<BufferResult> bufferResultFuture = taskManager.getTaskResults(taskId, bufferId, token, maxSize);
-        Duration waitTime = randomizeWaitTime(DEFAULT_MAX_WAIT_TIME);
-        bufferResultFuture = addTimeout(
-                bufferResultFuture,
-                () -> BufferResult.emptyResults(taskManager.getTaskInstanceId(taskId), token, false),
-                waitTime,
-                timeoutExecutor);
-
-        ListenableFuture<Response> responseFuture = Futures.transform(bufferResultFuture, result -> {
-            List<SerializedPage> serializedPages = result.getSerializedPages();
-
-            GenericEntity<?> entity = null;
-            Status status;
-            if (serializedPages.isEmpty()) {
-                status = Status.NO_CONTENT;
-            }
-            else {
-                entity = new GenericEntity<>(serializedPages, new TypeToken<List<Page>>() {}.getType());
-                status = Status.OK;
-            }
-
-            return Response.status(status)
-                    .entity(entity)
+        if (maxSize.toBytes() == 0) {
+            BufferResult result = BufferResult.emptyResults(taskManager.getTaskInstanceId(taskId), token, false);
+            ListenableFuture<Response> responseFuture = Futures.immediateFuture(Response.status(Status.NO_CONTENT)
+                    .entity(null)
                     .header(PRESTO_TASK_INSTANCE_ID, result.getTaskInstanceId())
                     .header(PRESTO_PAGE_TOKEN, result.getToken())
                     .header(PRESTO_PAGE_NEXT_TOKEN, result.getNextToken())
                     .header(PRESTO_BUFFER_COMPLETE, result.isBufferComplete())
                     .header(PRESTO_WORKER_SHUTTING_DOWN, gracefulShutdownHandler.isShutdownRequested())
-                    .build();
-        }, directExecutor());
+                    .build()
+            );
+            Duration waitTime = randomizeWaitTime(DEFAULT_MAX_WAIT_TIME);
+            Duration timeout = new Duration(waitTime.toMillis() + ADDITIONAL_WAIT_TIME.toMillis(), MILLISECONDS);
+            bindAsyncResponse(asyncResponse, responseFuture, responseExecutor)
+                    .withTimeout(timeout,
+                            Response.status(Status.NO_CONTENT)
+                                    .header(PRESTO_TASK_INSTANCE_ID, taskManager.getTaskInstanceId(taskId))
+                                    .header(PRESTO_PAGE_TOKEN, token)
+                                    .header(PRESTO_PAGE_NEXT_TOKEN, token)
+                                    .header(PRESTO_BUFFER_COMPLETE, false)
+                                    .header(PRESTO_WORKER_SHUTTING_DOWN, gracefulShutdownHandler.isShutdownRequested())
+                                    .build());
+        }
+        else {
+            long start = System.nanoTime();
+            ListenableFuture<BufferResult> bufferResultFuture = taskManager.getTaskResults(taskId, bufferId, token, maxSize);
+            Duration waitTime = randomizeWaitTime(DEFAULT_MAX_WAIT_TIME);
+            bufferResultFuture = addTimeout(
+                    bufferResultFuture,
+                    () -> BufferResult.emptyResults(taskManager.getTaskInstanceId(taskId), token, false),
+                    waitTime,
+                    timeoutExecutor);
 
-        // For hard timeout, add an additional time to max wait for thread scheduling contention and GC
-        Duration timeout = new Duration(waitTime.toMillis() + ADDITIONAL_WAIT_TIME.toMillis(), MILLISECONDS);
-        bindAsyncResponse(asyncResponse, responseFuture, responseExecutor)
-                .withTimeout(timeout,
-                        Response.status(Status.NO_CONTENT)
-                                .header(PRESTO_TASK_INSTANCE_ID, taskManager.getTaskInstanceId(taskId))
-                                .header(PRESTO_PAGE_TOKEN, token)
-                                .header(PRESTO_PAGE_NEXT_TOKEN, token)
-                                .header(PRESTO_BUFFER_COMPLETE, false)
-                                .header(PRESTO_WORKER_SHUTTING_DOWN, gracefulShutdownHandler.isShutdownRequested())
-                                .build());
+            ListenableFuture<Response> responseFuture = Futures.transform(bufferResultFuture, result -> {
+                List<SerializedPage> serializedPages = result.getSerializedPages();
 
-        responseFuture.addListener(() -> readFromOutputBufferTime.add(Duration.nanosSince(start)), directExecutor());
-        asyncResponse.register((CompletionCallback) throwable -> resultsRequestTime.add(Duration.nanosSince(start)));
+                GenericEntity<?> entity = null;
+                Status status;
+                if (serializedPages.isEmpty()) {
+                    status = Status.NO_CONTENT;
+                }
+                else {
+                    entity = new GenericEntity<>(serializedPages, new TypeToken<List<Page>>() {}.getType());
+                    status = Status.OK;
+                }
+
+                return Response.status(status)
+                        .entity(entity)
+                        .header(PRESTO_TASK_INSTANCE_ID, result.getTaskInstanceId())
+                        .header(PRESTO_PAGE_TOKEN, result.getToken())
+                        .header(PRESTO_PAGE_NEXT_TOKEN, result.getNextToken())
+                        .header(PRESTO_BUFFER_COMPLETE, result.isBufferComplete())
+                        .header(PRESTO_WORKER_SHUTTING_DOWN, gracefulShutdownHandler.isShutdownRequested())
+                        .build();
+            }, directExecutor());
+
+            // For hard timeout, add an additional time to max wait for thread scheduling contention and GC
+            Duration timeout = new Duration(waitTime.toMillis() + ADDITIONAL_WAIT_TIME.toMillis(), MILLISECONDS);
+            bindAsyncResponse(asyncResponse, responseFuture, responseExecutor)
+                    .withTimeout(timeout,
+                            Response.status(Status.NO_CONTENT)
+                                    .header(PRESTO_TASK_INSTANCE_ID, taskManager.getTaskInstanceId(taskId))
+                                    .header(PRESTO_PAGE_TOKEN, token)
+                                    .header(PRESTO_PAGE_NEXT_TOKEN, token)
+                                    .header(PRESTO_BUFFER_COMPLETE, false)
+                                    .header(PRESTO_WORKER_SHUTTING_DOWN, gracefulShutdownHandler.isShutdownRequested())
+                                    .build());
+
+            responseFuture.addListener(() -> readFromOutputBufferTime.add(Duration.nanosSince(start)), directExecutor());
+            asyncResponse.register((CompletionCallback) throwable -> resultsRequestTime.add(Duration.nanosSince(start)));
+        }
     }
 
     @GET

@@ -378,6 +378,9 @@ public class ExchangeClient
         long neededBytes = bufferCapacity - bufferRetainedSizeInBytes;
         if (neededBytes <= 0) {
             int clientCount = queuedClients.size();
+            int pendingClients = allClients.size() - queuedClients.size() - completedClients.size();
+            clientCount -= pendingClients;
+
             for (int i = 0; i < clientCount; ) {
                 PageBufferClient client = queuedClients.poll();
                 if (client == null) {
@@ -389,7 +392,7 @@ public class ExchangeClient
                     continue;
                 }
 
-                DataSize max = new DataSize(1, BYTE);
+                DataSize max = new DataSize(0, BYTE);
                 client.scheduleRequest(max, false);
                 i++;
             }
