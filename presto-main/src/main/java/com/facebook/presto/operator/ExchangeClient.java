@@ -374,40 +374,75 @@ public class ExchangeClient
         }
         long averageResponseSize = max(1, responseSizeExponentialMovingAverage.get());
         handleWorkerShuttingdown();
+
         long neededBytes = bufferCapacity - bufferRetainedSizeInBytes;
         if (neededBytes <= 0) {
-            return;
+            int clientCount = queuedClients.size();
+            for (int i = 0; i < clientCount; ) {
+                PageBufferClient client = queuedClients.poll();
+                if (client == null) {
+                    // no more clients available
+                    return;
+                }
+
+                if (removedClients.contains(client)) {
+                    continue;
+                }
+
+                DataSize max = new DataSize(1, BYTE);
+                client.scheduleRequest(max, false);
+                i++;
+            }
         }
-        /**
-         * Multiplier determining the number of concurrent requests relative to available buffer memory.
-         * The maximum number of requests is determined using a heuristic of the number of clients that can
-         * fit into available buffer space, based on average buffer usage per request times this multiplier.
-         * For example, with an exchange.max-buffer-size of 32 MB and 20 MB already used and average size
-         * per request being 2MB, the maximum number of clients is multiplier * ((32MB - 20MB) / 2MB) = multiplier * 6.
-         * Tuning this value adjusts the heuristic, which may increase concurrency and improve network utilization.
-         */
+        else {
+            /**
+             * Multiplier determining the number of concurrent requests relative to available buffer memory.
+             * The maximum number of requests is determined using a heuristic of the number of clients that can
+             * fit into available buffer space, based on average buffer usage per request times this multiplier.
+             * For example, with an exchange.max-buffer-size of 32 MB and 20 MB already used and average size
+             * per request being 2MB, the maximum number of clients is multiplier * ((32MB - 20MB) / 2MB) = multiplier * 6.
+             * Tuning this value adjusts the heuristic, which may increase concurrency and improve network utilization.
+             */
 
-        //estimated number of clients that can concurrently process a request based on amount of data that needs to be transferred and avg response size
-        int clientCount = (int) ((1.0 * neededBytes / averageResponseSize) * concurrentRequestMultiplier);
-        clientCount = max(clientCount, 1);
-        //pendingClients = Number of clients that have not yet received a response and are waiting to do so.
-        int pendingClients = allClients.size() - queuedClients.size() - completedClients.size();
-        clientCount -= pendingClients;
+            //estimated number of clients that can concurrently process a request based on amount of data that needs to be transferred and avg response size
+            int clientCount = (int) ((1.0 * neededBytes / averageResponseSize) * concurrentRequestMultiplier);
+            clientCount = max(clientCount, 1);
+            //pendingClients = Number of clients that have not yet received a response and are waiting to do so.
+            int pendingClients = allClients.size() - queuedClients.size() - completedClients.size();
+            clientCount -= pendingClients;
 
-        for (int i = 0; i < clientCount; ) {
-            PageBufferClient client = queuedClients.poll();
-            if (client == null) {
-                // no more clients available
-                return;
+            for (int i = 0; i < clientCount; ) {
+                PageBufferClient client = queuedClients.poll();
+                if (client == null) {
+                    // no more clients available
+                    return;
+                }
+
+                if (removedClients.contains(client)) {
+                    continue;
+                }
+
+                DataSize max = new DataSize(min(averageResponseSize * 2, maxResponseSize.toBytes()), BYTE);
+                client.scheduleRequest(max, false);
+                i++;
             }
 
-            if (removedClients.contains(client)) {
-                continue;
-            }
+            int restClientCount = queuedClients.size() - clientCount;
+            for (int i = 0; i < restClientCount; ) {
+                PageBufferClient client = queuedClients.poll();
+                if (client == null) {
+                    // no more clients available
+                    return;
+                }
 
-            DataSize max = new DataSize(min(averageResponseSize * 2, maxResponseSize.toBytes()), BYTE);
-            client.scheduleRequest(max, false);
-            i++;
+                if (removedClients.contains(client)) {
+                    continue;
+                }
+
+                DataSize max = new DataSize(1, BYTE);
+                client.scheduleRequest(max, false);
+                i++;
+            }
         }
     }
 
