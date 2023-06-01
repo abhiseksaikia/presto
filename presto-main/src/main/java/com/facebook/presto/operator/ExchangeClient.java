@@ -414,6 +414,7 @@ public class ExchangeClient
             int pendingClients = allClients.size() - queuedClients.size() - completedClients.size();
             clientCount -= pendingClients;
 
+            int restClientCount = queuedClients.size() - clientCount;
             for (int i = 0; i < clientCount; ) {
                 PageBufferClient client = queuedClients.poll();
                 if (client == null) {
@@ -430,21 +431,22 @@ public class ExchangeClient
                 i++;
             }
 
-            int restClientCount = queuedClients.size() - clientCount;
-            for (int i = 0; i < restClientCount; ) {
-                PageBufferClient client = queuedClients.poll();
-                if (client == null) {
-                    // no more clients available
-                    return;
-                }
+            if (restClientCount > 0) {
+                for (int i = 0; i < restClientCount; ) {
+                    PageBufferClient client = queuedClients.poll();
+                    if (client == null) {
+                        // no more clients available
+                        return;
+                    }
 
-                if (removedClients.contains(client)) {
-                    continue;
-                }
+                    if (removedClients.contains(client)) {
+                        continue;
+                    }
 
-                DataSize max = new DataSize(1, BYTE);
-                client.scheduleRequest(max, false);
-                i++;
+                    DataSize max = new DataSize(0, BYTE);
+                    client.scheduleRequest(max, false);
+                    i++;
+                }
             }
         }
     }
