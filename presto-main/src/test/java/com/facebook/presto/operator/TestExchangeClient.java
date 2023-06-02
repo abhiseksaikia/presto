@@ -562,6 +562,7 @@ public class TestExchangeClient
                 false,
                 0.2,
                 new TestingHttpClient(processor, testingHttpClientExecutor),
+                new TestingHttpClient(processor, testingHttpClientExecutor),
                 new TestingDriftClient<>(),
                 scheduler,
                 new SimpleLocalMemoryContext(newSimpleAggregatedMemoryContext(), "test"),

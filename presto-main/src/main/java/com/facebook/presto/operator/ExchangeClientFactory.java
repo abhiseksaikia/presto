@@ -45,6 +45,7 @@ public class ExchangeClientFactory
     private final int concurrentRequestMultiplier;
     private final Duration maxErrorDuration;
     private final HttpClient httpClient;
+    private final HttpClient longPollingHttpClient;
     private final DriftClient<ThriftTaskClient> driftClient;
     private final DataSize maxResponseSize;
     private final boolean acknowledgePages;
@@ -59,6 +60,7 @@ public class ExchangeClientFactory
             ExchangeClientConfig config,
             TaskManagerConfig taskManagerConfig,
             @ForExchange HttpClient httpClient,
+            @ForExchangeLongPolling HttpClient longPollingHttpClient,
             @ForExchange DriftClient<ThriftTaskClient> driftClient,
             @ForExchange ScheduledExecutorService scheduler)
     {
@@ -73,6 +75,7 @@ public class ExchangeClientFactory
                 config.getPageBufferClientMaxCallbackThreads(),
                 config.getResponseSizeExponentialMovingAverageDecayingAlpha(),
                 httpClient,
+                longPollingHttpClient,
                 driftClient,
                 scheduler);
     }
@@ -88,6 +91,7 @@ public class ExchangeClientFactory
             int pageBufferClientMaxCallbackThreads,
             double responseSizeExponentialMovingAverageDecayingAlpha,
             HttpClient httpClient,
+            HttpClient longPollingHttpClient,
             DriftClient<ThriftTaskClient> driftClient,
             ScheduledExecutorService scheduler)
     {
@@ -98,6 +102,7 @@ public class ExchangeClientFactory
         this.acknowledgePages = acknowledgePages;
         this.asyncPageTransportEnabled = asyncPageTransportEnabled;
         this.httpClient = requireNonNull(httpClient, "httpClient is null");
+        this.longPollingHttpClient = requireNonNull(longPollingHttpClient, "longPollingHttpClient is null");
         this.driftClient = requireNonNull(driftClient, "driftClient is null");
 
         // Use only 0.75 of the maxResponseSize to leave room for additional bytes from the encoding
@@ -145,6 +150,7 @@ public class ExchangeClientFactory
                 asyncPageTransportEnabled,
                 responseSizeExponentialMovingAverageDecayingAlpha,
                 httpClient,
+                longPollingHttpClient,
                 driftClient,
                 scheduler,
                 systemMemoryContext,

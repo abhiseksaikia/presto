@@ -92,6 +92,7 @@ public class ExchangeClient
     private final Duration maxErrorDuration;
     private final boolean acknowledgePages;
     private final HttpClient httpClient;
+    private final HttpClient longPollingHttpClient;
     private final DriftClient<ThriftTaskClient> driftClient;
     private final ScheduledExecutorService scheduler;
     private boolean asyncPageTransportEnabled;
@@ -141,6 +142,7 @@ public class ExchangeClient
             boolean asyncPageTransportEnabled,
             double responseSizeExponentialMovingAverageDecayingAlpha,
             HttpClient httpClient,
+            HttpClient longPollingHttpClient,
             DriftClient<ThriftTaskClient> driftClient,
             ScheduledExecutorService scheduler,
             LocalMemoryContext systemMemoryContext,
@@ -155,6 +157,7 @@ public class ExchangeClient
         this.acknowledgePages = acknowledgePages;
         this.asyncPageTransportEnabled = asyncPageTransportEnabled;
         this.httpClient = httpClient;
+        this.longPollingHttpClient = longPollingHttpClient;
         this.driftClient = driftClient;
         this.scheduler = scheduler;
         this.systemMemoryContext = systemMemoryContext;
@@ -209,7 +212,7 @@ public class ExchangeClient
         switch (location.getScheme().toLowerCase(Locale.ENGLISH)) {
             case "http":
             case "https":
-                resultClient = new HttpRpcShuffleClient(httpClient, location, asyncPageTransportLocation);
+                resultClient = new HttpRpcShuffleClient(httpClient, longPollingHttpClient, location, asyncPageTransportLocation);
                 break;
             case "thrift":
                 resultClient = new ThriftRpcShuffleClient(driftClient, location);
@@ -231,6 +234,7 @@ public class ExchangeClient
         checkState(taskIdToLocationMap.put(remoteSourceTaskId, location) == null, "Duplicate remoteSourceTaskId: " + remoteSourceTaskId);
         queuedClients.add(client);
 
+        client.establishLongPollingRequest();
         scheduleRequestIfNecessary();
     }
 

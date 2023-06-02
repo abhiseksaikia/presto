@@ -13,6 +13,7 @@
  */
 package com.facebook.presto.operator;
 
+import com.facebook.airlift.http.client.StatusResponseHandler;
 import com.facebook.presto.operator.PageBufferClient.PagesResponse;
 import com.google.common.util.concurrent.ListenableFuture;
 import io.airlift.units.DataSize;
@@ -36,6 +37,8 @@ public interface RpcShuffleClient
      * Close remote buffer
      */
     ListenableFuture<?> abortResults();
+
+    ListenableFuture<StatusResponseHandler.StatusResponse> longPollShutDown();
 
     /**
      * Rewrite network related exception to Presto exception

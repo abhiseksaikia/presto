@@ -38,6 +38,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.reflect.TypeToken;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
+import com.google.common.util.concurrent.SettableFuture;
 import io.airlift.units.DataSize;
 import io.airlift.units.Duration;
 import org.weakref.jmx.Managed;
@@ -389,6 +390,27 @@ public class TaskResource
         requireNonNull(bufferId, "bufferId is null");
 
         taskManager.acknowledgeTaskResults(taskId, bufferId, token);
+    }
+
+    @GET
+    @Path("node-shutdown")
+    @Produces(APPLICATION_JSON)
+    public void nodeShutdown(@Suspended AsyncResponse asyncResponse)
+    {
+        SettableFuture<Response> responseFuture = SettableFuture.create();
+
+        timeoutExecutor.scheduleAtFixedRate(() -> {
+            if (gracefulShutdownHandler.isShutdownRequested()) {
+                responseFuture.set(Response.ok().build());
+            }
+        }, 100, 100, MILLISECONDS);
+
+        Duration waitTime = randomizeWaitTime(new Duration(600, SECONDS));
+        Duration timeout = new Duration(waitTime.toMillis() + ADDITIONAL_WAIT_TIME.toMillis(), MILLISECONDS);
+        bindAsyncResponse(asyncResponse, responseFuture, responseExecutor)
+                .withTimeout(timeout,
+                        Response.status(Status.NO_CONTENT)
+                                .build());
     }
 
     @DELETE

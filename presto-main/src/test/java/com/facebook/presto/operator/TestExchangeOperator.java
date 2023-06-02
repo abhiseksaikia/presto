@@ -95,6 +95,7 @@ public class TestExchangeOperator
                 false,
                 0.2,
                 httpClient,
+                httpClient,
                 new TestingDriftClient<>(),
                 scheduler,
                 systemMemoryUsageListener,

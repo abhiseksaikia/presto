@@ -19,6 +19,7 @@ import com.facebook.airlift.http.client.Request;
 import com.facebook.airlift.http.client.Response;
 import com.facebook.airlift.http.client.ResponseHandler;
 import com.facebook.airlift.http.client.ResponseTooLargeException;
+import com.facebook.airlift.http.client.StatusResponseHandler;
 import com.facebook.airlift.log.Logger;
 import com.facebook.presto.operator.PageBufferClient.PagesResponse;
 import com.facebook.presto.spi.HostAddress;
@@ -67,17 +68,19 @@ public final class HttpRpcShuffleClient
     private static final Logger log = Logger.get(HttpRpcShuffleClient.class);
 
     private final HttpClient httpClient;
+    private final HttpClient longPollingHttpClient;
     private final URI location;
     private final Optional<URI> asyncPageTransportLocation;
 
-    public HttpRpcShuffleClient(HttpClient httpClient, URI location)
+    public HttpRpcShuffleClient(HttpClient httpClient, HttpClient longPollingHttpClient, URI location)
     {
-        this(httpClient, location, Optional.empty());
+        this(httpClient, longPollingHttpClient, location, Optional.empty());
     }
 
-    public HttpRpcShuffleClient(HttpClient httpClient, URI location, Optional<URI> asyncPageTransportLocation)
+    public HttpRpcShuffleClient(HttpClient httpClient, HttpClient longPollingHttpClient, URI location, Optional<URI> asyncPageTransportLocation)
     {
         this.httpClient = requireNonNull(httpClient, "httpClient is null");
+        this.longPollingHttpClient = requireNonNull(longPollingHttpClient, "longPollinghttpClient is null");
         this.location = requireNonNull(location, "location is null");
         this.asyncPageTransportLocation = requireNonNull(asyncPageTransportLocation, "asyncPageTransportLocation is null");
     }
@@ -122,6 +125,17 @@ public final class HttpRpcShuffleClient
     public ListenableFuture<?> abortResults()
     {
         return httpClient.executeAsync(prepareDelete().setUri(location).build(), createStatusResponseHandler());
+    }
+
+    @Override
+    public ListenableFuture<StatusResponseHandler.StatusResponse> longPollShutDown()
+    {
+        URI uriBase = asyncPageTransportLocation.orElse(location);
+        URI uri = uriBuilderFrom(uriBase).replacePath("/v1/task/node-shutdown").build();
+        return longPollingHttpClient.executeAsync(
+                prepareGet()
+                        .setUri(uri).build(),
+                createStatusResponseHandler());
     }
 
     @Override

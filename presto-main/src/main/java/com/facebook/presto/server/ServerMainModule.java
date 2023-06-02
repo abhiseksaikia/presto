@@ -112,6 +112,7 @@ import com.facebook.presto.operator.ExchangeClientSupplier;
 import com.facebook.presto.operator.FileFragmentResultCacheConfig;
 import com.facebook.presto.operator.FileFragmentResultCacheManager;
 import com.facebook.presto.operator.ForExchange;
+import com.facebook.presto.operator.ForExchangeLongPolling;
 import com.facebook.presto.operator.FragmentCacheStats;
 import com.facebook.presto.operator.FragmentResultCacheManager;
 import com.facebook.presto.operator.LookupJoinOperators;
@@ -266,6 +267,7 @@ import static java.util.Objects.requireNonNull;
 import static java.util.concurrent.Executors.newCachedThreadPool;
 import static java.util.concurrent.Executors.newFixedThreadPool;
 import static java.util.concurrent.Executors.newScheduledThreadPool;
+import static java.util.concurrent.TimeUnit.MINUTES;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.weakref.jmx.ObjectNames.generatedNameOf;
 import static org.weakref.jmx.guice.ExportBinder.newExporter;
@@ -544,6 +546,16 @@ public class ServerMainModule
                     config.setMaxConnectionsPerServer(250);
                     config.setMaxContentLength(new DataSize(32, MEGABYTE));
                 });
+
+        httpClientBinder(binder).bindHttpClient("exchange-long-polling", ForExchangeLongPolling.class)
+                .withTracing()
+                .withFilter(GenerateTraceTokenRequestFilter.class)
+                .withConfigDefaults(config -> {
+                    config.setRequestTimeout(new Duration(60, MINUTES));
+                    config.setMaxConnectionsPerServer(5);
+                    config.setMaxContentLength(new DataSize(1, MEGABYTE));
+                });
+
         binder.install(new DriftNettyClientModule());
         driftClientBinder(binder).bindDriftClient(ThriftTaskClient.class, ForExchange.class)
                 .withAddressSelector(((addressSelectorBinder, annotation, prefix) ->

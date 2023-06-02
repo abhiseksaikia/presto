@@ -96,7 +96,6 @@ public final class SqlStageExecution
             REMOTE_TASK_MISMATCH.toErrorCode(),
             REMOTE_TASK_ERROR.toErrorCode());
 
-
     private Optional<Set<ErrorCode>> recoveryErrorCodes = Optional.empty();
     private static final int DELAY_NO_MORE_RETRY = 10_000;
     public static final int DEFAULT_TASK_ATTEMPT_NUMBER = 0;

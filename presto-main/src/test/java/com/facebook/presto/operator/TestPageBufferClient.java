@@ -103,7 +103,7 @@ public class TestPageBufferClient
 
         URI location = URI.create("http://localhost:8080");
         PageBufferClient client = new PageBufferClient(
-                new HttpRpcShuffleClient(new TestingHttpClient(processor, scheduler), location),
+                new HttpRpcShuffleClient(new TestingHttpClient(processor, scheduler), new TestingHttpClient(processor, scheduler), location),
                 new Duration(1, TimeUnit.MINUTES),
                 true,
                 location,
@@ -190,7 +190,7 @@ public class TestPageBufferClient
 
         URI location = URI.create("http://localhost:8080");
         PageBufferClient client = new PageBufferClient(
-                new HttpRpcShuffleClient(new TestingHttpClient(processor, scheduler), location),
+                new HttpRpcShuffleClient(new TestingHttpClient(processor, scheduler), new TestingHttpClient(processor, scheduler), location),
                 new Duration(1, TimeUnit.MINUTES),
                 true,
                 location,
@@ -232,7 +232,7 @@ public class TestPageBufferClient
 
         URI location = URI.create("http://localhost:8080");
         PageBufferClient client = new PageBufferClient(
-                new HttpRpcShuffleClient(new TestingHttpClient(processor, scheduler), location),
+                new HttpRpcShuffleClient(new TestingHttpClient(processor, scheduler), new TestingHttpClient(processor, scheduler), location),
                 new Duration(1, TimeUnit.MINUTES),
                 true,
                 location,
@@ -302,7 +302,7 @@ public class TestPageBufferClient
 
         URI location = URI.create("http://localhost:8080");
         PageBufferClient client = new PageBufferClient(
-                new HttpRpcShuffleClient(new TestingHttpClient(processor, scheduler), location),
+                new HttpRpcShuffleClient(new TestingHttpClient(processor, scheduler), new TestingHttpClient(processor, scheduler), location),
                 new Duration(1, TimeUnit.MINUTES),
                 true,
                 location,
@@ -358,7 +358,7 @@ public class TestPageBufferClient
 
         URI location = URI.create("http://localhost:8080");
         PageBufferClient client = new PageBufferClient(
-                new HttpRpcShuffleClient(new TestingHttpClient(processor, scheduler), location),
+                new HttpRpcShuffleClient(new TestingHttpClient(processor, scheduler), new TestingHttpClient(processor, scheduler), location),
                 new Duration(30, TimeUnit.SECONDS),
                 true,
                 location,

@@ -13,6 +13,7 @@
  */
 package com.facebook.presto.operator;
 
+import com.facebook.airlift.http.client.StatusResponseHandler;
 import com.facebook.drift.client.DriftClient;
 import com.facebook.drift.transport.client.MessageTooLargeException;
 import com.facebook.presto.execution.TaskId;
@@ -81,6 +82,13 @@ public final class ThriftRpcShuffleClient
     public ListenableFuture<?> abortResults()
     {
         return thriftClient.abortResults(taskId, outputBufferId);
+    }
+
+    @Override
+    public ListenableFuture<StatusResponseHandler.StatusResponse> longPollShutDown()
+    {
+        // FIXME:
+        return null;
     }
 
     @Override

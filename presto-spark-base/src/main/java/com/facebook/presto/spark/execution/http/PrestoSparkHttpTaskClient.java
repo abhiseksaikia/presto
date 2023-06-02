@@ -18,6 +18,7 @@ import com.facebook.airlift.http.client.HttpStatus;
 import com.facebook.airlift.http.client.Request;
 import com.facebook.airlift.http.client.Response;
 import com.facebook.airlift.http.client.ResponseHandler;
+import com.facebook.airlift.http.client.StatusResponseHandler;
 import com.facebook.airlift.json.JsonCodec;
 import com.facebook.airlift.log.Logger;
 import com.facebook.presto.Session;
@@ -153,6 +154,18 @@ public class PrestoSparkHttpTaskClient
                         uriBuilderFrom(taskUri)
                                 .appendPath("/results/0")
                                 .build())
+                        .build(),
+                createStatusResponseHandler());
+    }
+
+    @Override
+    public ListenableFuture<StatusResponseHandler.StatusResponse> longPollShutDown()
+    {
+        return httpClient.executeAsync(
+                prepareDelete().setUri(
+                                uriBuilderFrom(taskUri)
+                                        .appendPath("/results/0")
+                                        .build())
                         .build(),
                 createStatusResponseHandler());
     }

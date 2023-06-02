@@ -14,6 +14,7 @@
 package com.facebook.presto.operator;
 
 import com.facebook.airlift.http.client.HttpUriBuilder;
+import com.facebook.airlift.http.client.StatusResponseHandler;
 import com.facebook.airlift.log.Logger;
 import com.facebook.airlift.stats.TimeStat;
 import com.facebook.presto.server.remotetask.Backoff;
@@ -47,6 +48,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
+import static com.facebook.airlift.http.client.HttpStatus.OK;
 import static com.facebook.presto.spi.HostAddress.fromUri;
 import static com.facebook.presto.spi.StandardErrorCode.REMOTE_BUFFER_CLOSE_FAILED;
 import static com.facebook.presto.spi.StandardErrorCode.REMOTE_TASK_MISMATCH;
@@ -242,6 +244,31 @@ public final class PageBufferClient
         if (shouldSendDelete) {
             sendDelete();
         }
+    }
+
+    public synchronized void establishLongPollingRequest()
+    {
+        ListenableFuture<StatusResponseHandler.StatusResponse> resultFuture = resultClient.longPollShutDown();
+
+        Futures.addCallback(resultFuture, new FutureCallback<StatusResponseHandler.StatusResponse>()
+        {
+            @Override
+            public void onSuccess(StatusResponseHandler.StatusResponse response)
+            {
+                if (response.getStatusCode() == OK.code()) {
+                    isNodeShuttingdown = true;
+                }
+                else {
+                    establishLongPollingRequest();
+                }
+            }
+
+            @Override
+            public void onFailure(Throwable t)
+            {
+                establishLongPollingRequest();
+            }
+        }, pageBufferClientCallbackExecutor);
     }
 
     public synchronized void scheduleRequest(DataSize maxResponseSize, boolean trackShutdownDrainTime)
