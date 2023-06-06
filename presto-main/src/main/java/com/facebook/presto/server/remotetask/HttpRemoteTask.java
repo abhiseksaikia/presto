@@ -425,6 +425,11 @@ public final class HttpRemoteTask
     }
 
     @Override
+    public boolean getIsLeaf()
+    {
+            return planFragment.isLeaf();
+    }
+    @Override
     public TaskInfo getTaskInfo()
     {
         return taskInfoFetcher.getTaskInfo();

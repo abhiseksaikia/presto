@@ -187,6 +187,8 @@ public class MockRemoteTaskFactory
 
         private final PlanFragment fragment;
 
+        private final boolean isLeaf;
+
         private boolean isRetriedOnFailure;
 
         @GuardedBy("this")
@@ -269,6 +271,7 @@ public class MockRemoteTaskFactory
             }
 
             this.nodeStatsTracker = requireNonNull(nodeStatsTracker, "nodeStatsTracker is null");
+            this.isLeaf = false;
             updateTaskStats();
             updateSplitQueueSpace();
         }
@@ -285,6 +288,11 @@ public class MockRemoteTaskFactory
             return nodeId;
         }
 
+        @Override
+        public boolean getIsLeaf()
+        {
+            return isLeaf;
+        }
         @Override
         public TaskInfo getTaskInfo()
         {

@@ -85,7 +85,7 @@ public class TestExchangeOperator
         pageBufferClientCallbackExecutor = Executors.newSingleThreadExecutor();
         httpClient = new TestingHttpClient(new TestingExchangeHttpClientHandler(taskBuffers), scheduler);
 
-        exchangeClientSupplier = (systemMemoryUsageListener) -> new ExchangeClient(
+        exchangeClientSupplier = (systemMemoryUsageListener, gracefulExchangeClientFailureHandling) -> new ExchangeClient(
                 new DataSize(204, MEGABYTE),
                 new DataSize(32, MEGABYTE),
                 new DataSize(10, MEGABYTE),
@@ -98,7 +98,8 @@ public class TestExchangeOperator
                 new TestingDriftClient<>(),
                 scheduler,
                 systemMemoryUsageListener,
-                pageBufferClientCallbackExecutor);
+                pageBufferClientCallbackExecutor,
+                gracefulExchangeClientFailureHandling);
     }
 
     @AfterClass(alwaysRun = true)
@@ -148,7 +149,7 @@ public class TestExchangeOperator
 
     private static Split newRemoteSplit(String taskId)
     {
-        return new Split(REMOTE_CONNECTOR_ID, new RemoteTransactionHandle(), new RemoteSplit(new Location("http://localhost/" + taskId), TaskId.valueOf(taskId)));
+        return new Split(REMOTE_CONNECTOR_ID, new RemoteTransactionHandle(), new RemoteSplit(new Location("http://localhost/" + taskId), TaskId.valueOf(taskId), false));
     }
 
     @Test

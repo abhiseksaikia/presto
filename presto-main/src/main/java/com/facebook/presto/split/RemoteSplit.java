@@ -34,12 +34,14 @@ public class RemoteSplit
 {
     private final Location location;
     private final TaskId remoteSourceTaskId;
+    private final boolean isLeaf;
 
     @JsonCreator
-    public RemoteSplit(@JsonProperty("location") Location location, @JsonProperty("remoteSourceTaskId") TaskId remoteSourceTaskId)
+    public RemoteSplit(@JsonProperty("location") Location location, @JsonProperty("remoteSourceTaskId") TaskId remoteSourceTaskId, @JsonProperty("isLeaf") boolean isLeaf)
     {
         this.location = requireNonNull(location, "location is null");
         this.remoteSourceTaskId = requireNonNull(remoteSourceTaskId, "remoteSourceTaskId is null");
+        this.isLeaf = isLeaf;
     }
 
     @JsonProperty
@@ -54,6 +56,11 @@ public class RemoteSplit
         return remoteSourceTaskId;
     }
 
+    @JsonProperty
+    public boolean getIsLeaf()
+    {
+        return isLeaf;
+    }
     @Override
     public Object getInfo()
     {

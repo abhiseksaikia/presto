@@ -565,6 +565,7 @@ public class TestExchangeClient
                 new TestingDriftClient<>(),
                 scheduler,
                 new SimpleLocalMemoryContext(newSimpleAggregatedMemoryContext(), "test"),
-                pageBufferClientCallbackExecutor);
+                pageBufferClientCallbackExecutor,
+                false);
     }
 }
