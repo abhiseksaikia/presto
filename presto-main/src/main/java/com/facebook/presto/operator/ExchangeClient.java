@@ -377,7 +377,11 @@ public class ExchangeClient
             return;
         }
         long averageResponseSize = max(1, responseSizeExponentialMovingAverage.get());
-        handleWorkerShuttingdown();
+
+        if (gracefulExchangeClientFailureHandling) {
+            handleWorkerShuttingdown();
+        }
+
         long neededBytes = bufferCapacity - bufferRetainedSizeInBytes;
         if (neededBytes <= 0) {
             return;
@@ -430,7 +434,8 @@ public class ExchangeClient
             }
 
             log.warn("Handling shutting down node, client: %s", i);
-            client.scheduleRequest(sinkMaxBufferSize, true);
+            DataSize max = new DataSize(min(sinkMaxBufferSize.toBytes(), maxResponseSize.toBytes()), BYTE);
+            client.scheduleRequest(max, true);
             i++;
         }
     }
