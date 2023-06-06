@@ -115,13 +115,13 @@ public class GracefulShutdownHandler
                 waitForQueriesToComplete();
             }
             else {
-                long timeBeforeTaskExecutorShutdown = System.nanoTime();
-                if (queryManagerConfig.isEnableRetryForFailedSplits()) {
-                    taskExecutor.gracefulShutdown();
-                }
-                gracefulShutdownCounter.update(1);
-                gracefulShutdownTime.add(Duration.nanosSince(timeBeforeTaskExecutorShutdown));
-                log.warn("Wait time for task TaskExecutor Shutdown -> %s", System.nanoTime() - timeBeforeTaskExecutorShutdown);
+//                long timeBeforeTaskExecutorShutdown = System.nanoTime();
+//                if (queryManagerConfig.isEnableRetryForFailedSplits()) {
+//                    taskExecutor.gracefulShutdown();
+//                }
+//                gracefulShutdownCounter.update(1);
+//                gracefulShutdownTime.add(Duration.nanosSince(timeBeforeTaskExecutorShutdown));
+//                log.warn("Wait time for task TaskExecutor Shutdown -> %s", System.nanoTime() - timeBeforeTaskExecutorShutdown);
                 waitForTasksToComplete();
                 //waitForCoordinatorContinuousTaskFetcher();
                 // wait for another grace period for all task states to be observed by the coordinator

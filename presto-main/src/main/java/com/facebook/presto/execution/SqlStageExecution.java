@@ -613,31 +613,31 @@ public final class SqlStageExecution
                         .findFirst()
                         .map(ExecutionFailureInfo::toException)
                         .orElse(new PrestoException(GENERIC_INTERNAL_ERROR, "A task failed for an unknown reason"));
-                if (isRecoverable(rewrittenFailures)) {
-                    try {
-                        stageTaskRecoveryCallback.get().recover(taskId, rewrittenFailures);
-                        totalRetries.incrementAndGet();
-
-                        RemoteTask failedTask = getAllTasks().stream()
-                                .filter(task -> task.getTaskId().equals(taskId))
-                                .collect(onlyElement());
-                        failedTask.setIsRetried();
-
-                        finishedTasks.add(taskId);
-                    }
-                    catch (Throwable t) {
-                        // In an ideal world, this exception is not supposed to happen.
-                        // However, it could happen, for example, if connector throws exception.
-                        // We need to handle the exception in order to fail the query properly, otherwise the failed task will hang in RUNNING/SCHEDULING state.
-                        failure.addSuppressed(new PrestoException(GENERIC_RECOVERY_ERROR, format("Encountered error when trying to recover task %s, #tasks: %s, #retries: %s", taskId, allTasks.size(), totalRetries.get()), t));
-                        List<URI> uris = getAllRemoteURI();
-                        log.info(format("All Leaf Tasks URIs: %s", uris.toString()));
-                        stateMachine.transitionToFailed(failure);
-                    }
-                }
-                else {
-                    stateMachine.transitionToFailed(failure);
-                }
+//                if (isRecoverable(rewrittenFailures)) {
+//                    try {
+//                        stageTaskRecoveryCallback.get().recover(taskId, rewrittenFailures);
+//                        totalRetries.incrementAndGet();
+//
+//                        RemoteTask failedTask = getAllTasks().stream()
+//                                .filter(task -> task.getTaskId().equals(taskId))
+//                                .collect(onlyElement());
+//                        failedTask.setIsRetried();
+//
+//                        finishedTasks.add(taskId);
+//                    }
+//                    catch (Throwable t) {
+//                        // In an ideal world, this exception is not supposed to happen.
+//                        // However, it could happen, for example, if connector throws exception.
+//                        // We need to handle the exception in order to fail the query properly, otherwise the failed task will hang in RUNNING/SCHEDULING state.
+//                        failure.addSuppressed(new PrestoException(GENERIC_RECOVERY_ERROR, format("Encountered error when trying to recover task %s, #tasks: %s, #retries: %s", taskId, allTasks.size(), totalRetries.get()), t));
+//                        List<URI> uris = getAllRemoteURI();
+//                        log.info(format("All Leaf Tasks URIs: %s", uris.toString()));
+//                        stateMachine.transitionToFailed(failure);
+//                    }
+//                }
+//                else {
+                stateMachine.transitionToFailed(failure);
+//                }
             }
             else if (taskState == TaskState.ABORTED) {
                 // A task should only be in the aborted state if the STAGE is done (ABORTED or FAILED)
