@@ -792,7 +792,8 @@ public class PrestoSparkTaskExecutorFactory
         shuffleReadInfos.forEach((planNodeId, info) ->
                 result.add(new ScheduledSplit(nextSplitId.getAndIncrement(), planNodeId, new Split(REMOTE_CONNECTOR_ID, new RemoteTransactionHandle(), new RemoteSplit(
                         new Location(format("batch://%s?shuffleInfo=%s", taskId, shuffleInfoTranslator.createSerializedReadInfo(info))),
-                        taskId)))));
+                        taskId,
+                        false)))));
 
         List<TaskSource> nativeExecutionSources = taskSources.stream().filter(taskSource -> taskSource.getPlanNodeId().equals(root)).collect(Collectors.toList());
         checkState(nativeExecutionSources.size() <= 1, "At most 1 taskSource is expected for NativeExecutionNode but got %s", nativeExecutionSources.size());
