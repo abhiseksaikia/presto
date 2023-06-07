@@ -23,6 +23,7 @@ import java.util.Set;
 @Immutable
 public class ShutdownSnapshot
 {
+    private int runningTaskNum;
     private int taskNumNoPageAdded;
     private int taskNumToDrain;
     private int taskNumBeKilled;
@@ -38,6 +39,7 @@ public class ShutdownSnapshot
 
     @JsonCreator
     public ShutdownSnapshot(
+            @JsonProperty("runningTaskNum") int runningTaskNum,
             @JsonProperty("taskNumNoPageAdded") int taskNumNoPageAdded,
             @JsonProperty("taskNumToDrain") int taskNumToDrain,
             @JsonProperty("taskNumBeKilled") int taskNumBeKilled,
@@ -48,6 +50,7 @@ public class ShutdownSnapshot
             @JsonProperty("shutdownFinishRunningSplitsTime") long shutdownFinishRunningSplitsTime,
             @JsonProperty("outputBufferShutdownStatesSet") Set<OutputBufferShutdownState> outputBufferShutdownStatesSet)
     {
+        this.runningTaskNum = runningTaskNum;
         this.taskNumNoPageAdded = taskNumNoPageAdded;
         this.taskNumToDrain = taskNumToDrain;
         this.taskNumBeKilled = taskNumBeKilled;
@@ -58,6 +61,12 @@ public class ShutdownSnapshot
         this.shutdownFinishRunningSplitsTime = shutdownFinishRunningSplitsTime;
         this.outputBufferShutdownStatesSet = outputBufferShutdownStatesSet;
         this.snapshotTime = System.currentTimeMillis();
+    }
+
+    @JsonProperty
+    public int getRunningTaskNum()
+    {
+        return runningTaskNum;
     }
 
     @JsonProperty

@@ -232,7 +232,7 @@ public class GracefulShutdownHandler
 
     public ShutdownSnapshot getShutdownSnapshot()
     {
-        return new ShutdownSnapshot(taskExecutor.getTaskNumNoPageAdded(), taskExecutor.getTaskNumToDrain(), taskExecutor.getTaskNumBeKilled(), taskExecutor.getShutdownStartTime(), taskExecutor.getShutdownFinishKillTime(), taskExecutor.getShutdownStartDrainTime(), taskExecutor.getShutdownFinishDrainTime(), taskExecutor.getShutdownFinishRunningSplitsTime(), taskExecutor.getOutputBufferShutdownStates());
+        return new ShutdownSnapshot(taskExecutor.getTasks(), taskExecutor.getTaskNumNoPageAdded(), taskExecutor.getTaskNumToDrain(), taskExecutor.getTaskNumBeKilled(), taskExecutor.getShutdownStartTime(), taskExecutor.getShutdownFinishKillTime(), taskExecutor.getShutdownStartDrainTime(), taskExecutor.getShutdownFinishDrainTime(), taskExecutor.getShutdownFinishRunningSplitsTime(), taskExecutor.getOutputBufferShutdownStates());
     }
 
     @Managed
