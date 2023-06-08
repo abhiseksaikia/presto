@@ -373,7 +373,7 @@ public class ExchangeClient
             return;
         }
         long averageResponseSize = max(1, responseSizeExponentialMovingAverage.get());
-        handleWorkerShuttingdown();
+//        handleWorkerShuttingdown();
         long neededBytes = bufferCapacity - bufferRetainedSizeInBytes;
         if (neededBytes <= 0) {
             return;
