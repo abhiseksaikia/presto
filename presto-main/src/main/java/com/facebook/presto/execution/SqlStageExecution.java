@@ -65,7 +65,6 @@ import static com.facebook.presto.SystemSessionProperties.getMaxFailedTaskPercen
 import static com.facebook.presto.failureDetector.FailureDetector.State.GONE;
 import static com.facebook.presto.operator.ExchangeOperator.REMOTE_CONNECTOR_ID;
 import static com.facebook.presto.spi.StandardErrorCode.GENERIC_INTERNAL_ERROR;
-import static com.facebook.presto.spi.StandardErrorCode.GENERIC_RECOVERY_ERROR;
 import static com.facebook.presto.spi.StandardErrorCode.PAGE_TRANSPORT_ERROR;
 import static com.facebook.presto.spi.StandardErrorCode.PAGE_TRANSPORT_TIMEOUT;
 import static com.facebook.presto.spi.StandardErrorCode.REMOTE_HOST_GONE;
@@ -77,7 +76,6 @@ import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkState;
 import static com.google.common.collect.ImmutableList.toImmutableList;
 import static com.google.common.collect.Iterables.getOnlyElement;
-import static com.google.common.collect.MoreCollectors.onlyElement;
 import static com.google.common.collect.Sets.newConcurrentHashSet;
 import static io.airlift.units.DataSize.Unit.BYTE;
 import static java.lang.String.format;
@@ -95,7 +93,6 @@ public final class SqlStageExecution
             PAGE_TRANSPORT_TIMEOUT.toErrorCode(),
             REMOTE_TASK_MISMATCH.toErrorCode(),
             REMOTE_TASK_ERROR.toErrorCode());
-
 
     private Optional<Set<ErrorCode>> recoveryErrorCodes = Optional.empty();
     private static final int DELAY_NO_MORE_RETRY = 10_000;
