@@ -387,6 +387,8 @@ public class ExchangeClient
         long averageResponseSize = max(1, responseSizeExponentialMovingAverage.get());
         handleWorkerShuttingdown();
         long neededBytes = bufferCapacity - bufferRetainedSizeInBytes;
+        exchangeClientStats.setNeededBytes(neededBytes);
+
         if (neededBytes <= 0) {
             return;
         }
@@ -406,6 +408,7 @@ public class ExchangeClient
         int pendingClients = allClients.size() - queuedClients.size() - completedClients.size();
         clientCount -= pendingClients;
 
+        exchangeClientStats.setScheduledClientCount(clientCount);
         for (int i = 0; i < clientCount; ) {
             PageBufferClient client = queuedClients.poll();
             if (client == null) {

@@ -72,6 +72,7 @@ public class TestMergeOperator
     private ScheduledExecutorService executor;
     private PagesSerdeFactory serdeFactory;
     private HttpClient httpClient;
+    private HttpClient longPollingHttpClient;
     private ExchangeClientFactory exchangeClientFactory;
     private OrderingCompiler orderingCompiler;
 
@@ -85,7 +86,8 @@ public class TestMergeOperator
 
         taskBuffers = CacheBuilder.newBuilder().build(CacheLoader.from(TestingTaskBuffer::new));
         httpClient = new TestingHttpClient(new TestingExchangeHttpClientHandler(taskBuffers), executor);
-        exchangeClientFactory = new ExchangeClientFactory(new ExchangeClientConfig(), httpClient, new TestingDriftClient<>(), executor, new ExchangeClientStats());
+        longPollingHttpClient = new TestingHttpClient(new TestingExchangeHttpClientHandler(taskBuffers), executor);
+        exchangeClientFactory = new ExchangeClientFactory(new ExchangeClientConfig(), new TaskManagerConfig(), httpClient, longPollingHttpClient, new TestingDriftClient<>(), executor, new ExchangeClientStats());
         orderingCompiler = new OrderingCompiler();
     }
 

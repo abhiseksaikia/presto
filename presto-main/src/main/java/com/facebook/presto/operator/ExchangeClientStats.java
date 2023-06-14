@@ -15,11 +15,50 @@ package com.facebook.presto.operator;
 
 import org.weakref.jmx.Managed;
 
+import javax.annotation.concurrent.ThreadSafe;
+
 import java.util.concurrent.atomic.AtomicLong;
 
+@ThreadSafe
 public class ExchangeClientStats
 {
     private final AtomicLong retainedBytes = new AtomicLong();
+    private final AtomicLong neededBytes = new AtomicLong();
+    private final AtomicLong scheduledClientCount = new AtomicLong();
+    private final AtomicLong longPollingNotifiedCount = new AtomicLong();
+
+    @Managed
+    public long getLongPollingNotifiedCount()
+    {
+        return longPollingNotifiedCount.get();
+    }
+
+    public void addLongPollingNotifiedCount()
+    {
+        longPollingNotifiedCount.addAndGet(1);
+    }
+
+    @Managed
+    public long getScheduledClientCount()
+    {
+        return scheduledClientCount.get();
+    }
+
+    public void setScheduledClientCount(long clientCount)
+    {
+        scheduledClientCount.set(clientCount);
+    }
+
+    @Managed
+    public long getNeededBytes()
+    {
+        return neededBytes.get();
+    }
+
+    public void setNeededBytes(long bytes)
+    {
+        neededBytes.set(bytes);
+    }
 
     @Managed
     public long getRetainedBytes()
