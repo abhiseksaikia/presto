@@ -259,6 +259,7 @@ public final class PageBufferClient
             {
                 if (response.getStatusCode() == OK.code()) {
                     isNodeShuttingdown = true;
+                    clientCallback.nodeShuttingDown(PageBufferClient.this);
                 }
                 else {
                     establishLongPollingRequest();
