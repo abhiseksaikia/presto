@@ -511,6 +511,11 @@ public class TestPageBufferClient
             // requestComplete() will be called after this
         }
 
+        @Override
+        public void nodeShuttingDown(PageBufferClient client)
+        {
+        }
+
         public void resetStats()
         {
             pages.clear();

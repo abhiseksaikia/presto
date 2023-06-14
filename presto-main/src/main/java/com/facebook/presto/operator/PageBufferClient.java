@@ -87,6 +87,8 @@ public final class PageBufferClient
         void clientFinished(PageBufferClient client);
 
         void clientFailed(PageBufferClient client, Throwable cause);
+
+        void nodeShuttingDown(PageBufferClient client);
     }
 
     private final RpcShuffleClient resultClient;

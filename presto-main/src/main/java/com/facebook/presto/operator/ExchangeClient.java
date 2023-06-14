@@ -543,6 +543,17 @@ public class ExchangeClient
         }
     }
 
+    private synchronized void nodeShuttingDown(PageBufferClient client)
+    {
+        requireNonNull(client, "client is null");
+
+        if (!shuttingdownClients.contains(client)) {
+            shuttingdownClients.add(client);
+        }
+
+        scheduleRequestIfNecessary();
+    }
+
     private boolean isFailed()
     {
         return failure.get() != null;
@@ -589,6 +600,13 @@ public class ExchangeClient
 
             ExchangeClient.this.clientFinished(client);
 //            ExchangeClient.this.clientFailed(client, cause);
+        }
+
+        @Override
+        public void nodeShuttingDown(PageBufferClient client)
+        {
+            requireNonNull(client, "client is null");
+            ExchangeClient.this.nodeShuttingDown(client);
         }
     }
 
