@@ -246,6 +246,18 @@ public class TestThriftTaskIntegration
                 }
 
                 @Override
+                public double getP95BufferFetchInterval()
+                {
+                    return 0.0;
+                }
+
+                @Override
+                public double getP99BufferFetchInterval()
+                {
+                    return 0.0;
+                }
+
+                @Override
                 public void acknowledgeTaskResults(TaskId taskId, OutputBufferId bufferId, long sequenceId)
                 {
                     assertEquals(taskId, TaskId.valueOf("queryid.0.0.0.0"));

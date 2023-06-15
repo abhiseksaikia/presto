@@ -19,6 +19,7 @@ import com.facebook.airlift.log.Logger;
 import com.facebook.airlift.node.NodeInfo;
 import com.facebook.airlift.stats.CounterStat;
 import com.facebook.airlift.stats.GcMonitor;
+import com.facebook.airlift.stats.TimeStat;
 import com.facebook.presto.Session;
 import com.facebook.presto.common.block.BlockEncodingSerde;
 import com.facebook.presto.event.SplitMonitor;
@@ -74,10 +75,12 @@ import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.ConcurrentHashMap;
 
 import static com.facebook.airlift.concurrent.Threads.threadsNamed;
 import static com.facebook.presto.SystemSessionProperties.getHeapDumpFileDirectory;
@@ -128,6 +131,8 @@ public class SqlTaskManager
     private final Map<String, Long> currentMemoryPoolAssignmentVersions = new Object2LongOpenHashMap<>();
 
     private final CounterStat failedTasks = new CounterStat();
+    private final TimeStat bufferFetchInterval = new TimeStat();
+    private final ConcurrentHashMap<Long, Long> lastGetResultCalls;
 
     @Inject
     public SqlTaskManager(
@@ -164,6 +169,7 @@ public class SqlTaskManager
 
         this.taskManagementExecutor = requireNonNull(taskManagementExecutor, "taskManagementExecutor cannot be null").getExecutor();
         this.driverYieldExecutor = newScheduledThreadPool(config.getTaskYieldThreads(), threadsNamed("task-yield-%s"));
+        this.lastGetResultCalls = new ConcurrentHashMap<>();
 
         SqlTaskExecutionFactory sqlTaskExecutionFactory = new SqlTaskExecutionFactory(
                 taskNotificationExecutor,
@@ -454,7 +460,30 @@ public class SqlTaskManager
         checkArgument(startingSequenceId >= 0, "startingSequenceId is negative");
         requireNonNull(maxSize, "maxSize is null");
 
+        long start = System.nanoTime();
+        long combinedID = ((long) taskId.getId()) * 10000 + (long) bufferId.getId();
+        if (lastGetResultCalls.containsKey(combinedID)) {
+            long last = lastGetResultCalls.get(combinedID);
+            bufferFetchInterval.add(Duration.nanosSince(last));
+            lastGetResultCalls.put(combinedID, start);
+        }
+        else {
+            lastGetResultCalls.put(combinedID, start);
+        }
+
         return tasks.getUnchecked(taskId).getTaskResults(bufferId, startingSequenceId, maxSize);
+    }
+
+    @Override
+    public double getP95BufferFetchInterval()
+    {
+        return bufferFetchInterval.getAllTime().getP95();
+    }
+
+    @Override
+    public double getP99BufferFetchInterval()
+    {
+        return bufferFetchInterval.getAllTime().getP99();
     }
 
     @Override

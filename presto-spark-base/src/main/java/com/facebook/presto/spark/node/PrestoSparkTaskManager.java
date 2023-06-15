@@ -103,6 +103,18 @@ public class PrestoSparkTaskManager
     }
 
     @Override
+    public double getP95BufferFetchInterval()
+    {
+        return 0.0;
+    }
+
+    @Override
+    public double getP99BufferFetchInterval()
+    {
+        return 0.0;
+    }
+
+    @Override
     public void acknowledgeTaskResults(TaskId taskId, OutputBuffers.OutputBufferId bufferId, long sequenceId)
     {
         throw new UnsupportedOperationException();

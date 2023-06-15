@@ -32,6 +32,8 @@ public class ShutdownSnapshot
     private long shutdownFinishDrainTime;
     private long shutdownFinishRunningSplitsTime;
 
+    private double p95BufferFetchInterval;
+    private double p99BufferFetchInterval;
     private Set<OutputBufferShutdownState> outputBufferShutdownStatesSet;
 
     private long snapshotTime;
@@ -46,6 +48,8 @@ public class ShutdownSnapshot
             @JsonProperty("shutdownStartDrainTime") long shutdownStartDrainTime,
             @JsonProperty("shutdownFinishDrainTime") long shutdownFinishDrainTime,
             @JsonProperty("shutdownFinishRunningSplitsTime") long shutdownFinishRunningSplitsTime,
+            @JsonProperty("p95BufferFetchInterval") double p95BufferFetchInterval,
+            @JsonProperty("p99BufferFetchInterval") double p99BufferFetchInterval,
             @JsonProperty("outputBufferShutdownStatesSet") Set<OutputBufferShutdownState> outputBufferShutdownStatesSet)
     {
         this.taskNumNoPageAdded = taskNumNoPageAdded;
@@ -56,6 +60,8 @@ public class ShutdownSnapshot
         this.shutdownStartDrainTime = shutdownStartDrainTime;
         this.shutdownFinishDrainTime = shutdownFinishDrainTime;
         this.shutdownFinishRunningSplitsTime = shutdownFinishRunningSplitsTime;
+        this.p95BufferFetchInterval = p95BufferFetchInterval;
+        this.p99BufferFetchInterval = p99BufferFetchInterval;
         this.outputBufferShutdownStatesSet = outputBufferShutdownStatesSet;
         this.snapshotTime = System.currentTimeMillis();
     }
@@ -106,6 +112,18 @@ public class ShutdownSnapshot
     public long getShutdownFinishRunningSplitsTime()
     {
         return shutdownFinishRunningSplitsTime;
+    }
+
+    @JsonProperty
+    public double getP95BufferFetchInterval()
+    {
+        return p95BufferFetchInterval;
+    }
+
+    @JsonProperty
+    public double getP99BufferFetchInterval()
+    {
+        return p99BufferFetchInterval;
     }
 
     @JsonProperty

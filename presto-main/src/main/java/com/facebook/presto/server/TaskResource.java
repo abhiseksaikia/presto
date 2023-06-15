@@ -67,7 +67,6 @@ import javax.ws.rs.core.Response.Status;
 import javax.ws.rs.core.UriInfo;
 
 import java.util.List;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
 
@@ -114,12 +113,10 @@ public class TaskResource
     private final TimeStat readFromOutputBufferTime = new TimeStat();
     private final TimeStat resultsRequestTime = new TimeStat();
 
-    private final TimeStat bufferFetchInterval = new TimeStat();
     private final Codec<PlanFragment> planFragmentCodec;
     private final HandleResolver handleResolver;
     private final ConnectorTypeSerdeManager connectorTypeSerdeManager;
     private final GracefulShutdownHandler gracefulShutdownHandler;
-    private final ConcurrentHashMap<Long, Long> lastGetResultCalls;
 
     @Inject
     public TaskResource(
@@ -142,7 +139,6 @@ public class TaskResource
         this.handleResolver = requireNonNull(handleResolver, "handleResolver is null");
         this.connectorTypeSerdeManager = requireNonNull(connectorTypeSerdeManager, "connectorTypeSerdeManager is null");
         this.gracefulShutdownHandler = gracefulShutdownHandler;
-        this.lastGetResultCalls = new ConcurrentHashMap<>();
     }
 
     @GET
@@ -338,16 +334,6 @@ public class TaskResource
 
         long start = System.nanoTime();
 
-        long combinedID = ((long) taskId.getId()) * 10000 + (long) bufferId.getId();
-        if (lastGetResultCalls.containsKey(combinedID)) {
-            long last = lastGetResultCalls.get(combinedID);
-            bufferFetchInterval.add(Duration.nanosSince(last));
-            lastGetResultCalls.put(combinedID, start);
-        }
-        else {
-            lastGetResultCalls.put(combinedID, start);
-        }
-
         ListenableFuture<BufferResult> bufferResultFuture = taskManager.getTaskResults(taskId, bufferId, token, maxSize);
         Duration waitTime = randomizeWaitTime(DEFAULT_MAX_WAIT_TIME);
         bufferResultFuture = addTimeout(
@@ -462,13 +448,6 @@ public class TaskResource
     public TimeStat getResultsRequestTime()
     {
         return resultsRequestTime;
-    }
-
-    @Managed
-    @Nested
-    public TimeStat getBufferFetchInterval()
-    {
-        return bufferFetchInterval;
     }
 
     private static boolean shouldSummarize(UriInfo uriInfo)

@@ -114,6 +114,10 @@ public interface TaskManager
      */
     ListenableFuture<BufferResult> getTaskResults(TaskId taskId, OutputBufferId bufferId, long startingSequenceId, DataSize maxSize);
 
+    double getP95BufferFetchInterval();
+
+    double getP99BufferFetchInterval();
+
     /**
      * Acknowledges previously received results.
      */
