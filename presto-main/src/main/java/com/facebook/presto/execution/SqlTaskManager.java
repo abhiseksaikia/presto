@@ -80,7 +80,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.ConcurrentHashMap;
 
 import static com.facebook.airlift.concurrent.Threads.threadsNamed;
 import static com.facebook.presto.SystemSessionProperties.getHeapDumpFileDirectory;

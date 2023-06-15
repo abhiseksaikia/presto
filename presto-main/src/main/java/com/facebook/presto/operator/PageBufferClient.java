@@ -174,6 +174,11 @@ public final class PageBufferClient
         this.backoff = new Backoff(maxErrorDuration, ticker);
     }
 
+    public synchronized String getURIString()
+    {
+        return location.toString();
+    }
+
     public synchronized PageBufferClientStatus getStatus()
     {
         String state;

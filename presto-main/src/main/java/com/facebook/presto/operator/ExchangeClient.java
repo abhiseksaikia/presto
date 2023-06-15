@@ -16,6 +16,7 @@ package com.facebook.presto.operator;
 import com.facebook.airlift.http.client.HttpClient;
 import com.facebook.airlift.http.client.HttpUriBuilder;
 import com.facebook.airlift.log.Logger;
+import com.facebook.airlift.stats.TimeStat;
 import com.facebook.drift.client.DriftClient;
 import com.facebook.presto.execution.TaskId;
 import com.facebook.presto.memory.context.LocalMemoryContext;
@@ -132,6 +133,10 @@ public class ExchangeClient
     private final ExchangeClientStats exchangeClientStats;
     private final boolean isPrioritizeShuttingDownNodes;
 
+    private final ConcurrentHashMap<String, Long> lastGetResultCalls;
+
+    private final TimeStat upstreamFetchInterval = new TimeStat();
+
     // ExchangeClientStatus.mergeWith assumes all clients have the same bufferCapacity.
     // Please change that method accordingly when this assumption becomes not true.
     public ExchangeClient(
@@ -170,6 +175,7 @@ public class ExchangeClient
         this.responseSizeExponentialMovingAverage = new ExponentialMovingAverage(responseSizeExponentialMovingAverageDecayingAlpha, DEFAULT_MAX_PAGE_SIZE_IN_BYTES);
         this.exchangeClientStats = exchangeClientStats;
         this.isPrioritizeShuttingDownNodes = isPrioritizeShuttingDownNodes;
+        this.lastGetResultCalls = new ConcurrentHashMap<>();
     }
 
     public ExchangeClientStatus getStatus()
@@ -416,6 +422,16 @@ public class ExchangeClient
                 return;
             }
 
+            long start = System.nanoTime();
+            if (lastGetResultCalls.containsKey(client.getURIString())) {
+                long last = lastGetResultCalls.get(client.getURIString());
+                upstreamFetchInterval.add(Duration.nanosSince(last));
+                lastGetResultCalls.put(client.getURIString(), start);
+            }
+            else {
+                lastGetResultCalls.put(client.getURIString(), start);
+            }
+
             if (removedClients.contains(client)) {
                 continue;
             }
@@ -424,6 +440,9 @@ public class ExchangeClient
             client.scheduleRequest(max, false);
             i++;
         }
+
+        exchangeClientStats.setP99UpstreamFetchInterval(upstreamFetchInterval.getAllTime().getP99());
+        exchangeClientStats.setP95UpstreamFetchInterval(upstreamFetchInterval.getAllTime().getP95());
     }
 
     //FIXME this is a hack, we need to add some guard to make sure we don't end up consuming more memory, have some capacity limit for this

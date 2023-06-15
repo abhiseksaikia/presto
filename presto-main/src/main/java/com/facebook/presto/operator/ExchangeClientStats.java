@@ -13,6 +13,7 @@
  */
 package com.facebook.presto.operator;
 
+import com.google.common.util.concurrent.AtomicDouble;
 import org.weakref.jmx.Managed;
 
 import javax.annotation.concurrent.ThreadSafe;
@@ -26,6 +27,32 @@ public class ExchangeClientStats
     private final AtomicLong neededBytes = new AtomicLong();
     private final AtomicLong scheduledClientCount = new AtomicLong();
     private final AtomicLong longPollingNotifiedCount = new AtomicLong();
+
+    private final AtomicDouble p95UpstreamFetchInterval = new AtomicDouble();
+    private final AtomicDouble p99UpstreamFetchInterval = new AtomicDouble();
+
+    @Managed
+    public double getP99UpstreamFetchInterval()
+    {
+        return p99UpstreamFetchInterval.get();
+    }
+
+    public void setP99UpstreamFetchInterval(double upstreamFetchInterval)
+    {
+        this.p99UpstreamFetchInterval.set(upstreamFetchInterval);
+    }
+
+    @Managed
+    public double getP95UpstreamFetchInterval()
+    {
+        return p95UpstreamFetchInterval.get();
+    }
+
+    public void setP95UpstreamFetchInterval(double upstreamFetchInterval)
+    {
+        this.p95UpstreamFetchInterval.set(upstreamFetchInterval);
+    }
+
 
     @Managed
     public long getLongPollingNotifiedCount()
