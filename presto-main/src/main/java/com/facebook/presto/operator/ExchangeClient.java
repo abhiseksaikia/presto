@@ -16,7 +16,6 @@ package com.facebook.presto.operator;
 import com.facebook.airlift.http.client.HttpClient;
 import com.facebook.airlift.http.client.HttpUriBuilder;
 import com.facebook.airlift.log.Logger;
-import com.facebook.airlift.stats.TimeStat;
 import com.facebook.drift.client.DriftClient;
 import com.facebook.presto.execution.TaskId;
 import com.facebook.presto.memory.context.LocalMemoryContext;
@@ -50,6 +49,7 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.Executor;
 import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -132,10 +132,7 @@ public class ExchangeClient
     private final Executor pageBufferClientCallbackExecutor;
     private final ExchangeClientStats exchangeClientStats;
     private final boolean isPrioritizeShuttingDownNodes;
-
     private final ConcurrentHashMap<String, Long> lastGetResultCalls;
-
-    private final TimeStat upstreamFetchInterval = new TimeStat();
 
     // ExchangeClientStatus.mergeWith assumes all clients have the same bufferCapacity.
     // Please change that method accordingly when this assumption becomes not true.
@@ -393,9 +390,9 @@ public class ExchangeClient
         long averageResponseSize = max(1, responseSizeExponentialMovingAverage.get());
         handleWorkerShuttingdown();
         long neededBytes = bufferCapacity - bufferRetainedSizeInBytes;
-        exchangeClientStats.setNeededBytes(neededBytes);
 
         if (neededBytes <= 0) {
+            exchangeClientStats.addBufferUsedUp();
             return;
         }
         /**
@@ -414,7 +411,10 @@ public class ExchangeClient
         int pendingClients = allClients.size() - queuedClients.size() - completedClients.size();
         clientCount -= pendingClients;
 
-        exchangeClientStats.setScheduledClientCount(clientCount);
+        if (clientCount < 10) {
+            exchangeClientStats.addScheduledClientCountLessThanTen();
+        }
+
         for (int i = 0; i < clientCount; ) {
             PageBufferClient client = queuedClients.poll();
             if (client == null) {
@@ -425,12 +425,13 @@ public class ExchangeClient
             long start = System.nanoTime();
             if (lastGetResultCalls.containsKey(client.getURIString())) {
                 long last = lastGetResultCalls.get(client.getURIString());
-                upstreamFetchInterval.add(Duration.nanosSince(last));
-                lastGetResultCalls.put(client.getURIString(), start);
+
+                if (Duration.nanosSince(last).compareTo(new Duration(10, TimeUnit.SECONDS)) > 0) {
+                    exchangeClientStats.addUpstreamFetchIntervalOverTenSecond();
+                }
             }
-            else {
-                lastGetResultCalls.put(client.getURIString(), start);
-            }
+
+            lastGetResultCalls.put(client.getURIString(), start);
 
             if (removedClients.contains(client)) {
                 continue;
@@ -440,9 +441,6 @@ public class ExchangeClient
             client.scheduleRequest(max, false);
             i++;
         }
-
-        exchangeClientStats.setP99UpstreamFetchInterval(upstreamFetchInterval.getAllTime().getP99());
-        exchangeClientStats.setP95UpstreamFetchInterval(upstreamFetchInterval.getAllTime().getP95());
     }
 
     //FIXME this is a hack, we need to add some guard to make sure we don't end up consuming more memory, have some capacity limit for this

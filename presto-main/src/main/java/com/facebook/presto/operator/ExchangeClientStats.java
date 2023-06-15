@@ -13,7 +13,6 @@
  */
 package com.facebook.presto.operator;
 
-import com.google.common.util.concurrent.AtomicDouble;
 import org.weakref.jmx.Managed;
 
 import javax.annotation.concurrent.ThreadSafe;
@@ -24,35 +23,32 @@ import java.util.concurrent.atomic.AtomicLong;
 public class ExchangeClientStats
 {
     private final AtomicLong retainedBytes = new AtomicLong();
-    private final AtomicLong neededBytes = new AtomicLong();
-    private final AtomicLong scheduledClientCount = new AtomicLong();
+    private final AtomicLong scheduledClientCountLessThanTen = new AtomicLong();
     private final AtomicLong longPollingNotifiedCount = new AtomicLong();
-
-    private final AtomicDouble p95UpstreamFetchInterval = new AtomicDouble();
-    private final AtomicDouble p99UpstreamFetchInterval = new AtomicDouble();
-
-    @Managed
-    public double getP99UpstreamFetchInterval()
-    {
-        return p99UpstreamFetchInterval.get();
-    }
-
-    public void setP99UpstreamFetchInterval(double upstreamFetchInterval)
-    {
-        this.p99UpstreamFetchInterval.set(upstreamFetchInterval);
-    }
+    private final AtomicLong bufferUsedUp = new AtomicLong();
+    private final AtomicLong upstreamFetchIntervalOverTenSecond = new AtomicLong();
 
     @Managed
-    public double getP95UpstreamFetchInterval()
+    public long getUpstreamFetchIntervalOverTenSecond()
     {
-        return p95UpstreamFetchInterval.get();
+        return upstreamFetchIntervalOverTenSecond.get();
     }
 
-    public void setP95UpstreamFetchInterval(double upstreamFetchInterval)
+    public void addUpstreamFetchIntervalOverTenSecond()
     {
-        this.p95UpstreamFetchInterval.set(upstreamFetchInterval);
+        upstreamFetchIntervalOverTenSecond.addAndGet(1);
     }
 
+    @Managed
+    public long getBufferUsedUp()
+    {
+        return bufferUsedUp.get();
+    }
+
+    public void addBufferUsedUp()
+    {
+        bufferUsedUp.addAndGet(1);
+    }
 
     @Managed
     public long getLongPollingNotifiedCount()
@@ -66,27 +62,15 @@ public class ExchangeClientStats
     }
 
     @Managed
-    public long getScheduledClientCount()
+    public long getScheduledClientCountLessThanTen()
     {
-        return scheduledClientCount.get();
+        return scheduledClientCountLessThanTen.get();
     }
 
-    public void setScheduledClientCount(long clientCount)
+    public void addScheduledClientCountLessThanTen()
     {
-        scheduledClientCount.set(clientCount);
+        scheduledClientCountLessThanTen.addAndGet(1);
     }
-
-    @Managed
-    public long getNeededBytes()
-    {
-        return neededBytes.get();
-    }
-
-    public void setNeededBytes(long bytes)
-    {
-        neededBytes.set(bytes);
-    }
-
     @Managed
     public long getRetainedBytes()
     {
