@@ -563,6 +563,7 @@ public class ExchangeClient
             shuttingdownClients.add(client);
         }
 
+        exchangeClientStats.addLongPollingNotifiedCount();
         scheduleRequestIfNecessary();
     }
 
