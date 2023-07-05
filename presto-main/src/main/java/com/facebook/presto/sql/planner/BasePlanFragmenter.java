@@ -260,12 +260,42 @@ public abstract class BasePlanFragmenter
         return context.defaultRewrite(node, context.get());
     }
 
+    private static boolean isLocalExchangeOnLeaf(ExchangeNode exchange)
+    {
+        return !exchange.getSources().stream().anyMatch(BasePlanFragmenter::containsNonLocalExchangeNode) &&
+                exchange.getSources().stream().anyMatch(BasePlanFragmenter::containsTableScanNode);
+    }
+
+    private static boolean containsNonLocalExchangeNode(PlanNode node)
+    {
+        if ((node instanceof ExchangeNode) && ((ExchangeNode) node).getScope() != ExchangeNode.Scope.LOCAL) {
+            return true;
+        }
+
+        return node.getSources().stream().anyMatch(BasePlanFragmenter::containsNonLocalExchangeNode);
+    }
+
+    private static boolean containsTableScanNode(PlanNode node)
+    {
+        if (node instanceof TableScanNode) {
+            return true;
+        }
+
+        return node.getSources().stream().anyMatch(BasePlanFragmenter::containsTableScanNode);
+    }
+
     @Override
     public PlanNode visitExchange(ExchangeNode exchange, RewriteContext<FragmentProperties> context)
     {
         switch (exchange.getScope()) {
             case LOCAL:
-                return context.defaultRewrite(exchange, context.get());
+                if (BasePlanFragmenter.isLocalExchangeOnLeaf(exchange)) {
+                    // rewrite it to Remote Streaming Exchange
+                    return createRemoteStreamingExchange(exchange, context);
+                }
+                else {
+                    return context.defaultRewrite(exchange, context.get());
+                }
             case REMOTE_STREAMING:
                 return createRemoteStreamingExchange(exchange, context);
             case REMOTE_MATERIALIZED:
