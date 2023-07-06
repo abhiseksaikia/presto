@@ -22,6 +22,7 @@ import com.facebook.presto.execution.TaskId;
 import com.facebook.presto.memory.QueryContextVisitor;
 import com.facebook.presto.memory.context.LocalMemoryContext;
 import com.facebook.presto.memory.context.MemoryTrackingContext;
+import com.facebook.presto.spi.NodePoolType;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.ImmutableList;
@@ -613,5 +614,10 @@ public class PipelineContext
             }
             return new PipelineStatus(queuedDrivers, runningDrivers, blockedDrivers, queuedPartitionedSplits, queuedPartitionedSplitsWeight, runningPartitionedSplits, runningPartitionedSplitsWeight);
         }
+    }
+
+    public NodePoolType getPoolType()
+    {
+        return taskContext.getPoolType();
     }
 }

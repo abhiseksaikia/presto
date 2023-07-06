@@ -28,6 +28,7 @@ import com.facebook.presto.memory.QueryContextVisitor;
 import com.facebook.presto.memory.VoidTraversingQueryContextVisitor;
 import com.facebook.presto.memory.context.LocalMemoryContext;
 import com.facebook.presto.memory.context.MemoryTrackingContext;
+import com.facebook.presto.spi.NodePoolType;
 import com.facebook.presto.spi.plan.AggregationNode;
 import com.facebook.presto.spi.plan.PlanNode;
 import com.facebook.presto.spi.plan.PlanNodeId;
@@ -756,5 +757,10 @@ public class TaskContext
         return searchFrom(taskPlan.get())
                 .where(node -> node.getId().equals(planNodeId) && nodeType.isInstance(node))
                 .findSingle();
+    }
+
+    public NodePoolType getPoolType()
+    {
+        return queryContext.getPoolType();
     }
 }

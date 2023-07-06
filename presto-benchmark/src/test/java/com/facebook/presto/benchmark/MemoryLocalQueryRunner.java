@@ -44,6 +44,7 @@ import java.util.Map;
 import java.util.Optional;
 
 import static com.facebook.airlift.json.JsonCodec.listJsonCodec;
+import static com.facebook.presto.spi.NodePoolType.DEFAULT;
 import static com.facebook.presto.testing.TestingSession.testSessionBuilder;
 import static io.airlift.units.DataSize.Unit.GIGABYTE;
 import static org.testng.Assert.assertTrue;
@@ -89,7 +90,7 @@ public class MemoryLocalQueryRunner
                 localQueryRunner.getScheduler(),
                 new DataSize(4, GIGABYTE),
                 spillSpaceTracker,
-                listJsonCodec(TaskMemoryReservationSummary.class));
+                listJsonCodec(TaskMemoryReservationSummary.class), DEFAULT);
 
         TaskContext taskContext = queryContext
                 .addTaskContext(

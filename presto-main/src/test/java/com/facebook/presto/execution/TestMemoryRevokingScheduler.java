@@ -75,6 +75,7 @@ import static com.facebook.presto.execution.TaskTestUtils.updateTask;
 import static com.facebook.presto.execution.buffer.OutputBuffers.BufferType.PARTITIONED;
 import static com.facebook.presto.execution.buffer.OutputBuffers.createInitialEmptyOutputBuffers;
 import static com.facebook.presto.memory.LocalMemoryManager.GENERAL_POOL;
+import static com.facebook.presto.spi.NodePoolType.DEFAULT;
 import static com.facebook.presto.sql.analyzer.FeaturesConfig.TaskSpillingStrategy.ORDER_BY_CREATE_TIME;
 import static com.facebook.presto.sql.analyzer.FeaturesConfig.TaskSpillingStrategy.ORDER_BY_REVOCABLE_BYTES;
 import static io.airlift.units.DataSize.Unit.BYTE;
@@ -814,7 +815,8 @@ public class TestMemoryRevokingScheduler
                 scheduledExecutor,
                 new DataSize(1, GIGABYTE),
                 spillSpaceTracker,
-                listJsonCodec(TaskMemoryReservationSummary.class)));
+                listJsonCodec(TaskMemoryReservationSummary.class),
+                DEFAULT));
     }
 
     private TaskContext getOrCreateTaskContext(SqlTask sqlTask)

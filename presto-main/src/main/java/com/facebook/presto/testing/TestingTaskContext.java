@@ -33,6 +33,7 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
 
 import static com.facebook.airlift.json.JsonCodec.listJsonCodec;
+import static com.facebook.presto.spi.NodePoolType.DEFAULT;
 import static io.airlift.units.DataSize.Unit.GIGABYTE;
 import static io.airlift.units.DataSize.Unit.MEGABYTE;
 
@@ -186,7 +187,8 @@ public final class TestingTaskContext
                     yieldExecutor,
                     queryMaxSpillSize,
                     spillSpaceTracker,
-                    listJsonCodec(TaskMemoryReservationSummary.class));
+                    listJsonCodec(TaskMemoryReservationSummary.class),
+                    DEFAULT);
 
             return createTaskContext(queryContext, session, taskStateMachine, taskPlan);
         }

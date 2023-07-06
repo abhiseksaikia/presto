@@ -78,7 +78,7 @@ public class GracefulShutdownHandler
 
     public synchronized void requestShutdown()
     {
-        log.info("Shutdown requested");
+        log.info("Shutdown requested, with grace period : %s", gracePeriod);
 
         if (isResourceManager) {
             throw new UnsupportedOperationException("Cannot shutdown resource manager");

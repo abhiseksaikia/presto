@@ -156,6 +156,7 @@ import static com.facebook.presto.spark.util.PrestoSparkUtils.getNullifyingItera
 import static com.facebook.presto.spark.util.PrestoSparkUtils.serializeZstdCompressed;
 import static com.facebook.presto.spark.util.PrestoSparkUtils.toPrestoSparkSerializedPage;
 import static com.facebook.presto.spi.ErrorCause.UNKNOWN;
+import static com.facebook.presto.spi.NodePoolType.DEFAULT;
 import static com.facebook.presto.sql.planner.SystemPartitioningHandle.FIXED_ARBITRARY_DISTRIBUTION;
 import static com.facebook.presto.util.Failures.toFailures;
 import static com.google.common.base.Preconditions.checkArgument;
@@ -404,7 +405,7 @@ public class PrestoSparkTaskExecutorFactory
                 yieldExecutor,
                 maxQuerySpillPerNode,
                 spillSpaceTracker,
-                memoryReservationSummaryJsonCodec);
+                memoryReservationSummaryJsonCodec, DEFAULT);
         queryContext.setVerboseExceededMemoryLimitErrorsEnabled(isVerboseExceededMemoryLimitErrorsEnabled(session));
         queryContext.setHeapDumpOnExceededMemoryLimitEnabled(isHeapDumpOnExceededMemoryLimitEnabled(session));
         String heapDumpFilePath = Paths.get(

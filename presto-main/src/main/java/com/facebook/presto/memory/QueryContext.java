@@ -24,6 +24,7 @@ import com.facebook.presto.operator.OperatorMemoryReservationSummary;
 import com.facebook.presto.operator.TaskContext;
 import com.facebook.presto.operator.TaskMemoryReservationSummary;
 import com.facebook.presto.spi.ErrorCause;
+import com.facebook.presto.spi.NodePoolType;
 import com.facebook.presto.spi.QueryId;
 import com.facebook.presto.spi.plan.PlanNode;
 import com.facebook.presto.spiller.SpillSpaceTracker;
@@ -84,6 +85,7 @@ public class QueryContext
     private final SpillSpaceTracker spillSpaceTracker;
     private final JsonCodec<List<TaskMemoryReservationSummary>> memoryReservationSummaryJsonCodec;
     private final Map<TaskId, TaskContext> taskContexts = new ConcurrentHashMap<>();
+    private final NodePoolType poolType;
 
     @GuardedBy("this")
     private boolean resourceOverCommit;
@@ -133,7 +135,8 @@ public class QueryContext
             ScheduledExecutorService yieldExecutor,
             DataSize maxSpill,
             SpillSpaceTracker spillSpaceTracker,
-            JsonCodec<List<TaskMemoryReservationSummary>> memoryReservationSummaryJsonCodec)
+            JsonCodec<List<TaskMemoryReservationSummary>> memoryReservationSummaryJsonCodec,
+            NodePoolType poolType)
     {
         this.queryId = requireNonNull(queryId, "queryId is null");
         this.maxUserMemory = requireNonNull(maxUserMemory, "maxUserMemory is null").toBytes();
@@ -151,6 +154,7 @@ public class QueryContext
                 newRootAggregatedMemoryContext(new QueryMemoryReservationHandler(this::updateUserMemory, this::tryUpdateUserMemory, this::updateBroadcastMemory, this::tryUpdateBroadcastMemory), GUARANTEED_MEMORY),
                 newRootAggregatedMemoryContext(new QueryMemoryReservationHandler(this::updateRevocableMemory, this::tryReserveMemoryNotSupported, this::updateBroadcastMemory, this::tryUpdateBroadcastMemory), 0L),
                 newRootAggregatedMemoryContext(new QueryMemoryReservationHandler(this::updateSystemMemory, this::tryReserveMemoryNotSupported, this::updateBroadcastMemory, this::tryUpdateBroadcastMemory), 0L));
+        this.poolType = requireNonNull(poolType, "poolType is null");
     }
 
     public boolean isMemoryLimitsInitialized()
@@ -614,5 +618,10 @@ public class QueryContext
         // This is done to avoid skew scenario for which we need different strategy of breaking down just the partitions with skew
         List<DataSize> sortedDataSizes = dataSizes.stream().filter(a -> a.toBytes() > 0).sorted().collect(toList());
         return sortedDataSizes.get(0).toBytes() * 2 >= sortedDataSizes.get(sortedDataSizes.size() - 1).toBytes();
+    }
+
+    public NodePoolType getPoolType()
+    {
+        return poolType;
     }
 }

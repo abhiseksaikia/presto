@@ -51,6 +51,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 
 import static com.facebook.airlift.json.JsonCodec.listJsonCodec;
+import static com.facebook.presto.spi.NodePoolType.DEFAULT;
 import static com.facebook.presto.testing.LocalQueryRunner.queryRunnerWithInitialTransaction;
 import static com.facebook.presto.testing.TestingSession.testSessionBuilder;
 import static com.facebook.presto.testing.TestingTaskContext.createTaskContext;
@@ -106,7 +107,8 @@ public class TestMemoryPools
                 localQueryRunner.getScheduler(),
                 TEN_MEGABYTES,
                 spillSpaceTracker,
-                listJsonCodec(TaskMemoryReservationSummary.class));
+                listJsonCodec(TaskMemoryReservationSummary.class),
+                DEFAULT);
         taskContext = createTaskContext(queryContext, localQueryRunner.getExecutor(), session);
         drivers = driversSupplier.get();
     }

@@ -39,6 +39,8 @@ import com.facebook.presto.metadata.MetadataUpdates;
 import com.facebook.presto.operator.ExchangeClientSupplier;
 import com.facebook.presto.operator.FragmentResultCacheManager;
 import com.facebook.presto.operator.TaskMemoryReservationSummary;
+import com.facebook.presto.server.ServerConfig;
+import com.facebook.presto.spi.NodePoolType;
 import com.facebook.presto.spi.PrestoException;
 import com.facebook.presto.spi.QueryId;
 import com.facebook.presto.spi.connector.ConnectorMetadataUpdater;
@@ -146,7 +148,8 @@ public class SqlTaskManager
             OrderingCompiler orderingCompiler,
             FragmentResultCacheManager fragmentResultCacheManager,
             ObjectMapper objectMapper,
-            SpoolingOutputBufferFactory spoolingOutputBufferFactory)
+            SpoolingOutputBufferFactory spoolingOutputBufferFactory,
+            ServerConfig serverConfig)
     {
         requireNonNull(nodeInfo, "nodeInfo is null");
         requireNonNull(config, "config is null");
@@ -179,7 +182,7 @@ public class SqlTaskManager
         DataSize maxQueryBroadcastMemory = nodeMemoryConfig.getMaxQueryBroadcastMemory();
 
         queryContexts = CacheBuilder.newBuilder().weakValues().build(CacheLoader.from(
-                queryId -> createQueryContext(queryId, localMemoryManager, localSpillManager, gcMonitor, maxQueryUserMemoryPerNode, maxQueryTotalMemoryPerNode, maxRevocableMemoryPerNode, maxQuerySpillPerNode, maxQueryBroadcastMemory)));
+                queryId -> createQueryContext(queryId, localMemoryManager, localSpillManager, gcMonitor, maxQueryUserMemoryPerNode, maxQueryTotalMemoryPerNode, maxRevocableMemoryPerNode, maxQuerySpillPerNode, maxQueryBroadcastMemory, serverConfig.getPoolType())));
 
         requireNonNull(spoolingOutputBufferFactory, "spoolingOutputBufferFactory is null");
 
@@ -210,7 +213,8 @@ public class SqlTaskManager
             DataSize maxQueryTotalMemoryPerNode,
             DataSize maxRevocableMemoryPerNode,
             DataSize maxQuerySpillPerNode,
-            DataSize maxQueryBroadcastMemory)
+            DataSize maxQueryBroadcastMemory,
+            NodePoolType poolType)
     {
         return new QueryContext(
                 queryId,
@@ -224,7 +228,8 @@ public class SqlTaskManager
                 driverYieldExecutor,
                 maxQuerySpillPerNode,
                 localSpillManager.getSpillSpaceTracker(),
-                memoryReservationSummaryJsonCodec);
+                memoryReservationSummaryJsonCodec,
+                poolType);
     }
 
     @Override

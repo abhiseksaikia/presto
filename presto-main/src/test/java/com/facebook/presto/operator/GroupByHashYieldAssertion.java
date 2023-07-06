@@ -40,6 +40,7 @@ import static com.facebook.presto.RowPagesBuilder.rowPagesBuilder;
 import static com.facebook.presto.SessionTestUtils.TEST_SESSION;
 import static com.facebook.presto.common.type.BigintType.BIGINT;
 import static com.facebook.presto.operator.OperatorAssertion.finishOperator;
+import static com.facebook.presto.spi.NodePoolType.DEFAULT;
 import static com.facebook.presto.testing.TestingTaskContext.createTaskContext;
 import static com.facebook.presto.testing.assertions.Assert.assertEquals;
 import static io.airlift.units.DataSize.Unit.GIGABYTE;
@@ -93,7 +94,8 @@ public final class GroupByHashYieldAssertion
                 SCHEDULED_EXECUTOR,
                 new DataSize(512, MEGABYTE),
                 new SpillSpaceTracker(new DataSize(512, MEGABYTE)),
-                listJsonCodec(TaskMemoryReservationSummary.class));
+                listJsonCodec(TaskMemoryReservationSummary.class),
+                DEFAULT);
 
         DriverContext driverContext = createTaskContext(queryContext, EXECUTOR, TEST_SESSION)
                 .addPipelineContext(0, true, true, false)

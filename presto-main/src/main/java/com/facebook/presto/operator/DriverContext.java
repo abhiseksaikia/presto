@@ -15,12 +15,14 @@ package com.facebook.presto.operator;
 
 import com.facebook.airlift.stats.CounterStat;
 import com.facebook.presto.Session;
+import com.facebook.presto.common.RuntimeStats;
 import com.facebook.presto.execution.FragmentResultCacheContext;
 import com.facebook.presto.execution.Lifespan;
 import com.facebook.presto.execution.TaskId;
 import com.facebook.presto.memory.QueryContextVisitor;
 import com.facebook.presto.memory.context.MemoryTrackingContext;
 import com.facebook.presto.operator.OperationTimer.OperationTiming;
+import com.facebook.presto.spi.NodePoolType;
 import com.facebook.presto.spi.plan.PlanNodeId;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
@@ -39,6 +41,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
+import static com.facebook.presto.common.RuntimeUnit.NONE;
+import static com.facebook.presto.spi.NodePoolType.DEFAULT;
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.collect.Iterables.getFirst;
 import static com.google.common.collect.Iterables.getLast;
@@ -131,6 +135,12 @@ public class DriverContext
                 this,
                 notificationExecutor,
                 driverMemoryContext.newMemoryTrackingContext());
+        NodePoolType poolType = pipelineContext.getPoolType();
+        if (poolType != DEFAULT) {
+            RuntimeStats poolTypeStats = new RuntimeStats();
+            poolTypeStats.addMetricValue(poolType.name(), NONE, 0);
+            operatorContext.updateStats(poolTypeStats);
+        }
         operatorContexts.add(operatorContext);
         return operatorContext;
     }

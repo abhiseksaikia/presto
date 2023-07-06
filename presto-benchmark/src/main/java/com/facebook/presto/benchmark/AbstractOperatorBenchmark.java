@@ -71,6 +71,7 @@ import static com.facebook.airlift.stats.CpuTimer.CpuDuration;
 import static com.facebook.presto.SystemSessionProperties.getFilterAndProjectMinOutputPageRowCount;
 import static com.facebook.presto.SystemSessionProperties.getFilterAndProjectMinOutputPageSize;
 import static com.facebook.presto.common.type.BigintType.BIGINT;
+import static com.facebook.presto.spi.NodePoolType.DEFAULT;
 import static com.facebook.presto.spi.connector.ConnectorSplitManager.SplitSchedulingStrategy.UNGROUPED_SCHEDULING;
 import static com.facebook.presto.spi.connector.NotPartitionedPartitionHandle.NOT_PARTITIONED;
 import static com.facebook.presto.sql.planner.PlannerUtils.getHashExpression;
@@ -285,7 +286,8 @@ public abstract class AbstractOperatorBenchmark
                 localQueryRunner.getScheduler(),
                 new DataSize(256, MEGABYTE),
                 spillSpaceTracker,
-                listJsonCodec(TaskMemoryReservationSummary.class))
+                listJsonCodec(TaskMemoryReservationSummary.class),
+                DEFAULT)
                 .addTaskContext(
                         new TaskStateMachine(new TaskId("query", 0, 0, 0, 0), localQueryRunner.getExecutor()),
                         session,

@@ -47,6 +47,7 @@ import java.util.regex.Pattern;
 import static com.facebook.airlift.concurrent.Threads.daemonThreadsNamed;
 import static com.facebook.airlift.json.JsonCodec.listJsonCodec;
 import static com.facebook.presto.execution.TaskTestUtils.PLAN_FRAGMENT;
+import static com.facebook.presto.spi.NodePoolType.DEFAULT;
 import static com.facebook.presto.testing.TestingSession.testSessionBuilder;
 import static io.airlift.units.DataSize.Unit.GIGABYTE;
 import static java.lang.String.format;
@@ -113,7 +114,8 @@ public class TestMemoryTracking
                 yieldExecutor,
                 queryMaxSpillSize,
                 spillSpaceTracker,
-                listJsonCodec(TaskMemoryReservationSummary.class));
+                listJsonCodec(TaskMemoryReservationSummary.class),
+                DEFAULT);
         taskContext = queryContext.addTaskContext(
                 new TaskStateMachine(new TaskId("query", 0, 0, 0, 0), notificationExecutor),
                 testSessionBuilder().build(),

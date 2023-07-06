@@ -42,6 +42,7 @@ import static com.facebook.presto.SessionTestUtils.TEST_SESSION;
 import static com.facebook.presto.execution.TaskTestUtils.PLAN_FRAGMENT;
 import static com.facebook.presto.memory.LocalMemoryManager.GENERAL_POOL;
 import static com.facebook.presto.memory.LocalMemoryManager.RESERVED_POOL;
+import static com.facebook.presto.spi.NodePoolType.DEFAULT;
 import static io.airlift.units.DataSize.Unit.BYTE;
 import static io.airlift.units.DataSize.Unit.GIGABYTE;
 import static java.util.concurrent.Executors.newScheduledThreadPool;
@@ -91,7 +92,8 @@ public class TestQueryContext
                     localQueryRunner.getScheduler(),
                     new DataSize(0, BYTE),
                     new SpillSpaceTracker(new DataSize(0, BYTE)),
-                    listJsonCodec(TaskMemoryReservationSummary.class));
+                    listJsonCodec(TaskMemoryReservationSummary.class),
+                    DEFAULT);
 
             // Use memory
             queryContext.getQueryMemoryContext().initializeLocalMemoryContexts("test");
@@ -128,7 +130,8 @@ public class TestQueryContext
                     localQueryRunner.getScheduler(),
                     new DataSize(0, BYTE),
                     new SpillSpaceTracker(new DataSize(0, BYTE)),
-                    listJsonCodec(TaskMemoryReservationSummary.class));
+                    listJsonCodec(TaskMemoryReservationSummary.class),
+                    DEFAULT);
 
             queryContext.getQueryMemoryContext().initializeLocalMemoryContexts("test");
             LocalMemoryContext systemMemoryContext = queryContext.getQueryMemoryContext().localSystemMemoryContext();
@@ -155,7 +158,8 @@ public class TestQueryContext
                     localQueryRunner.getScheduler(),
                     new DataSize(0, BYTE),
                     new SpillSpaceTracker(new DataSize(0, BYTE)),
-                    listJsonCodec(TaskMemoryReservationSummary.class));
+                    listJsonCodec(TaskMemoryReservationSummary.class),
+                    DEFAULT);
 
             queryContext.getQueryMemoryContext().initializeLocalMemoryContexts("test");
             LocalMemoryContext systemMemoryContext = queryContext.getQueryMemoryContext().localSystemMemoryContext();
@@ -226,6 +230,7 @@ public class TestQueryContext
                 TEST_EXECUTOR,
                 new DataSize(0, BYTE),
                 new SpillSpaceTracker(new DataSize(0, BYTE)),
-                listJsonCodec(TaskMemoryReservationSummary.class));
+                listJsonCodec(TaskMemoryReservationSummary.class),
+                DEFAULT);
     }
 }
