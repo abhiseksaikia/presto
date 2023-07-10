@@ -69,6 +69,7 @@ import static com.facebook.presto.SystemSessionProperties.getConcurrentLifespans
 import static com.facebook.presto.SystemSessionProperties.getMaxTasksPerStage;
 import static com.facebook.presto.SystemSessionProperties.getWriterMinSize;
 import static com.facebook.presto.SystemSessionProperties.isOptimizedScaleWriterProducerBuffer;
+import static com.facebook.presto.common.RuntimeUnit.NONE;
 import static com.facebook.presto.execution.SqlStageExecution.createSqlStageExecution;
 import static com.facebook.presto.execution.scheduler.SourcePartitionedScheduler.newSourcePartitionedSchedulerAsStageScheduler;
 import static com.facebook.presto.execution.scheduler.TableWriteInfo.createTableWriteInfo;
@@ -89,6 +90,7 @@ import static com.google.common.collect.Iterables.getLast;
 import static com.google.common.collect.Iterables.getOnlyElement;
 import static com.google.common.collect.Sets.newConcurrentHashSet;
 import static com.google.common.util.concurrent.MoreExecutors.directExecutor;
+import static java.lang.String.format;
 import static java.util.Objects.requireNonNull;
 import static java.util.stream.Collectors.toList;
 import static java.util.stream.Collectors.toSet;
@@ -172,7 +174,7 @@ public class SectionExecutionFactory
         // Only fetch a distribution once per section to ensure all stages see the same machine assignments
         Map<PartitioningHandle, NodePartitionMap> partitioningCache = new HashMap<>();
         TableWriteInfo tableWriteInfo = createTableWriteInfo(section.getPlan(), metadata, session);
-        Optional<Predicate<Node>> nodePredicate = getNodePoolSelectionPredicate(section.getPlan());
+        Optional<Predicate<Node>> nodePredicate = getNodePoolSelectionPredicate(session, attemptId, section.getPlan());
         List<StageExecutionAndScheduler> sectionStages = createStreamingLinkedStageExecutions(
                 session,
                 locationsConsumer,
@@ -259,7 +261,8 @@ public class SectionExecutionFactory
                 stageExecution,
                 partitioningHandle,
                 tableWriteInfo,
-                childStageExecutions);
+                childStageExecutions,
+                attemptId);
         stageExecutionAndSchedulers.add(new StageExecutionAndScheduler(
                 stageExecution,
                 stageLinkage,
@@ -278,11 +281,12 @@ public class SectionExecutionFactory
             SqlStageExecution stageExecution,
             PartitioningHandle partitioningHandle,
             TableWriteInfo tableWriteInfo,
-            Set<SqlStageExecution> childStageExecutions)
+            Set<SqlStageExecution> childStageExecutions,
+            int attemptId)
     {
         Map<PlanNodeId, SplitSource> splitSources = splitSourceFactory.createSplitSources(plan.getFragment(), session, tableWriteInfo);
         int maxTasksPerStage = getMaxTasksPerStage(session);
-        Optional<Predicate<Node>> nodePredicate = getNodePoolSelectionPredicate(plan);
+        Optional<Predicate<Node>> nodePredicate = getNodePoolSelectionPredicate(session, attemptId, plan);
         if (partitioningHandle.equals(SOURCE_DISTRIBUTION)) {
             // nodes are selected dynamically based on the constraints of the splits and the system load
             Map.Entry<PlanNodeId, SplitSource> entry = getOnlyElement(splitSources.entrySet());
@@ -403,13 +407,15 @@ public class SectionExecutionFactory
         }
     }
 
-    private Optional<Predicate<Node>> getNodePoolSelectionPredicate(StreamingSubPlan plan)
+    private Optional<Predicate<Node>> getNodePoolSelectionPredicate(Session session, int attemptId, StreamingSubPlan plan)
     {
         if (!isEnableWorkerIsolation || plan.getFragment().getStageExecutionDescriptor().isStageGroupedExecution()) {
             //skipping node pool based selection for grouped execution
             return Optional.empty();
         }
         NodePoolType workerPoolType = plan.getFragment().isLeaf() ? LEAF : INTERMEDIATE;
+        session.getRuntimeStats().addMetricValue(
+                format("%s-Fragment %s-attempt %s", workerPoolType.name(), plan.getFragment().getId(), attemptId), NONE, 1);
         return Optional.of(node -> node.getPoolType().equals(workerPoolType));
     }
 
