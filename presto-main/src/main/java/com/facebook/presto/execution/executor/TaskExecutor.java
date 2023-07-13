@@ -232,45 +232,8 @@ public class TaskExecutor
                 taskHandle.handleShutDown(true);
             }
             else {
-                if (taskHandle.runningIntermediateSplits.isEmpty()) {
-                    // if the task doesn't have any intermediate splits, it is a simple query without localexchange etc
-                    boolean hasRunningSplitBlockedOrWaited = false;
-                    for (PrioritizedSplitRunner split : taskHandle.runningLeafSplits) {
-                        if (blockedSplits.containsKey(split) || waitingInMultiLevelSplitsQueue.contains(split)) {
-                            // if any of the runningLeafSplits is not in the running state, it means they are either blocked or waiting in the MLSQ
-                            // kill them instead.
-                            hasRunningSplitBlockedOrWaited = true;
-                            break;
-                        }
-                    }
-
-                    if (hasRunningSplitBlockedOrWaited) {
-                        // remove them from the runningSplits so that we don't have to wait for them to be drained.
-                        for (PrioritizedSplitRunner s : taskHandle.runningLeafSplits) {
-                            runningSplits.remove(s);
-                        }
-
-                        // kill the query
-                        taskHandle.handleShutDown(false);
-                        taskNumBeKilled.incrementAndGet();
-                    }
-                    else {
-                        tasksToDrain.add(taskHandle);
-                        taskNumToDrain.incrementAndGet();
-                    }
-                }
-                else {
-                    if (!taskHandle.runningLeafSplits.isEmpty()) {
-                        // kill the query
-                        taskHandle.handleShutDown(false);
-                        taskNumBeKilled.incrementAndGet();
-                    }
-                    else {
-                        // There are intermediate splits
-                        tasksToDrain.add(taskHandle);
-                        taskNumToDrain.incrementAndGet();
-                    }
-                }
+                tasksToDrain.add(taskHandle);
+                taskNumToDrain.incrementAndGet();
             }
         }
 
@@ -282,13 +245,24 @@ public class TaskExecutor
 
             //wait for running splits to be over
             long waitTimeMillis = 5; // Wait for 10 milliseconds between checks to avoid cpu spike
-            long startTime = System.nanoTime();
-            while (!runningSplits.isEmpty()) {
+            long startTime = System.currentTimeMillis();
+            long trailingTime = startTime;
+            while (!allSplits.isEmpty() || trailingTime - startTime >= 30000) {
                 try {
                     Thread.sleep(waitTimeMillis);
+                    trailingTime = System.currentTimeMillis();
                 }
                 catch (InterruptedException e) {
                     log.error("GracefulShutdown got interrupted while waiting for running splits", e);
+                }
+            }
+
+            // kill the tasks that still have splits running
+            for (TaskHandle taskHandle : tasks) {
+                if (!taskHandle.runningLeafSplits.isEmpty() || !taskHandle.runningIntermediateSplits.isEmpty()) {
+                    taskHandle.handleShutDown(false);
+                    taskNumBeKilled.incrementAndGet();
+                    tasksToDrain.remove(taskHandle);
                 }
             }
 
