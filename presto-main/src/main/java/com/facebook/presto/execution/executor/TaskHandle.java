@@ -140,10 +140,13 @@ public class TaskHandle
 
     public synchronized boolean enqueueSplit(PrioritizedSplitRunner split)
     {
-        if (destroyed || isShuttingDown.get()) {
+        if (destroyed) {
+            //TaskExecutor::540 (check the else block)
             return false;
         }
-        queuedLeafSplits.add(split);
+        if (!isShuttingDown.get()) {
+            queuedLeafSplits.add(split);
+        }
         return true;
     }
 

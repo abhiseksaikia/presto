@@ -100,7 +100,8 @@ public class MultilevelSplitQueue
     public void offer(PrioritizedSplitRunner split)
     {
         checkArgument(split != null, "split is null");
-        if (isShuttingDown.get()) {
+        if (isShuttingDown.get() && !isSplitAlreadyStarted(split)) {
+            //if shutdown is started, lets not add any split that is not started yet (i.e allow adding only blocked split)
             return;
         }
         split.setReady();
@@ -124,6 +125,11 @@ public class MultilevelSplitQueue
         finally {
             lock.unlock();
         }
+    }
+
+    private boolean isSplitAlreadyStarted(PrioritizedSplitRunner split)
+    {
+        return split.getStartNanos() != 0;
     }
 
     public synchronized void shutDown()
@@ -170,9 +176,6 @@ public class MultilevelSplitQueue
     @GuardedBy("lock")
     private PrioritizedSplitRunner pollSplit()
     {
-        if (isShuttingDown.get()) {
-            return null;
-        }
         long targetScheduledTime = getLevel0TargetTime();
         double worstRatio = 1;
         int selectedLevel = -1;
@@ -195,7 +198,10 @@ public class MultilevelSplitQueue
 
         PrioritizedSplitRunner result = levelWaitingSplits.get(selectedLevel).poll();
         checkState(result != null, "pollSplit cannot return null");
-
+        if (isShuttingDown.get() && !isSplitAlreadyStarted(result)) {
+            //poll split that was running before, otherwise the split can be left to be retried and we can delete from queue
+            return pollSplit();
+        }
         return result;
     }
 
@@ -277,6 +283,24 @@ public class MultilevelSplitQueue
             for (PriorityQueue<PrioritizedSplitRunner> level : levelWaitingSplits) {
                 level.removeAll(splits);
             }
+        }
+        finally {
+            lock.unlock();
+        }
+    }
+
+    public boolean isAlreadyRunSplitInQueue()
+    {
+        lock.lock();
+        try {
+            for (PriorityQueue<PrioritizedSplitRunner> level : levelWaitingSplits) {
+                for (PrioritizedSplitRunner split : level) {
+                    if (isSplitAlreadyStarted(split)) {
+                        return true;
+                    }
+                }
+            }
+            return false;
         }
         finally {
             lock.unlock();

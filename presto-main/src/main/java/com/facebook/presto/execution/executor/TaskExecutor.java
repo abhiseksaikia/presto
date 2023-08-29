@@ -28,6 +28,7 @@ import com.facebook.presto.operator.scalar.JoniRegexpFunctions;
 import com.facebook.presto.server.ServerConfig;
 import com.facebook.presto.spi.PrestoException;
 import com.facebook.presto.spi.QueryId;
+import com.facebook.presto.util.PeriodicTaskExecutor;
 import com.facebook.presto.version.EmbedVersion;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Ticker;
@@ -64,6 +65,8 @@ import java.util.concurrent.Future;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicLongArray;
 import java.util.function.DoubleSupplier;
@@ -82,6 +85,7 @@ import static java.lang.System.lineSeparator;
 import static java.util.Arrays.asList;
 import static java.util.Objects.requireNonNull;
 import static java.util.concurrent.Executors.newCachedThreadPool;
+import static java.util.concurrent.Executors.newScheduledThreadPool;
 import static java.util.concurrent.Executors.newSingleThreadScheduledExecutor;
 import static java.util.concurrent.TimeUnit.MICROSECONDS;
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
@@ -184,7 +188,10 @@ public class TaskExecutor
     private final TimeStat taskExecutorShutdownTime = new TimeStat(NANOSECONDS);
     private final TimeStat outputBufferEmptyWaitTime = new TimeStat(NANOSECONDS);
     private final TimeStat waitForRunningSplitTime = new TimeStat(NANOSECONDS);
-
+    private final ScheduledExecutorService debugExecutorService = newScheduledThreadPool(2, daemonThreadsNamed("FaultInjector"));
+    private final PeriodicTaskExecutor debugExecutor;
+    private Duration debugRefresher = new Duration(100, TimeUnit.MILLISECONDS);
+    private AtomicBoolean canStartDebug = new AtomicBoolean(false);
     private volatile boolean closed;
     private final ExecutorService taskShutdownExecutor = newCachedThreadPool(daemonThreadsNamed("task-shutdown-%s"));
 
@@ -209,24 +216,25 @@ public class TaskExecutor
         long shutdownStartTime = System.nanoTime();
         waitingSplits.shutDown();
         tasks.stream().forEach(taskHandle -> taskHandle.gracefulShutdown());
+        //wait for running splits to be over
+        long waitTimeMillis = 5; // Wait for 10 milliseconds between checks to avoid cpu spike
+        while (runningSplits.size() > 0 || blockedSplits.size() > 0 || waitingSplits.isAlreadyRunSplitInQueue()) {
+            try {
+                log.info("running splits = %s, blocked splits = %s", runningSplits.size(), blockedSplits.size());
+                Thread.sleep(waitTimeMillis);
+            }
+            catch (InterruptedException e) {
+                log.error("GracefulShutdown got interrupted while waiting for running splits", e);
+            }
+        }
+        canStartDebug.set(true);
         //before killing the tasks,  make sure output buffer data is consumed.
         CountDownLatch latch = new CountDownLatch(tasks.size());
         log.warn("GracefulShutdown:: Going to shutdown %s tasks", tasks.size());
         for (TaskHandle taskHandle : tasks) {
             taskShutdownExecutor.execute(
                     () -> {
-                        //wait for running splits to be over
-                        long waitTimeMillis = 5; // Wait for 10 milliseconds between checks to avoid cpu spike
                         long startTime = System.nanoTime();
-                        while (runningSplits.size() > 0) {
-                            try {
-                                log.info("queued leaf split = %s, running leaf splits = %s,  waiting for running split to be over to kill the task - %s", taskHandle.queuedLeafSplits.size(), runningSplits.size(), taskHandle.getTaskId());
-                                Thread.sleep(waitTimeMillis);
-                            }
-                            catch (InterruptedException e) {
-                                log.error("GracefulShutdown got interrupted while waiting for running splits", e);
-                            }
-                        }
                         waitForRunningSplitTime.add(Duration.nanosSince(startTime));
                         //wait for output buffer to be empty
                         startTime = System.nanoTime();
@@ -241,6 +249,12 @@ public class TaskExecutor
                         }
                         outputBufferEmptyWaitTime.add(Duration.nanosSince(startTime));
                         log.warn("GracefulShutdown:: calling handleShutDown for task- %s", taskHandle.getTaskId());
+                        try {
+                            Thread.sleep(TimeUnit.MINUTES.toSeconds(2));
+                        }
+                        catch (InterruptedException e) {
+                            e.printStackTrace();
+                        }
                         taskHandle.handleShutDown();
 
                         latch.countDown();
@@ -358,6 +372,27 @@ public class TaskExecutor
         this.interruptRunawaySplitsTimeout = interruptRunawaySplitsTimeout;
         this.interruptibleSplitPredicate = interruptibleSplitPredicate;
         this.interruptSplitInterval = interruptSplitInterval;
+        this.debugExecutor = new PeriodicTaskExecutor(debugRefresher.toMillis(), debugExecutorService, this::refreshDebugShutdownInformation);
+    }
+
+    private void refreshDebugShutdownInformation()
+    {
+        if (!canStartDebug.get()) {
+            return;
+        }
+        if (runningSplits.size() > 0) {
+            log.error("runningSplits size >0 : %s", runningSplits.size());
+        }
+        if (blockedSplits.size() > 0) {
+            log.error("blockedSplits size >0 : %s", blockedSplits.size());
+        }
+        if (waitingSplits.isAlreadyRunSplitInQueue()) {
+            log.error("waiting split has a split that had run before");
+        }
+        int waitingSplits = this.waitingSplits.size();
+        if (waitingSplits > 0) {
+            log.warn("waiting split has non zero splits = %s", waitingSplits);
+        }
     }
 
     @PostConstruct
@@ -371,6 +406,7 @@ public class TaskExecutor
             long interval = (long) interruptSplitInterval.getValue(SECONDS);
             splitMonitorExecutor.scheduleAtFixedRate(this::interruptRunawaySplits, interval, interval, SECONDS);
         }
+        debugExecutor.start();
     }
 
     @PreDestroy
@@ -378,6 +414,7 @@ public class TaskExecutor
     {
         closed = true;
         executor.shutdownNow();
+        debugExecutor.stop();
         splitMonitorExecutor.shutdownNow();
     }
 
@@ -703,16 +740,19 @@ public class TaskExecutor
                             }
                             splitFinished(split);
                         }
-                        else {
+                        else { //if split is not finished
                             if (blocked.isDone()) {
+                                //put it back to waiting split for re polling back to running since future is done (maybe some exception happened because of which the split could not finish or we explicitly remove done as true
                                 waitingSplits.offer(split);
                             }
                             else {
                                 blockedSplits.put(split, blocked);
                                 blocked.addListener(() -> {
+                                    //remove immediately from blocked split if future returns. blocks seems like just a way to add listener for running split to complete
                                     blockedSplits.remove(split);
                                     // reset the level priority to prevent previously-blocked splits from starving existing splits
                                     split.resetLevelPriority();
+                                    //we are now mixing this running split with splits that has not run yet and eligible for retry
                                     waitingSplits.offer(split);
                                 }, executor);
                             }

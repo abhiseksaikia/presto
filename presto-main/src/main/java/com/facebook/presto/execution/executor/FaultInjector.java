@@ -75,8 +75,9 @@ public class FaultInjector
             return;
         }
         int queuedSplit = taskExecutor.getTaskList().stream().mapToInt(taskHandle -> taskHandle.getQueuedSplitSize()).sum();
+        int blockedSplit = taskExecutor.getBlockedSplits();
         int runningLeafSplit = taskExecutor.getTaskList().stream().mapToInt(taskHandle -> taskHandle.getRunningLeafSplits()).sum();
-        if (queuedSplit > 5 && runningLeafSplit > 0 && !isShutDown.get()) {
+        if (queuedSplit > 0 && runningLeafSplit > 0 && !isShutDown.get()) {
             log.warn("Shutting down node - %s", nodeInfo.getNodeId());
             shutdownHandler.requestShutdown();
             isShutDown.set(true);

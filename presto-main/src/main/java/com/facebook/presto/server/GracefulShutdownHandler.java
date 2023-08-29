@@ -22,6 +22,7 @@ import com.facebook.presto.execution.QueryManagerConfig;
 import com.facebook.presto.execution.TaskInfo;
 import com.facebook.presto.execution.TaskManager;
 import com.facebook.presto.execution.executor.TaskExecutor;
+import com.facebook.presto.spi.NodePoolType;
 import io.airlift.units.Duration;
 import org.weakref.jmx.Managed;
 import org.weakref.jmx.Nested;
@@ -39,6 +40,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeoutException;
 
 import static com.facebook.airlift.concurrent.Threads.threadsNamed;
+import static com.facebook.presto.spi.NodePoolType.LEAF;
 import static com.google.common.base.Preconditions.checkState;
 import static com.google.common.collect.ImmutableList.toImmutableList;
 import static com.google.common.util.concurrent.Uninterruptibles.sleepUninterruptibly;
@@ -67,6 +69,7 @@ public class GracefulShutdownHandler
     private final TaskExecutor taskExecutor;
     private final QueryManagerConfig queryManagerConfig;
     private final NodeStatusNotificationManager nodeStatusNotificationManager;
+    private final NodePoolType poolType;
     private boolean isLoadNodeStatusNotification;
 
     private final CounterStat shutdownCounter = new CounterStat();
@@ -92,6 +95,7 @@ public class GracefulShutdownHandler
         this.isCoordinator = requireNonNull(serverConfig, "serverConfig is null").isCoordinator();
         this.isResourceManager = serverConfig.isResourceManager();
         this.gracePeriod = serverConfig.getGracePeriod();
+        this.poolType = serverConfig.getPoolType();
         this.queryManager = requireNonNull(queryManager, "queryManager is null");
         this.taskExecutor = requireNonNull(taskExecutor, "taskExecutor is null");
         this.queryManagerConfig = requireNonNull(queryManagerConfig, "taskExecutor is null");
@@ -129,14 +133,14 @@ public class GracefulShutdownHandler
 
         //wait for a grace period to start the shutdown sequence
         //immediately start shutdown process for worker
-        long delay = isCoordinator ? gracePeriod.toMillis() : 0;
+        long delay = (isCoordinator || !queryManagerConfig.isEnableRetryForFailedSplits()) ? gracePeriod.toMillis() : 0;
         shutdownHandler.schedule(() -> {
             if (isCoordinator) {
                 waitForQueriesToComplete();
             }
             else {
                 long timeBeforeTaskExecutorShutdown = System.nanoTime();
-                if (queryManagerConfig.isEnableRetryForFailedSplits()) {
+                if (queryManagerConfig.isEnableRetryForFailedSplits() && poolType == LEAF) {
                     taskExecutor.gracefulShutdown();
                 }
                 gracefulShutdownCounter.update(1);
