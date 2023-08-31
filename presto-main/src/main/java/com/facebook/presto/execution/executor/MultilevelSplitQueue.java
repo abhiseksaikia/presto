@@ -28,7 +28,6 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.PriorityQueue;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
@@ -56,7 +55,6 @@ public class MultilevelSplitQueue
     private final Condition notEmpty = lock.newCondition();
 
     private final double levelTimeMultiplier;
-    private final AtomicBoolean isShuttingDown = new AtomicBoolean(false);
 
     @Inject
     public MultilevelSplitQueue(TaskManagerConfig taskManagerConfig)
@@ -100,10 +98,7 @@ public class MultilevelSplitQueue
     public void offer(PrioritizedSplitRunner split)
     {
         checkArgument(split != null, "split is null");
-        if (isShuttingDown.get() && !isSplitAlreadyStarted(split)) {
-            //if shutdown is started, lets not add any split that is not started yet (i.e allow adding only blocked split)
-            return;
-        }
+
         split.setReady();
         int level = split.getPriority().getLevel();
         lock.lock();
@@ -130,11 +125,6 @@ public class MultilevelSplitQueue
     private boolean isSplitAlreadyStarted(PrioritizedSplitRunner split)
     {
         return split.getStartNanos() != 0;
-    }
-
-    public synchronized void shutDown()
-    {
-        isShuttingDown.set(true);
     }
 
     public PrioritizedSplitRunner take()
@@ -198,10 +188,7 @@ public class MultilevelSplitQueue
 
         PrioritizedSplitRunner result = levelWaitingSplits.get(selectedLevel).poll();
         checkState(result != null, "pollSplit cannot return null");
-        if (isShuttingDown.get() && !isSplitAlreadyStarted(result)) {
-            //poll split that was running before, otherwise the split can be left to be retried and we can delete from queue
-            return pollSplit();
-        }
+
         return result;
     }
 
@@ -301,6 +288,34 @@ public class MultilevelSplitQueue
                 }
             }
             return false;
+        }
+        finally {
+            lock.unlock();
+        }
+    }
+
+    public String getSplitViewSnapshot()
+    {
+        lock.lock();
+        try {
+            StringBuilder builder = new StringBuilder();
+            List<String> levelData = new ArrayList<>();
+            for (PriorityQueue<PrioritizedSplitRunner> level : levelWaitingSplits) {
+                for (PrioritizedSplitRunner split : level) {
+                    StringBuilder levelBuilder = new StringBuilder();
+                    String state = isSplitAlreadyStarted(split) ? "started" : "not_started";
+                    levelBuilder.append(state);
+                    levelBuilder.append(":");
+                    levelBuilder.append(split.getInfo());
+                    levelData.add(levelBuilder.toString());
+                }
+            }
+            for (int level = 0; level < levelData.size(); level++) {
+                builder.append("Level " + level + ":=======>\n");
+                builder.append(levelData.get(level));
+                builder.append("\n");
+            }
+            return builder.toString();
         }
         finally {
             lock.unlock();

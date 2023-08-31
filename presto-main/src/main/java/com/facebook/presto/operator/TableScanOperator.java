@@ -13,6 +13,7 @@
  */
 package com.facebook.presto.operator;
 
+import com.facebook.airlift.log.Logger;
 import com.facebook.presto.common.Page;
 import com.facebook.presto.common.RuntimeStats;
 import com.facebook.presto.execution.ScheduledSplit;
@@ -51,6 +52,8 @@ import static java.util.Objects.requireNonNull;
 public class TableScanOperator
         implements SourceOperator, Closeable
 {
+    private static final Logger log = Logger.get(TableScanOperator.class);
+
     public static class TableScanOperatorFactory
             implements SourceOperatorFactory
     {

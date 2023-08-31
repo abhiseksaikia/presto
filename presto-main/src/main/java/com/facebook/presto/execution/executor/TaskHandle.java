@@ -33,7 +33,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.DoubleSupplier;
 
+import static com.facebook.presto.server.GracefulShutdownHandler.OPEC_GRACEFUL_LOG_PREFIX;
 import static com.google.common.base.MoreObjects.toStringHelper;
+import static com.google.common.base.Preconditions.checkState;
 import static java.util.Objects.requireNonNull;
 
 @ThreadSafe
@@ -147,6 +149,10 @@ public class TaskHandle
         if (!isShuttingDown.get()) {
             queuedLeafSplits.add(split);
         }
+        else {
+            checkState(!split.isSplitAlreadyStarted(), OPEC_GRACEFUL_LOG_PREFIX + "split we are avoiding to queue was already started!");
+            log.info(OPEC_GRACEFUL_LOG_PREFIX + "TaskHandle::enqueueSplit:: Avoid adding split retry_eligible_split %s ", split.getInfo());
+        }
         return true;
     }
 
@@ -154,6 +160,9 @@ public class TaskHandle
     {
         if (destroyed) {
             return false;
+        }
+        if (isShuttingDown.get()) {
+            log.info(OPEC_GRACEFUL_LOG_PREFIX + "TaskHandle::recordIntermediateSplit:: %s,", split.getInfo());
         }
         runningIntermediateSplits.add(split);
         return true;
@@ -171,7 +180,12 @@ public class TaskHandle
 
     public synchronized PrioritizedSplitRunner pollNextSplit()
     {
-        if (destroyed || isShuttingDown.get()) {
+        if (destroyed) {
+            return null;
+        }
+        if (isShuttingDown.get()) {
+            boolean isAnyQueuedSplitStarted = isAnySplitStarted(queuedLeafSplits);
+            checkState(!isAnyQueuedSplitStarted, OPEC_GRACEFUL_LOG_PREFIX + "queued split contains started splits");
             return null;
         }
 
@@ -184,6 +198,16 @@ public class TaskHandle
             runningLeafSplits.add(split);
         }
         return split;
+    }
+
+    private boolean isAnySplitStarted(Queue<PrioritizedSplitRunner> queuedLeafSplits)
+    {
+        for (PrioritizedSplitRunner splitRunner : queuedLeafSplits) {
+            if (splitRunner.isSplitAlreadyStarted()) {
+                return true;
+            }
+        }
+        return false;
     }
 
     public void gracefulShutdown()
@@ -232,5 +256,10 @@ public class TaskHandle
     public Optional<OutputBuffer> getOutputBuffer()
     {
         return outputBuffer;
+    }
+
+    public boolean isShutdownInProgress()
+    {
+        return isShuttingDown.get();
     }
 }

@@ -115,7 +115,7 @@ import static java.util.stream.Collectors.toSet;
 public class SectionExecutionFactory
 {
     private static final Logger log = Logger.get(SectionExecutionFactory.class);
-    private static final String RUNTIME_STATS_RETRIED_SPLITS_PREFIX = "retried-splits-node-";
+    private static final String RUNTIME_STATS_RETRIED_SPLITS_PREFIX = "retried-splits-from-node-";
     public static final int SPLIT_RETRY_BATCH_SIZE = 100;
     private final Metadata metadata;
     private final NodePartitioningManager nodePartitioningManager;
@@ -327,18 +327,18 @@ public class SectionExecutionFactory
             SplitPlacementPolicy placementPolicy = new DynamicSplitPlacementPolicy(nodeSelector, stageExecution::getAllTasks);
 
             if (plan.getFragment().isLeaf() && isRetryOfFailedSplitsEnabled) {
-                stageExecution.registerStageTaskRecoveryCallback((taskId) -> {
+                stageExecution.registerStageTaskRecoveryCallback((failedTask) -> {
                     Set<String> activeNodeIDs = nodeManager.getNodes(ACTIVE).stream().map(InternalNode::getNodeIdentifier).collect(toImmutableSet());
-                    log.warn("Going to recover task - %s", taskId);
-                    HttpRemoteTask remoteTask = stageExecution.getAllTasks().stream()
-                            .filter(task -> task.getTaskId().equals(taskId))
+                    HttpRemoteTask taskToRecover = stageExecution.getAllTasks().stream()
+                            .filter(task -> task.getTaskId().equals(failedTask))
                             .filter(task -> task instanceof HttpRemoteTask)
                             .map(task -> (HttpRemoteTask) task)
                             .collect(onlyElement());
-                    String failingNodeID = remoteTask.getNodeId();
+                    String failingNodeID = taskToRecover.getNodeId();
+                    log.warn("Going to recover task - %s, failed on node = %s", failedTask, failingNodeID);
 
-                    List<HttpRemoteTask> httpRemoteTasks = stageExecution.getAllTasks().stream()
-                            .filter(task -> !task.getTaskId().equals(taskId))
+                    List<HttpRemoteTask> activeRemoteTasks = stageExecution.getAllTasks().stream()
+                            .filter(task -> !task.getTaskId().equals(failedTask))
                             .filter(task -> !task.getNodeId().equals(failingNodeID))
                             .filter(task -> activeNodeIDs.contains(task.getNodeId()))
                             .filter(task -> task instanceof HttpRemoteTask)
@@ -347,28 +347,36 @@ public class SectionExecutionFactory
 //                            .filter(task -> !task.isNoMoreSplits(planNodeId))
                             .collect(toList());
 
-                    if (httpRemoteTasks.isEmpty()) {
+                    if (activeRemoteTasks.isEmpty()) {
                         throw new PrestoException(REMOTE_TASK_ERROR, "Running out of the eligible remote tasks to retry");
                     }
 
-                    Collections.shuffle(httpRemoteTasks);
+                    Collections.shuffle(activeRemoteTasks);
 
                     synchronized (stageExecution) {
-                        checkState(remoteTask.isOnlyOneSplitLeft(planNodeId),
+                        checkState(taskToRecover.isOnlyOneSplitLeft(planNodeId),
                                 "Unexpected plan node id");
-                        Iterator<List<Split>> splits = Iterables.partition(
-                                Iterables.transform(remoteTask.getAllSplits(planNodeId), ScheduledSplit::getSplit),
+                        Iterator<List<ScheduledSplit>> splits = Iterables.partition(taskToRecover.getAllUnprocessedSplits(planNodeId),
                                 SPLIT_RETRY_BATCH_SIZE).iterator();
 
                         while (splits.hasNext()) {
-                            for (int i = 0; i < httpRemoteTasks.size() && splits.hasNext(); i++) {
-                                HttpRemoteTask httpRemoteTask = httpRemoteTasks.get(i);
-                                List<Split> scheduledSplit = splits.next();
+                            for (int i = 0; i < activeRemoteTasks.size() && splits.hasNext(); i++) {
+                                HttpRemoteTask httpRemoteTask = activeRemoteTasks.get(i);
+                                List<ScheduledSplit> scheduledSplit = splits.next();
+                                log.warn("Going to retry splits %s of failed task %s on active task %s", scheduledSplit.stream().map(ScheduledSplit::getSequenceId).collect(toImmutableList()), failedTask, httpRemoteTask.getTaskId());
+                                log.warn("Retrying splits %s of failed task %s on active task %s", scheduledSplit.stream().map(split -> split.getSplit().getSplitIdentifier()).collect(toImmutableList()), failedTask, httpRemoteTask.getTaskId());
                                 Multimap<PlanNodeId, Split> splitsToAdd = HashMultimap.create();
-                                splitsToAdd.putAll(planNodeId, scheduledSplit);
+                                splitsToAdd.putAll(planNodeId, scheduledSplit.stream().map(ScheduledSplit::getSplit).collect(toImmutableList()));
                                 //FIXME metric to get the retried split information, add time element to it (how long its taking for coordinator to detect the failure)
                                 RuntimeStats splitRetryStats = new RuntimeStats();
-                                splitRetryStats.addMetricValue(new StringBuilder(RUNTIME_STATS_RETRIED_SPLITS_PREFIX).append(failingNodeID).toString(), RuntimeUnit.NONE, 1);
+                                //node and task we are retrying from and destination node and task we are retrying to
+                                String retryMetricName = new StringBuilder(RUNTIME_STATS_RETRIED_SPLITS_PREFIX)
+                                        .append(failingNodeID).append("-task:" + getTaskIdentifier(failedTask))
+                                        .append("->")
+                                        .append(httpRemoteTask.getNodeId()).append("-task:" + getTaskIdentifier(httpRemoteTask.getTaskId()))
+                                        .toString();
+                                //track how many splits we are retrying from the source task
+                                splitRetryStats.addMetricValue(retryMetricName, RuntimeUnit.NONE, scheduledSplit.size());
                                 session.getRuntimeStats().update(splitRetryStats);
                                 httpRemoteTask.addSplits(splitsToAdd);
                             }
@@ -483,6 +491,18 @@ public class SectionExecutionFactory
                 return new FixedCountScheduler(stageExecution, partitionToNode);
             }
         }
+    }
+
+    private String getTaskIdentifier(com.facebook.presto.execution.TaskId failedTask)
+    {
+        return new StringBuilder(failedTask.getStageExecutionId().getStageId().getId())
+                .append(".")
+                .append(failedTask.getStageExecutionId().getId())
+                .append(".")
+                .append(failedTask.getId())
+                .append(".")
+                .append(failedTask.getAttemptNumber())
+                .toString();
     }
 
     private Optional<Predicate<Node>> getNodePoolSelectionPredicate(StreamingSubPlan plan)

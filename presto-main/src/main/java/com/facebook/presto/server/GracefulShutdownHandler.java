@@ -56,6 +56,7 @@ public class GracefulShutdownHandler
 {
     private static final Logger log = Logger.get(GracefulShutdownHandler.class);
     private static final Duration LIFECYCLE_STOP_TIMEOUT = new Duration(30, SECONDS);
+    public static final String OPEC_GRACEFUL_LOG_PREFIX = "OPEC::Graceful:";
 
     private final ScheduledExecutorService shutdownHandler = newSingleThreadScheduledExecutor(threadsNamed("shutdown-handler-%s"));
     private final ExecutorService lifeCycleStopper = newSingleThreadExecutor(threadsNamed("lifecycle-stopper-%s"));

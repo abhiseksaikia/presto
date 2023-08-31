@@ -112,6 +112,7 @@ public class LegacySqlQueryScheduler
         implements SqlQuerySchedulerInterface
 {
     private static final Logger log = Logger.get(LegacySqlQueryScheduler.class);
+    public static final String OPEC_GRACEFUL_LOG_PREFIX = "OPEC::Graceful:";
 
     private final LocationFactory locationFactory;
     private final ExecutionPolicy executionPolicy;
@@ -445,7 +446,9 @@ public class LegacySqlQueryScheduler
                         // modify parent and children based on the results of the scheduling
                         if (result.isFinished()) {
                             if (stageExecution.getFragment().isLeaf()) {
-                                if (stageExecution.noMoreRetry() || stageScheduler instanceof FixedSourcePartitionedScheduler) {
+                                boolean isNoMoreRetry = stageExecution.noMoreRetry();
+                                if (isNoMoreRetry || stageScheduler instanceof FixedSourcePartitionedScheduler) {
+                                    log.info(OPEC_GRACEFUL_LOG_PREFIX + " stage %s is scheduled to be completed, isNoMoreRetry=%s", stageExecution.getStageExecutionId(), isNoMoreRetry);
                                     stageExecution.schedulingComplete();
                                 }
                             }

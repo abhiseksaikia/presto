@@ -13,6 +13,7 @@
  */
 package com.facebook.presto.operator.index;
 
+import com.facebook.airlift.log.Logger;
 import com.facebook.presto.common.Page;
 import com.facebook.presto.operator.DriverContext;
 import com.facebook.presto.operator.Operator;
@@ -27,6 +28,8 @@ import static java.util.Objects.requireNonNull;
 public class PageBufferOperator
         implements Operator
 {
+    private static final Logger log = Logger.get(PageBufferOperator.class);
+
     public static class PageBufferOperatorFactory
             implements OperatorFactory
     {
@@ -96,6 +99,9 @@ public class PageBufferOperator
     public ListenableFuture<?> isBlocked()
     {
         updateBlockedIfNecessary();
+        if (!blocked.isDone()) {
+            log.info("PageBufferOperator is blocked for task %s", operatorContext.getDriverContext().getTaskId());
+        }
         return blocked;
     }
 

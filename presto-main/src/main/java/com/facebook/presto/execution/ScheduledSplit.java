@@ -19,6 +19,9 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.google.common.primitives.Longs;
 
+import java.util.HashSet;
+import java.util.Set;
+
 import static com.google.common.base.MoreObjects.toStringHelper;
 import static java.util.Objects.requireNonNull;
 
@@ -27,6 +30,7 @@ public class ScheduledSplit
     private final long sequenceId;
     private final PlanNodeId planNodeId;
     private final Split split;
+    private Set<String> taskIDs = new HashSet<>();
 
     @JsonCreator
     public ScheduledSplit(
@@ -61,6 +65,11 @@ public class ScheduledSplit
     public int hashCode()
     {
         return Longs.hashCode(sequenceId);
+    }
+
+    public void addTaskID(String taskID)
+    {
+        taskIDs.add(taskID);
     }
 
     @Override

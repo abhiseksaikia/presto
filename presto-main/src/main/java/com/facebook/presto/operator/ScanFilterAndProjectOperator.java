@@ -13,6 +13,7 @@
  */
 package com.facebook.presto.operator;
 
+import com.facebook.airlift.log.Logger;
 import com.facebook.presto.common.Page;
 import com.facebook.presto.common.PageBuilder;
 import com.facebook.presto.common.RuntimeStats;
@@ -67,6 +68,8 @@ import static java.util.Objects.requireNonNull;
 public class ScanFilterAndProjectOperator
         implements SourceOperator, Closeable
 {
+    private static final Logger log = Logger.get(ScanFilterAndProjectOperator.class);
+
     private final OperatorContext operatorContext;
     private final PlanNodeId planNodeId;
     private final PageSourceProvider pageSourceProvider;
@@ -218,11 +221,16 @@ public class ScanFilterAndProjectOperator
     public ListenableFuture<?> isBlocked()
     {
         if (!blocked.isDone()) {
+            log.info("ScanFilterProjectOperator is blocked for task %s", operatorContext.getDriverContext().getTaskId());
             return blocked;
         }
         if (pageSource != null) {
             CompletableFuture<?> pageSourceBlocked = pageSource.isBlocked();
-            return pageSourceBlocked.isDone() ? NOT_BLOCKED : toListenableFuture(pageSourceBlocked);
+            boolean isDone = pageSourceBlocked.isDone();
+            if (!isDone) {
+                log.info("pageSource is not null, ScanFilterProjectOperator is blocked for task %s", operatorContext.getDriverContext().getTaskId());
+            }
+            return isDone ? NOT_BLOCKED : toListenableFuture(pageSourceBlocked);
         }
         return NOT_BLOCKED;
     }

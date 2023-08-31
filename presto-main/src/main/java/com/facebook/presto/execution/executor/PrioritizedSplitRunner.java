@@ -18,6 +18,7 @@ import com.facebook.airlift.stats.CounterStat;
 import com.facebook.airlift.stats.TimeStat;
 import com.facebook.presto.execution.ScheduledSplit;
 import com.facebook.presto.execution.SplitRunner;
+import com.facebook.presto.server.GracefulShutdownHandler;
 import com.google.common.base.Ticker;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
@@ -174,6 +175,9 @@ public class PrioritizedSplitRunner
             waitNanos.getAndAdd(startNanos - lastReady.get());
 
             long cpuStart = THREAD_MX_BEAN.getCurrentThreadCpuTime();
+            if (taskHandle.isShutdownInProgress()) {
+                log.info(GracefulShutdownHandler.OPEC_GRACEFUL_LOG_PREFIX + "Running split %s", getInfo());
+            }
             ListenableFuture<?> blocked = split.processFor(SPLIT_RUN_QUANTA);
 
             long quantaCpuNanos = THREAD_MX_BEAN.getCurrentThreadCpuTime() - cpuStart;
@@ -187,9 +191,15 @@ public class PrioritizedSplitRunner
             Duration wallDuration = new Duration(quantaScheduledNanos, NANOSECONDS);
             if (blocked == NOT_BLOCKED) {
                 unblockedQuantaWallTime.add(wallDuration);
+                if (taskHandle.isShutdownInProgress()) {
+                    log.info(GracefulShutdownHandler.OPEC_GRACEFUL_LOG_PREFIX + "Running split NOT Blocked %s", getInfo());
+                }
             }
             else {
                 blockedQuantaWallTime.add(wallDuration);
+                if (taskHandle.isShutdownInProgress()) {
+                    log.info(GracefulShutdownHandler.OPEC_GRACEFUL_LOG_PREFIX + "Running split Blocked for %s ms,  %s", wallDuration.toMillis(), getInfo());
+                }
             }
 
             cpuTimeNanos.addAndGet(quantaCpuNanos);
@@ -248,6 +258,11 @@ public class PrioritizedSplitRunner
     public int getSplitId()
     {
         return splitId;
+    }
+
+    public boolean isSplitAlreadyStarted()
+    {
+        return getStartNanos() != 0;
     }
 
     public Priority getPriority()

@@ -26,6 +26,7 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 import com.google.common.io.Closer;
 import com.google.common.util.concurrent.ListenableFuture;
+import com.google.common.util.concurrent.SettableFuture;
 
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.ThreadSafe;
@@ -300,19 +301,41 @@ public class HashBuilderOperator
                 return NOT_BLOCKED;
 
             case SPILLING_INPUT:
+                log.info("SPILLING_INPUT,  is blocked for task %s", operatorContext.getDriverContext().getTaskId());
                 return spillInProgress;
 
             case LOOKUP_SOURCE_BUILT:
-                return lookupSourceNotNeeded.orElseThrow(() -> new IllegalStateException("Lookup source built, but disposal future not set"));
-
+                if (lookupSourceNotNeeded.isPresent()) {
+                    ListenableFuture<?> listenableFuture = lookupSourceNotNeeded.get();
+                    if (!listenableFuture.isDone()) {
+                        log.info("LOOKUP_SOURCE_BUILT,  is blocked for task %s", operatorContext.getDriverContext().getTaskId());
+                    }
+                    return listenableFuture;
+                }
+                throw new IllegalStateException("Lookup source built, but disposal future not set");
             case INPUT_SPILLED:
-                return spilledLookupSourceHandle.getUnspillingOrDisposeRequested();
+                ListenableFuture<?> listenableFuture = spilledLookupSourceHandle.getUnspillingOrDisposeRequested();
+                if (!listenableFuture.isDone()) {
+                    log.info("LOOKUP_SOURCE_BUILT,  is blocked for task %s", operatorContext.getDriverContext().getTaskId());
+                }
+                return listenableFuture;
 
             case INPUT_UNSPILLING:
-                return unspillInProgress.orElseThrow(() -> new IllegalStateException("Unspilling in progress, but unspilling future not set"));
+                if (unspillInProgress.isPresent()) {
+                    ListenableFuture<?> unspillListenableFuture = unspillInProgress.get();
+                    if (!unspillListenableFuture.isDone()) {
+                        log.info("INPUT_UNSPILLING,  is blocked for task %s", operatorContext.getDriverContext().getTaskId());
+                    }
+                    return unspillListenableFuture;
+                }
+                throw new IllegalStateException("Unspilling in progress, but unspilling future not set");
 
             case INPUT_UNSPILLED_AND_BUILT:
-                return spilledLookupSourceHandle.getDisposeRequested();
+                SettableFuture<?> disposeRequested = spilledLookupSourceHandle.getDisposeRequested();
+                if (!disposeRequested.isDone()) {
+                    log.info("INPUT_UNSPILLED_AND_BUILT,  is blocked for task %s", operatorContext.getDriverContext().getTaskId());
+                }
+                return disposeRequested;
 
             case CLOSED:
                 return NOT_BLOCKED;

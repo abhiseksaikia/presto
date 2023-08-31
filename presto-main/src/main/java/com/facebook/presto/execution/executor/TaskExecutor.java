@@ -76,6 +76,7 @@ import java.util.function.Predicate;
 import static com.facebook.airlift.concurrent.Threads.daemonThreadsNamed;
 import static com.facebook.airlift.concurrent.Threads.threadsNamed;
 import static com.facebook.presto.execution.executor.MultilevelSplitQueue.computeLevel;
+import static com.facebook.presto.server.GracefulShutdownHandler.OPEC_GRACEFUL_LOG_PREFIX;
 import static com.facebook.presto.util.MoreMath.min;
 import static com.google.common.base.MoreObjects.toStringHelper;
 import static com.google.common.base.Preconditions.checkArgument;
@@ -194,6 +195,7 @@ public class TaskExecutor
     private AtomicBoolean canStartDebug = new AtomicBoolean(false);
     private volatile boolean closed;
     private final ExecutorService taskShutdownExecutor = newCachedThreadPool(daemonThreadsNamed("task-shutdown-%s"));
+    private final AtomicBoolean isShuttingDown = new AtomicBoolean(false);
 
     @Inject
     public TaskExecutor(TaskManagerConfig config, EmbedVersion embedVersion, MultilevelSplitQueue splitQueue)
@@ -213,20 +215,29 @@ public class TaskExecutor
 
     public void gracefulShutdown()
     {
+        isShuttingDown.set(true);
         long shutdownStartTime = System.nanoTime();
-        waitingSplits.shutDown();
         tasks.stream().forEach(taskHandle -> taskHandle.gracefulShutdown());
+        logRunningAndWaitingBlockedSplits("BeforePreemption");
         //wait for running splits to be over
         long waitTimeMillis = 5; // Wait for 10 milliseconds between checks to avoid cpu spike
+        long logFrequencyMillis = 30_000;
+        long lastLogTime = System.currentTimeMillis();  // to track when we last logged
         while (runningSplits.size() > 0 || blockedSplits.size() > 0 || waitingSplits.isAlreadyRunSplitInQueue()) {
             try {
-                log.info("running splits = %s, blocked splits = %s", runningSplits.size(), blockedSplits.size());
+                long currentTime = System.currentTimeMillis();
+                if (currentTime - lastLogTime >= logFrequencyMillis) {
+                    log.info("Num running splits = %s, Num blocked splits = %s", runningSplits.size(), blockedSplits.size());
+                    logRunningAndWaitingBlockedSplits("waiting for prerequisite");
+                    lastLogTime = currentTime;  // update the last log time
+                }
                 Thread.sleep(waitTimeMillis);
             }
             catch (InterruptedException e) {
                 log.error("GracefulShutdown got interrupted while waiting for running splits", e);
             }
         }
+        logRunningAndWaitingBlockedSplits("Going to initiate task handler shutdown");
         canStartDebug.set(true);
         //before killing the tasks,  make sure output buffer data is consumed.
         CountDownLatch latch = new CountDownLatch(tasks.size());
@@ -249,12 +260,7 @@ public class TaskExecutor
                         }
                         outputBufferEmptyWaitTime.add(Duration.nanosSince(startTime));
                         log.warn("GracefulShutdown:: calling handleShutDown for task- %s", taskHandle.getTaskId());
-                        try {
-                            Thread.sleep(TimeUnit.MINUTES.toSeconds(2));
-                        }
-                        catch (InterruptedException e) {
-                            e.printStackTrace();
-                        }
+                        logRunningAndWaitingBlockedSplits("Shutdown task -" + taskHandle.getTaskId());
                         taskHandle.handleShutDown();
 
                         latch.countDown();
@@ -272,6 +278,36 @@ public class TaskExecutor
         Duration shutdownTime = Duration.nanosSince(shutdownStartTime);
         log.info("Waiting for shutdown of all tasks over in %s milli sec", shutdownTime.toMillis());
         taskExecutorShutdownTime.add(shutdownTime);
+    }
+
+    private void logRunningAndWaitingBlockedSplits(String state)
+    {
+        StringBuilder sb = new StringBuilder();
+        sb.append(OPEC_GRACEFUL_LOG_PREFIX + state);
+        sb.append("\nwaiting splits ======> \n" + waitingSplits.getSplitViewSnapshot());
+        sb.append("\nrunning splits ======> \n" + getRunningSplitsView());
+        sb.append("\nblocked splits ======> \n" + getBlockedSplitsView());
+        log.info(sb.toString());
+    }
+
+    private String getBlockedSplitsView()
+    {
+        StringBuilder builder = new StringBuilder();
+        for (PrioritizedSplitRunner splitRunner : blockedSplits.keySet()) {
+            builder.append(splitRunner.getInfo());
+            builder.append("\n");
+        }
+        return builder.toString();
+    }
+
+    private String getRunningSplitsView()
+    {
+        StringBuilder builder = new StringBuilder();
+        for (PrioritizedSplitRunner splitRunner : runningSplits) {
+            builder.append(splitRunner.getInfo());
+            builder.append("\n");
+        }
+        return builder.toString();
     }
 
     @VisibleForTesting
@@ -716,6 +752,10 @@ public class TaskExecutor
                     catch (InterruptedException e) {
                         Thread.currentThread().interrupt();
                         return;
+                    }
+                    if (isShuttingDown.get() && !split.isSplitAlreadyStarted()) {
+                        log.info(OPEC_GRACEFUL_LOG_PREFIX + " discarding split to run-> " + split.getInfo());
+                        continue;
                     }
 
                     String threadId = split.getTaskHandle().getTaskId() + "-" + split.getSplitId();

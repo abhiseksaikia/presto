@@ -13,6 +13,7 @@
  */
 package com.facebook.presto.operator.repartition;
 
+import com.facebook.airlift.log.Logger;
 import com.facebook.presto.common.Page;
 import com.facebook.presto.common.PageBuilder;
 import com.facebook.presto.common.block.Block;
@@ -58,6 +59,8 @@ import static java.util.Objects.requireNonNull;
 public class PartitionedOutputOperator
         implements Operator
 {
+    private static final Logger log = Logger.get(PartitionedOutputOperator.class);
+
     public static class PartitionedOutputFactory
             implements OutputFactory
     {
@@ -245,6 +248,9 @@ public class PartitionedOutputOperator
             isBlocked = partitionFunction.isFull();
             if (isBlocked.isDone()) {
                 isBlocked = NOT_BLOCKED;
+            }
+            else {
+                log.info("PartitionedOutputOperator is blocked for task %s", operatorContext.getDriverContext().getTaskId());
             }
         }
         return isBlocked;
