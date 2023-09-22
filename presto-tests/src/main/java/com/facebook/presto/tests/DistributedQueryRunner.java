@@ -485,7 +485,7 @@ public class DistributedQueryRunner
         else if (catalogServer) {
             nodeRole = "catalogServer";
         }
-        log.info("Created %s TestingPrestoServer in %s: %s", nodeRole, nanosSince(start).convertToMostSuccinctTimeUnit(), server.getBaseUrl());
+        log.info("Created %s TestingPrestoServer with pool type %s in %s: %s", nodeRole, properties.getOrDefault("pool-type", "DEFAULT"), nanosSince(start).convertToMostSuccinctTimeUnit(), server.getBaseUrl());
 
         return server;
     }

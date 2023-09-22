@@ -18,6 +18,7 @@ import com.facebook.presto.spi.ConnectorSplit;
 import com.facebook.presto.spi.ConnectorSplitSource;
 import com.facebook.presto.spi.ConnectorTableLayoutHandle;
 import com.facebook.presto.spi.FixedSplitSource;
+import com.facebook.presto.spi.HostAddress;
 import com.facebook.presto.spi.Node;
 import com.facebook.presto.spi.NodeManager;
 import com.facebook.presto.spi.NodePoolType;
@@ -25,9 +26,12 @@ import com.facebook.presto.spi.connector.ConnectorSplitManager;
 import com.facebook.presto.spi.connector.ConnectorTransactionHandle;
 import com.google.common.collect.ImmutableList;
 
+import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 
 import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.collect.ImmutableList.toImmutableList;
 
 public class TpchSplitManager
         implements ConnectorSplitManager
@@ -59,14 +63,24 @@ public class TpchSplitManager
 
         // Split the data using split and skew by the number of nodes available.
         ImmutableList.Builder<ConnectorSplit> splits = ImmutableList.builder();
+        Optional<List<HostAddress>> preferredAddresses = getLeafAddresses(nodes);
         for (Node node : nodes) {
             if (node.getPoolType() == NodePoolType.LEAF || node.getPoolType() == NodePoolType.DEFAULT) {
                 for (int i = 0; i < splitsPerNode; i++) {
-                    splits.add(new TpchSplit(tableHandle, partNumber, totalParts, ImmutableList.of(node.getHostAndPort()), tableLayoutHandle.getPredicate()));
+                    splits.add(new TpchSplit(tableHandle, partNumber, totalParts, preferredAddresses.orElse(ImmutableList.of(node.getHostAndPort())), tableLayoutHandle.getPredicate()));
                     partNumber++;
                 }
             }
         }
         return new FixedSplitSource(splits.build());
+    }
+
+    private Optional<List<HostAddress>> getLeafAddresses(Set<Node> nodes)
+    {
+        List<HostAddress> addresses = nodes.stream().filter(node -> node.getPoolType() == NodePoolType.LEAF).map(node -> node.getHostAndPort()).collect(toImmutableList());
+        if (addresses.isEmpty()) {
+            return Optional.empty();
+        }
+        return Optional.of(addresses);
     }
 }

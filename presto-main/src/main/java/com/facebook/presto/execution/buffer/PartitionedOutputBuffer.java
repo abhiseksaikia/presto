@@ -157,6 +157,7 @@ public class PartitionedOutputBuffer
         // ignore buffers added after query finishes, which can happen when a query is canceled
         // also ignore old versions, which is normal
         if (state.get().isTerminal() || outputBuffers.getVersion() >= newOutputBuffers.getVersion()) {
+            log.debug("ignore adding buffer, state = %s", state.get());
             return;
         }
 
@@ -194,7 +195,7 @@ public class PartitionedOutputBuffer
         // this can happen with a limit query
         if (!state.get().canAddPages() || pageTracker.isNoMorePagesForLifespan(lifespan)) {
             //FIXME put some debuggability
-            log.error("discarding page for task %s , state =%s, buffer state =%s", taskId, state.get(), getInfo());
+            log.error("Page Leak: discarding page for task %s , state =%s, buffer state =%s", taskId, state.get(), getInfo());
             return;
         }
 

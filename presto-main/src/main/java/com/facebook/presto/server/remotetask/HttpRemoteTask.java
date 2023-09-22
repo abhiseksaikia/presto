@@ -461,13 +461,15 @@ public final class HttpRemoteTask
     }
 
     @Override
-    public synchronized void addSplits(Multimap<PlanNodeId, Split> splitsBySource)
+    public synchronized boolean addSplits(Multimap<PlanNodeId, Split> splitsBySource)
     {
         requireNonNull(splitsBySource, "splitsBySource is null");
 
         // only add pending split if not done
-        if (getTaskStatus().getState().isDone()) {
-            return;
+        TaskState state = getTaskStatus().getState();
+        if (state.isDone()) {
+            return false;
+            //throw new RuntimeException(String.format("Adding split to a task in terminal state, state= %s", state));
         }
 
         boolean needsUpdate = false;
@@ -483,6 +485,7 @@ public final class HttpRemoteTask
                 ScheduledSplit scheduledSplit = new ScheduledSplit(nextSplitId.getAndIncrement(), sourceId, split);
                 if (pendingSplits.put(sourceId, scheduledSplit)) {
                     if (isTableScanSource) {
+                        log.debug("Putting split %s into unprocessed split", scheduledSplit.getSequenceId());
                         unprocessedSplits
                                 .computeIfAbsent(entry.getKey(), (k) -> new Long2ObjectOpenHashMap<>())
                                 .put(scheduledSplit.getSequenceId(), scheduledSplit);
@@ -504,6 +507,7 @@ public final class HttpRemoteTask
             this.needsUpdate.set(true);
             scheduleUpdate();
         }
+        return true;
     }
 
     @Override
@@ -763,6 +767,7 @@ public final class HttpRemoteTask
             long removedWeight = 0;
             for (ScheduledSplit split : source.getSplits()) {
                 if (pendingSplits.remove(planNodeId, split)) {
+                    log.debug("Removing split %s from planNodeId %s", split != null ? split.getSequenceId() : null, planNodeId);
                     if (isTableScanSource) {
                         removed++;
                         removedWeight = addExact(removedWeight, split.getSplit().getSplitWeight().getRawValue());
@@ -866,17 +871,20 @@ public final class HttpRemoteTask
         TaskStatus taskStatus = getTaskStatus();
         // don't update if the task hasn't been started yet or if it is already finished
         if (!started.get() || !needsUpdate.get() || taskStatus.getState().isDone()) {
+            log.info("Ignore sending splits for task %s, started =%s, needsUpdate=%s,taskStatus=%s ", taskId, started.get(), needsUpdate.get(), taskStatus.getState());
             return;
         }
 
         // if there is a request already running, wait for it to complete
         if (this.currentRequest != null && !this.currentRequest.isDone()) {
+            log.info("There is a current request running, ignoring update for task %s", taskId);
             return;
         }
 
         // if throttled due to error, asynchronously wait for timeout and try again
         ListenableFuture<?> errorRateLimit = updateErrorTracker.acquireRequestPermit();
         if (!errorRateLimit.isDone()) {
+            log.info("errorRateLimit is kicking in for task %s will wait for send update call", taskId);
             errorRateLimit.addListener(this::sendUpdate, executor);
             return;
         }
@@ -908,7 +916,13 @@ public final class HttpRemoteTask
                 stats.updateWithoutPlanSize(taskUpdateRequestJson.length);
             }
         }
+        List<Long> splitSequenceIds = sources.stream()
+                .filter(taskSource -> taskSource.getSplits() != null)
+                .flatMap(taskSource -> taskSource.getSplits().stream())
+                .map(ScheduledSplit::getSequenceId)
+                .collect(toImmutableList());
 
+        log.info("Going to schedule splits %s on task %s", splitSequenceIds, taskId);
         HttpUriBuilder uriBuilder = getHttpUriBuilder(taskStatus);
         Request request = setContentTypeHeaders(binaryTransportEnabled, preparePost())
                 .setUri(uriBuilder.build())
@@ -950,6 +964,8 @@ public final class HttpRemoteTask
     private synchronized TaskSource getSource(PlanNodeId planNodeId)
     {
         Set<ScheduledSplit> splits = pendingSplits.get(planNodeId);
+        List<Long> splitIds = splits.stream().map(ScheduledSplit::getSequenceId).collect(toImmutableList());
+        log.debug("Pending splits for %s plan node are %s", planNodeId, splitIds);
         boolean pendingNoMoreSplits = Boolean.TRUE.equals(this.noMoreSplits.get(planNodeId));
         boolean noMoreSplits = this.noMoreSplits.containsKey(planNodeId);
         Set<Lifespan> noMoreSplitsForLifespan = pendingNoMoreSplitsForLifespan.get(planNodeId);
@@ -957,6 +973,9 @@ public final class HttpRemoteTask
         TaskSource element = null;
         if (!splits.isEmpty() || !noMoreSplitsForLifespan.isEmpty() || pendingNoMoreSplits) {
             element = new TaskSource(planNodeId, splits, noMoreSplitsForLifespan, noMoreSplits);
+        }
+        else {
+            log.debug("Task source is not created for splits %s, splits.empty = %s, noMoreSplitsForLifespan.isEmpty()=%s, pendingNoMoreSplits=%s", splitIds, splits.isEmpty(), noMoreSplitsForLifespan.isEmpty(), pendingNoMoreSplits);
         }
         return element;
     }

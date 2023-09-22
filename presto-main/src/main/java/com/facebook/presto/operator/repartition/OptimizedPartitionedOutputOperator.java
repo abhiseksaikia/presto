@@ -13,6 +13,7 @@
  */
 package com.facebook.presto.operator.repartition;
 
+import com.facebook.airlift.log.Logger;
 import com.facebook.presto.common.Page;
 import com.facebook.presto.common.block.ArrayAllocator;
 import com.facebook.presto.common.block.ArrayBlock;
@@ -87,6 +88,7 @@ import static java.util.Objects.requireNonNull;
 public class OptimizedPartitionedOutputOperator
         implements Operator
 {
+    private static final Logger log = Logger.get(OptimizedPartitionedOutputOperator.class);
     private final OperatorContext operatorContext;
     private final Function<Page, Page> pagePreprocessor;
     private final PagePartitioner pagePartitioner;
@@ -137,6 +139,7 @@ public class OptimizedPartitionedOutputOperator
     {
         finished = true;
         pagePartitioner.flush();
+        log.debug("OptimizedPartitionedOutputOperator operator is finished");
     }
 
     @Override
@@ -153,6 +156,9 @@ public class OptimizedPartitionedOutputOperator
             isBlocked = pagePartitioner.isFull();
             if (isBlocked.isDone()) {
                 isBlocked = NOT_BLOCKED;
+            }
+            else {
+                log.debug("OptimizedPartitionedOutputOperator operator is blocked");
             }
         }
         return isBlocked;

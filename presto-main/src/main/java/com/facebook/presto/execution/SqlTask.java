@@ -28,6 +28,7 @@ import com.facebook.presto.execution.scheduler.TableWriteInfo;
 import com.facebook.presto.memory.QueryContext;
 import com.facebook.presto.metadata.MetadataUpdates;
 import com.facebook.presto.operator.ExchangeClientSupplier;
+import com.facebook.presto.operator.HostShuttingDownException;
 import com.facebook.presto.operator.PipelineContext;
 import com.facebook.presto.operator.PipelineStatus;
 import com.facebook.presto.operator.TaskContext;
@@ -92,6 +93,7 @@ public class SqlTask
     private final AtomicReference<TaskHolder> taskHolderReference = new AtomicReference<>(new TaskHolder());
     private final AtomicBoolean needsPlan = new AtomicBoolean(true);
     private final long creationTimeInMillis = System.currentTimeMillis();
+    private final AtomicBoolean isGracefulShutdownStarted = new AtomicBoolean(false);
 
     public static SqlTask createSqlTask(
             TaskId taskId,
@@ -135,7 +137,7 @@ public class SqlTask
             NodePoolType poolType)
     {
         this.taskId = requireNonNull(taskId, "taskId is null");
-        this.taskInstanceId = new TaskInstanceId(UUID.randomUUID());
+        this.taskInstanceId = new TaskInstanceId(taskId, UUID.randomUUID());
         this.location = requireNonNull(location, "location is null");
         this.nodeId = requireNonNull(nodeId, "nodeId is null");
         this.queryContext = requireNonNull(queryContext, "queryContext is null");
@@ -454,7 +456,10 @@ public class SqlTask
             // output buffer must be established before drivers are created (e.g.
             // a VALUES query).
             outputBuffer.setOutputBuffers(outputBuffers);
-
+            if (isGracefulShutdownStarted.get()) {
+                taskStateMachine.failed(new HostShuttingDownException("Shutting down host", System.nanoTime()));
+                return getTaskInfo();
+            }
             // assure the task execution is only created once
             SqlTaskExecution taskExecution;
             synchronized (this) {
@@ -476,6 +481,7 @@ public class SqlTask
                             fragment.get(),
                             sources,
                             tableWriteInfo.get());
+                    log.debug("Creating new task execution with task id = %s", taskExecution.getTaskId());
                     taskHolderReference.compareAndSet(taskHolder, new TaskHolder(taskExecution));
                     needsPlan.set(false);
                 }
@@ -651,12 +657,13 @@ public class SqlTask
         private final long uuidMostSignificantBits;
         private final String uuidString;
 
-        public TaskInstanceId(UUID uuid)
+        public TaskInstanceId(TaskId taskId, UUID uuid)
         {
             requireNonNull(uuid, "uuid is null");
             this.uuidLeastSignificantBits = uuid.getLeastSignificantBits();
             this.uuidMostSignificantBits = uuid.getMostSignificantBits();
-            this.uuidString = uuid.toString();
+            //FIXME added task id just for debugging
+            this.uuidString = new StringBuilder().append(taskId.toString()).append("-").append(uuid).toString();
         }
 
         public long getUuidLeastSignificantBits()
@@ -673,5 +680,10 @@ public class SqlTask
         {
             return uuidString;
         }
+    }
+
+    public void gracefulShutdown()
+    {
+        isGracefulShutdownStarted.set(true);
     }
 }

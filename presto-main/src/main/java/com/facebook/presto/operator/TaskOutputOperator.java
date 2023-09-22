@@ -13,6 +13,7 @@
  */
 package com.facebook.presto.operator;
 
+import com.facebook.airlift.log.Logger;
 import com.facebook.presto.common.Page;
 import com.facebook.presto.common.type.Type;
 import com.facebook.presto.execution.buffer.OutputBuffer;
@@ -36,6 +37,8 @@ import static java.util.Objects.requireNonNull;
 public class TaskOutputOperator
         implements Operator
 {
+    private static final Logger log = Logger.get(TaskOutputOperator.class);
+
     public static class TaskOutputFactory
             implements OutputFactory
     {
@@ -122,6 +125,7 @@ public class TaskOutputOperator
     public void finish()
     {
         finished = true;
+        log.debug("Taskoutput operator is finished");
     }
 
     @Override
@@ -138,6 +142,9 @@ public class TaskOutputOperator
             isBlocked = outputBuffer.isFull();
             if (isBlocked.isDone()) {
                 isBlocked = NOT_BLOCKED;
+            }
+            else {
+                log.debug("Taskoutput operator is blocked");
             }
         }
         return isBlocked;

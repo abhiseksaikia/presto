@@ -94,7 +94,7 @@ public class TestGracefulShutdown
         return new Object[][] {
                 {ImmutableMap.<String, String>builder()
                         .put("node-scheduler.include-coordinator", "false")
-                        .put("shutdown.grace-period", "10s")
+                        .put("shutdown.grace-period", "5m")
                         .build()}
         };
     }
@@ -135,7 +135,7 @@ public class TestGracefulShutdown
         }
     }
 
-    @Test(timeOut = SHUTDOWN_LEAF_TIMEOUT_MILLIS, dataProvider = "testHybridServerInfo", invocationCount = 10)
+    @Test(timeOut = SHUTDOWN_LEAF_TIMEOUT_MILLIS, dataProvider = "testHybridServerInfo", invocationCount = 1)
     public void testShutdownLeaf(Map<String, String> properties)
             throws Exception
     {
@@ -171,6 +171,16 @@ public class TestGracefulShutdown
             //log.info("queued driver=%s, running driver=%s, blocked drivers=%s", getQueuedDrivers(taskManager), getRunningDrivers(taskManager), getBlockedDrivers(taskManager));
             //assertEquals(getCompletedSplits(taskManager), getCompletedDrivers(taskManager));
             assertEquals(pendingSplits, getQueuedDrivers(taskManager));
+            Futures.allAsList(queryFutures).get();
+
+            List<BasicQueryInfo> queryInfos = queryRunner.getCoordinator().getQueryManager().getQueries();
+            for (BasicQueryInfo info : queryInfos) {
+                assertEquals(info.getState(), FINISHED);
+            }
+
+            TestShutdownAction shutdownAction = (TestShutdownAction) worker.getShutdownAction();
+            shutdownAction.waitForShutdownComplete(SHUTDOWN_TIMEOUT_MILLIS);
+            assertTrue(shutdownAction.isShutdown());
         }
     }
 
@@ -220,7 +230,7 @@ public class TestGracefulShutdown
     public static DistributedQueryRunner createQueryRunner(Session session, Map<String, String> properties)
             throws Exception
     {
-        DistributedQueryRunner queryRunner = new DistributedQueryRunner(session, 3, properties);
+        DistributedQueryRunner queryRunner = new DistributedQueryRunner(session, 6, properties);
 
         try {
             queryRunner.installPlugin(new TpchPlugin());

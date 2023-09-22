@@ -367,7 +367,7 @@ public class TestTaskExecutor
                 taskExecutor.enqueueSplits(taskHandle, false, ImmutableList.of(driver));
             }
             new Thread(() -> taskExecutor.gracefulShutdown()).start();
-            while (!taskExecutor.isShuttingDown()) {
+            while (!taskExecutor.isShuttingDownStarted()) {
                 MILLISECONDS.sleep(500);
             }
             assertEquals(taskHandle.getRunningLeafSplits(), 4);

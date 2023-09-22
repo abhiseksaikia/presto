@@ -13,6 +13,7 @@
  */
 package com.facebook.presto.operator;
 
+import com.facebook.airlift.log.Logger;
 import com.facebook.presto.common.Page;
 import com.facebook.presto.common.PageBuilder;
 import com.facebook.presto.common.RuntimeStats;
@@ -67,6 +68,7 @@ import static java.util.Objects.requireNonNull;
 public class ScanFilterAndProjectOperator
         implements SourceOperator, Closeable
 {
+    private static final Logger log = Logger.get(ScanFilterAndProjectOperator.class);
     private final OperatorContext operatorContext;
     private final PlanNodeId planNodeId;
     private final PageSourceProvider pageSourceProvider;
@@ -206,6 +208,7 @@ public class ScanFilterAndProjectOperator
         }
         finishing = true;
         mergingOutput.finish();
+        log.debug("ScanFilterAndProject operator is finished");
     }
 
     @Override
@@ -222,7 +225,13 @@ public class ScanFilterAndProjectOperator
         }
         if (pageSource != null) {
             CompletableFuture<?> pageSourceBlocked = pageSource.isBlocked();
-            return pageSourceBlocked.isDone() ? NOT_BLOCKED : toListenableFuture(pageSourceBlocked);
+            if (pageSourceBlocked.isDone()) {
+                return NOT_BLOCKED;
+            }
+            else {
+                log.debug("ScanFilterAndProject operator is blocked");
+                return toListenableFuture(pageSourceBlocked);
+            }
         }
         return NOT_BLOCKED;
     }
