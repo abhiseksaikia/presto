@@ -25,6 +25,7 @@ import com.facebook.presto.execution.buffer.TestingPagesSerdeFactory;
 import com.facebook.presto.metadata.RemoteTransactionHandle;
 import com.facebook.presto.metadata.Split;
 import com.facebook.presto.operator.ExchangeOperator.ExchangeOperatorFactory;
+import com.facebook.presto.server.NodeStatusNotificationManager;
 import com.facebook.presto.spi.plan.PlanNodeId;
 import com.facebook.presto.split.RemoteSplit;
 import com.google.common.cache.CacheBuilder;
@@ -99,7 +100,9 @@ public class TestExchangeOperator
                 systemMemoryUsageListener,
                 pageBufferClientCallbackExecutor,
                 false,
-                false);
+                false,
+                new NodeStatusNotificationManager(),
+                null);
     }
 
     @AfterClass(alwaysRun = true)

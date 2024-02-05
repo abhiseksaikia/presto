@@ -234,8 +234,9 @@ public class MockRemoteTaskFactory
                     false);
 
             this.location = URI.create("fake://task/" + taskId);
-
+            //FIXME
             this.outputBuffer = new LazyOutputBuffer(
+                    null,
                     taskId,
                     TASK_INSTANCE_ID.toString(),
                     executor,

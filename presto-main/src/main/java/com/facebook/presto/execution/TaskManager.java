@@ -25,6 +25,7 @@ import com.facebook.presto.sql.planner.PlanFragment;
 import com.google.common.util.concurrent.ListenableFuture;
 import io.airlift.units.DataSize;
 
+import java.net.URI;
 import java.util.List;
 import java.util.Optional;
 
@@ -112,7 +113,7 @@ public interface TaskManager
      * NOTE: this design assumes that only tasks and buffers that will
      * eventually exist are queried.
      */
-    ListenableFuture<BufferResult> getTaskResults(TaskId taskId, OutputBufferId bufferId, long startingSequenceId, DataSize maxSize);
+    ListenableFuture<BufferResult> getTaskResults(TaskId taskId, OutputBufferId bufferId, long startingSequenceId, DataSize maxSize, boolean isRequestForPageBackup);
 
     /**
      * Acknowledges previously received results.
@@ -148,4 +149,10 @@ public interface TaskManager
      * Update the results of metadata requests sent
      */
     void updateMetadataResults(TaskId taskId, MetadataUpdates metadataUpdates);
+
+    //void uploadPages(String taskId, String taskInstanceID, String bufferId, LinkedList<SerializedPageReferenceInfo> pagesData, long token);
+
+    void initializeUploadPages(URI bufferLocation, TaskId taskId, String taskInstanceID, String bufferId, long token, int numberOfPages);
+
+    void ackUploadPages(String taskId, String bufferId, String token);
 }

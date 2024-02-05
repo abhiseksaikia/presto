@@ -21,6 +21,8 @@ import com.facebook.presto.execution.TaskId;
 import com.facebook.presto.memory.context.LocalMemoryContext;
 import com.facebook.presto.operator.PageBufferClient.ClientCallback;
 import com.facebook.presto.operator.WorkProcessor.ProcessState;
+import com.facebook.presto.server.NodeStatusNotificationManager;
+import com.facebook.presto.server.remotetask.BackupPageManager;
 import com.facebook.presto.server.thrift.ThriftTaskClient;
 import com.facebook.presto.spi.PrestoException;
 import com.facebook.presto.spi.page.PageCodecMarker;
@@ -41,7 +43,6 @@ import java.util.ArrayList;
 import java.util.Deque;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -49,11 +50,11 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.Executor;
 import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static com.facebook.presto.common.block.PageBuilderStatus.DEFAULT_MAX_PAGE_SIZE_IN_BYTES;
-import static com.facebook.presto.spi.StandardErrorCode.GENERIC_INTERNAL_ERROR;
 import static com.facebook.presto.spi.StandardErrorCode.UNRECOVERABLE_HOST_SHUTTING_DOWN;
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkState;
@@ -129,6 +130,11 @@ public class ExchangeClient
     private final Executor pageBufferClientCallbackExecutor;
     private final boolean isEnableGracefulShutdown;
     private final boolean isEnableRetryForFailedSplits;
+    private final NodeStatusNotificationManager nodeStatusNotificationManager;
+    private final BackupPageManager pageManager;
+    //FIXME remove this, added to introduce slowness to reproduce waiting for outoutbuffer in local
+    private static long currentSleepTime = 5000; // Start with 2 sec
+    private static final double decayFactor = 0.9;
 
     // ExchangeClientStatus.mergeWith assumes all clients have the same bufferCapacity.
     // Please change that method accordingly when this assumption becomes not true.
@@ -146,8 +152,12 @@ public class ExchangeClient
             LocalMemoryContext systemMemoryContext,
             Executor pageBufferClientCallbackExecutor,
             boolean isEnableGracefulShutdown,
-            boolean isEnableRetryForFailedSplits)
+            boolean isEnableRetryForFailedSplits,
+            NodeStatusNotificationManager nodeStatusNotificationManager,
+            BackupPageManager pageManager)
     {
+        this.nodeStatusNotificationManager = nodeStatusNotificationManager;
+        this.pageManager = pageManager;
         checkArgument(responseSizeExponentialMovingAverageDecayingAlpha >= 0.0 && responseSizeExponentialMovingAverageDecayingAlpha <= 1.0, "responseSizeExponentialMovingAverageDecayingAlpha must be between 0 and 1: %s", responseSizeExponentialMovingAverageDecayingAlpha);
         this.bufferCapacity = bufferCapacity.toBytes();
         this.maxResponseSize = maxResponseSize;
@@ -207,33 +217,23 @@ public class ExchangeClient
 
         checkState(!noMoreLocations, "No more locations already set");
 
-        RpcShuffleClient resultClient;
         Optional<URI> asyncPageTransportLocation = getAsyncPageTransportLocation(location, asyncPageTransportEnabled);
-        switch (location.getScheme().toLowerCase(Locale.ENGLISH)) {
-            case "http":
-            case "https":
-                resultClient = new HttpRpcShuffleClient(httpClient, location, asyncPageTransportLocation, isEnableGracefulShutdown, isEnableRetryForFailedSplits);
-                break;
-            case "thrift":
-                resultClient = new ThriftRpcShuffleClient(driftClient, location);
-                break;
-            default:
-                throw new PrestoException(GENERIC_INTERNAL_ERROR, "unsupported task result client scheme " + location.getScheme());
-        }
-
         PageBufferClient client = new PageBufferClient(
-                resultClient,
+                httpClient,
                 maxErrorDuration,
                 acknowledgePages,
                 location,
                 asyncPageTransportLocation,
                 new ExchangeClientCallback(),
                 scheduler,
-                pageBufferClientCallbackExecutor);
+                pageBufferClientCallbackExecutor,
+                nodeStatusNotificationManager,
+                pageManager,
+                remoteSourceTaskId);
         allClients.put(location, client);
         checkState(taskIdToLocationMap.put(remoteSourceTaskId, location) == null, "Duplicate remoteSourceTaskId: " + remoteSourceTaskId);
         queuedClients.add(client);
-
+        client.registerRemoteHostShutdownListener(location);
         scheduleRequestIfNecessary();
     }
 
@@ -386,7 +386,12 @@ public class ExchangeClient
 
         int pendingClients = allClients.size() - queuedClients.size() - completedClients.size();
         clientCount -= pendingClients;
-
+        //FIXME remove it
+        //Added sleep for local debugging to slow down intermediate pollling to reproduce waiting for output buffer state
+        Optional<String> nodeType = Optional.ofNullable(System.getProperty("node_type"));
+        if (nodeType.isPresent() && nodeType.get().equals("worker_intermediate")) {
+            slowdownInitialExchange();
+        }
         for (int i = 0; i < clientCount; ) {
             PageBufferClient client = queuedClients.poll();
             if (client == null) {
@@ -401,6 +406,21 @@ public class ExchangeClient
             DataSize max = new DataSize(min(averageResponseSize * 2, maxResponseSize.toBytes()), BYTE);
             client.scheduleRequest(max);
             i++;
+        }
+    }
+
+    public static void slowdownInitialExchange()
+    {
+        if (currentSleepTime > 100) { // Use a minimal threshold to avoid sleeping for very tiny durations
+            try {
+                log.info("Sleeping for " + currentSleepTime + " ms");
+                TimeUnit.MILLISECONDS.sleep(currentSleepTime);
+                // Apply decay factor for next call
+                currentSleepTime *= decayFactor;
+            }
+            catch (InterruptedException e) {
+                log.error("sleep interrupted");
+            }
         }
     }
 

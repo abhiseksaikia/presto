@@ -55,7 +55,7 @@ public final class ThriftRpcShuffleClient
     }
 
     @Override
-    public ListenableFuture<PagesResponse> getResults(long token, DataSize maxResponseSize)
+    public ListenableFuture<PagesResponse> getResults(long token, DataSize maxResponseSize, boolean isRequestForPageBackup)
     {
         ListenableFuture<ThriftBufferResult> future = thriftClient.getResults(taskId, outputBufferId, token, maxResponseSize.toBytes());
         return Futures.transform(

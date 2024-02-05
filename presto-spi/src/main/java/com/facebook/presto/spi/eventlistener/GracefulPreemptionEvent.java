@@ -15,6 +15,7 @@ package com.facebook.presto.spi.eventlistener;
 
 import javax.annotation.concurrent.Immutable;
 
+import java.util.Map;
 import java.util.Optional;
 
 @Immutable
@@ -26,8 +27,9 @@ public class GracefulPreemptionEvent
     private final String state;
     private final Optional<Long> outputBufferSize;
     private final Optional<String> outputBufferID;
+    private final Optional<Map<String, String>> extraInfo;
 
-    public GracefulPreemptionEvent(String queryId, String taskId, long eventTime, String state, Optional<Long> outputBufferSize, Optional<String> outputBufferID)
+    public GracefulPreemptionEvent(String queryId, String taskId, long eventTime, String state, Optional<Long> outputBufferSize, Optional<String> outputBufferID, Optional<Map<String, String>> extraInfo)
     {
         this.queryId = queryId;
         this.taskId = taskId;
@@ -35,6 +37,7 @@ public class GracefulPreemptionEvent
         this.state = state;
         this.outputBufferID = outputBufferID;
         this.outputBufferSize = outputBufferSize;
+        this.extraInfo = extraInfo;
     }
 
     public String getQueryId()
@@ -65,5 +68,10 @@ public class GracefulPreemptionEvent
     public Optional<String> getOutputBufferID()
     {
         return outputBufferID;
+    }
+
+    public Optional<Map<String, String>> getExtraInfo()
+    {
+        return extraInfo;
     }
 }

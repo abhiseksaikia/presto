@@ -18,6 +18,8 @@ import com.facebook.airlift.http.client.HttpClient;
 import com.facebook.drift.client.DriftClient;
 import com.facebook.presto.execution.QueryManagerConfig;
 import com.facebook.presto.memory.context.LocalMemoryContext;
+import com.facebook.presto.server.NodeStatusNotificationManager;
+import com.facebook.presto.server.remotetask.BackupPageManager;
 import com.facebook.presto.server.thrift.ThriftTaskClient;
 import io.airlift.units.DataSize;
 import io.airlift.units.Duration;
@@ -53,13 +55,18 @@ public class ExchangeClientFactory
     private final ThreadPoolExecutorMBean executorMBean;
     private final ExecutorService pageBufferClientCallbackExecutor;
     private final QueryManagerConfig queryManagerConfig;
+    private final NodeStatusNotificationManager nodeStatusNotificationManager;
+    private final BackupPageManager pageManager;
+
     @Inject
     public ExchangeClientFactory(
             ExchangeClientConfig config,
             @ForExchange HttpClient httpClient,
             @ForExchange DriftClient<ThriftTaskClient> driftClient,
             @ForExchange ScheduledExecutorService scheduler,
-            QueryManagerConfig queryManagerConfig)
+            QueryManagerConfig queryManagerConfig,
+            NodeStatusNotificationManager nodeStatusNotificationManager,
+            BackupPageManager pageManager)
     {
         this(
                 config.getMaxBufferSize(),
@@ -73,7 +80,9 @@ public class ExchangeClientFactory
                 httpClient,
                 driftClient,
                 scheduler,
-                queryManagerConfig);
+                queryManagerConfig,
+                nodeStatusNotificationManager,
+                pageManager);
     }
 
     public ExchangeClientFactory(
@@ -88,8 +97,12 @@ public class ExchangeClientFactory
             HttpClient httpClient,
             DriftClient<ThriftTaskClient> driftClient,
             ScheduledExecutorService scheduler,
-            QueryManagerConfig queryManagerConfig)
+            QueryManagerConfig queryManagerConfig,
+            NodeStatusNotificationManager nodeStatusNotificationManager,
+            BackupPageManager pageManager)
     {
+        this.nodeStatusNotificationManager = nodeStatusNotificationManager;
+        this.pageManager = pageManager;
         this.maxBufferedBytes = requireNonNull(maxBufferedBytes, "maxBufferedBytes is null");
         this.concurrentRequestMultiplier = concurrentRequestMultiplier;
         this.maxErrorDuration = requireNonNull(maxErrorDuration, "maxErrorDuration is null");
@@ -148,6 +161,8 @@ public class ExchangeClientFactory
                 systemMemoryContext,
                 pageBufferClientCallbackExecutor,
                 queryManagerConfig.isEnableGracefulShutdown(),
-                queryManagerConfig.isEnableRetryForFailedSplits());
+                queryManagerConfig.isEnableRetryForFailedSplits(),
+                nodeStatusNotificationManager,
+                pageManager);
     }
 }

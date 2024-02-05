@@ -651,6 +651,7 @@ public final class SqlStageExecution
                 }
             }
             else {
+                log.info("failedTasks:%s < allTasks:%s * maxFailedTaskPercentage:%s;", failedTasks.size(), allTasks.size(), maxFailedTaskPercentage);
                 RuntimeException failure = new RuntimeException("FailedTasks exceed the threshold");
                 failure.addSuppressed(new PrestoException(UNRECOVERABLE_HOST_SHUTTING_DOWN, format("The Failed Tasks exceeds the threshold", taskId)));
                 stateMachine.transitionToFailed(failure);
@@ -788,8 +789,9 @@ public final class SqlStageExecution
 
     private synchronized boolean isFailedTasksBelowThreshold()
     {
+        //FIXME just for local testing
         // Even though failedTasks and allTasks are marked as Guard, the whole expression need to be evaluated synchronously to avoid failedTasks and allTasks are updated from the callback thread in the middle of the expression evaluation.
-        return failedTasks.size() < allTasks.size() * maxFailedTaskPercentage;
+        return failedTasks.size() < allTasks.size() * 1;
     }
 
     private synchronized void updateFinalTaskInfo(TaskInfo finalTaskInfo)

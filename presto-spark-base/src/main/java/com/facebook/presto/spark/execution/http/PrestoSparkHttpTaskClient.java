@@ -106,7 +106,8 @@ public class PrestoSparkHttpTaskClient
     @Override
     public ListenableFuture<PageBufferClient.PagesResponse> getResults(
             long token,
-            DataSize maxResponseSize)
+            DataSize maxResponseSize,
+            boolean isRequestForPageBackup)
     {
         URI uri = uriBuilderFrom(taskUri)
                 .appendPath("/results/0")

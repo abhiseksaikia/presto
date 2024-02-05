@@ -30,6 +30,7 @@ import com.facebook.presto.sql.planner.PlanFragment;
 import com.google.common.util.concurrent.ListenableFuture;
 import io.airlift.units.DataSize;
 
+import java.net.URI;
 import java.util.List;
 import java.util.Optional;
 
@@ -97,7 +98,7 @@ public class PrestoSparkTaskManager
     }
 
     @Override
-    public ListenableFuture<BufferResult> getTaskResults(TaskId taskId, OutputBuffers.OutputBufferId bufferId, long startingSequenceId, DataSize maxSize)
+    public ListenableFuture<BufferResult> getTaskResults(TaskId taskId, OutputBuffers.OutputBufferId bufferId, long startingSequenceId, DataSize maxSize, boolean isRequestForPageBackup)
     {
         throw new UnsupportedOperationException();
     }
@@ -130,5 +131,15 @@ public class PrestoSparkTaskManager
     public void updateMetadataResults(TaskId taskId, MetadataUpdates metadataUpdates)
     {
         throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public void initializeUploadPages(URI bufferLocation, TaskId taskId, String taskInstanceID, String bufferId, long token, int numberOfPages)
+    {
+    }
+
+    @Override
+    public void ackUploadPages(String taskId, String bufferId, String token)
+    {
     }
 }

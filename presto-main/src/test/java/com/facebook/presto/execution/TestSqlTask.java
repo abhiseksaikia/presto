@@ -158,13 +158,13 @@ public class TestSqlTask
         taskInfo = sqlTask.getTaskInfo();
         assertEquals(taskInfo.getTaskStatus().getState(), TaskState.RUNNING);
 
-        BufferResult results = sqlTask.getTaskResults(OUT, 0, new DataSize(1, MEGABYTE)).get();
+        BufferResult results = sqlTask.getTaskResults(OUT, 0, new DataSize(1, MEGABYTE), false).get();
         assertEquals(results.isBufferComplete(), false);
         assertEquals(results.getSerializedPages().size(), 1);
         assertEquals(results.getSerializedPages().get(0).getPositionCount(), 1);
 
         for (boolean moreResults = true; moreResults; moreResults = !results.isBufferComplete()) {
-            results = sqlTask.getTaskResults(OUT, results.getToken() + results.getSerializedPages().size(), new DataSize(1, MEGABYTE)).get();
+            results = sqlTask.getTaskResults(OUT, results.getToken() + results.getSerializedPages().size(), new DataSize(1, MEGABYTE), false).get();
         }
         assertEquals(results.getSerializedPages().size(), 0);
 
@@ -241,7 +241,7 @@ public class TestSqlTask
         OutputBuffers outputBuffers = createInitialEmptyOutputBuffers(PARTITIONED).withBuffer(OUT, 0).withNoMoreBufferIds();
         updateTask(sqlTask, EMPTY_SOURCES, outputBuffers);
 
-        ListenableFuture<BufferResult> bufferResult = sqlTask.getTaskResults(OUT, 0, new DataSize(1, MEGABYTE));
+        ListenableFuture<BufferResult> bufferResult = sqlTask.getTaskResults(OUT, 0, new DataSize(1, MEGABYTE), false);
         assertFalse(bufferResult.isDone());
 
         // close the sources (no splits will ever be added)
@@ -254,7 +254,7 @@ public class TestSqlTask
         bufferResult.get(1, SECONDS);
 
         // verify the buffer is closed
-        bufferResult = sqlTask.getTaskResults(OUT, 0, new DataSize(1, MEGABYTE));
+        bufferResult = sqlTask.getTaskResults(OUT, 0, new DataSize(1, MEGABYTE), false);
         assertTrue(bufferResult.isDone());
         assertTrue(bufferResult.get().isBufferComplete());
     }
@@ -267,7 +267,7 @@ public class TestSqlTask
 
         updateTask(sqlTask, EMPTY_SOURCES, createInitialEmptyOutputBuffers(PARTITIONED).withBuffer(OUT, 0).withNoMoreBufferIds());
 
-        ListenableFuture<BufferResult> bufferResult = sqlTask.getTaskResults(OUT, 0, new DataSize(1, MEGABYTE));
+        ListenableFuture<BufferResult> bufferResult = sqlTask.getTaskResults(OUT, 0, new DataSize(1, MEGABYTE), false);
         assertFalse(bufferResult.isDone());
 
         sqlTask.cancel();
@@ -276,7 +276,7 @@ public class TestSqlTask
         // buffer future will complete.. the event is async so wait a bit for event to propagate
         bufferResult.get(1, SECONDS);
 
-        bufferResult = sqlTask.getTaskResults(OUT, 0, new DataSize(1, MEGABYTE));
+        bufferResult = sqlTask.getTaskResults(OUT, 0, new DataSize(1, MEGABYTE), false);
         assertTrue(bufferResult.isDone());
         assertTrue(bufferResult.get().isBufferComplete());
     }
@@ -289,7 +289,7 @@ public class TestSqlTask
 
         updateTask(sqlTask, EMPTY_SOURCES, createInitialEmptyOutputBuffers(PARTITIONED).withBuffer(OUT, 0).withNoMoreBufferIds());
 
-        ListenableFuture<BufferResult> bufferResult = sqlTask.getTaskResults(OUT, 0, new DataSize(1, MEGABYTE));
+        ListenableFuture<BufferResult> bufferResult = sqlTask.getTaskResults(OUT, 0, new DataSize(1, MEGABYTE), false);
         assertFalse(bufferResult.isDone());
 
         TaskState taskState = sqlTask.getTaskInfo().getTaskStatus().getState();
@@ -304,7 +304,7 @@ public class TestSqlTask
         catch (TimeoutException expected) {
             // expected
         }
-        assertFalse(sqlTask.getTaskResults(OUT, 0, new DataSize(1, MEGABYTE)).isDone());
+        assertFalse(sqlTask.getTaskResults(OUT, 0, new DataSize(1, MEGABYTE), false).isDone());
     }
 
     public SqlTask createInitialTask()
@@ -336,6 +336,7 @@ public class TestSqlTask
                 false);
 
         return createSqlTask(
+                null,
                 taskId,
                 location,
                 "fake",

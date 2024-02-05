@@ -13,14 +13,21 @@
  */
 package com.facebook.presto.operator;
 
+import com.facebook.airlift.http.client.HttpClient;
 import com.facebook.airlift.http.client.HttpUriBuilder;
 import com.facebook.airlift.log.Logger;
+import com.facebook.presto.execution.TaskId;
+import com.facebook.presto.execution.executor.QueryRecoveryDebugInfo;
+import com.facebook.presto.execution.executor.QueryRecoveryState;
+import com.facebook.presto.server.NodeStatusNotificationManager;
 import com.facebook.presto.server.remotetask.Backoff;
+import com.facebook.presto.server.remotetask.BackupPageManager;
 import com.facebook.presto.spi.HostAddress;
 import com.facebook.presto.spi.PrestoException;
 import com.facebook.presto.spi.page.SerializedPage;
 import com.google.common.base.Ticker;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
@@ -33,8 +40,12 @@ import javax.annotation.concurrent.GuardedBy;
 import javax.annotation.concurrent.ThreadSafe;
 
 import java.io.Closeable;
+import java.net.Inet6Address;
+import java.net.InetAddress;
 import java.net.URI;
+import java.net.UnknownHostException;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
@@ -43,8 +54,13 @@ import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import static com.facebook.presto.spi.HostAddress.fromUri;
+import static com.facebook.presto.spi.StandardErrorCode.GENERIC_INTERNAL_ERROR;
+import static com.facebook.presto.spi.StandardErrorCode.GRACEFUL_SHUTDOWN;
+import static com.facebook.presto.spi.StandardErrorCode.PAGE_CACHE_UNAVAILABLE;
 import static com.facebook.presto.spi.StandardErrorCode.REMOTE_BUFFER_CLOSE_FAILED;
 import static com.facebook.presto.spi.StandardErrorCode.REMOTE_TASK_MISMATCH;
 import static com.facebook.presto.spi.StandardErrorCode.SERIALIZED_PAGE_CHECKSUM_ERROR;
@@ -64,6 +80,7 @@ public final class PageBufferClient
         implements Closeable
 {
     private static final Logger log = Logger.get(PageBufferClient.class);
+    private InetAddress remoteAddress;
 
     /**
      * For each request, the addPage method will be called zero or more times,
@@ -84,14 +101,14 @@ public final class PageBufferClient
         void clientFailed(PageBufferClient client, Throwable cause);
     }
 
-    private final RpcShuffleClient resultClient;
+    private RpcShuffleClient resultClient;
     private final boolean acknowledgePages;
-    private final URI location;
-    private final Optional<URI> asyncPageTransportLocation;
+    private URI location;
+    private Optional<URI> asyncPageTransportLocation;
     private final ClientCallback clientCallback;
     private final ScheduledExecutorService scheduler;
     private final Backoff backoff;
-
+    private final NodeStatusNotificationManager nodeStatusNotificationManager;
     @GuardedBy("this")
     private boolean closed;
     @GuardedBy("this")
@@ -108,6 +125,7 @@ public final class PageBufferClient
     private String taskInstanceId;
     @GuardedBy("this")
     private boolean isServerGracefulShutdown;
+    private boolean isRemoteHostShuttingdown;
 
     private final AtomicLong rowsReceived = new AtomicLong();
     private final AtomicInteger pagesReceived = new AtomicInteger();
@@ -120,22 +138,30 @@ public final class PageBufferClient
     private final AtomicInteger requestsFailed = new AtomicInteger();
 
     private final Executor pageBufferClientCallbackExecutor;
+    private final BackupPageManager pageManager;
+    private final TaskId remoteSourceTaskId;
+    private Optional<URI> currentBackupURI = Optional.empty();
+    private final HttpClient httpClient;
+    private boolean isLocationRedirected;
 
     public PageBufferClient(
-            RpcShuffleClient resultClient,
+            HttpClient httpClient,
             Duration maxErrorDuration,
             boolean acknowledgePages,
             URI location,
             Optional<URI> asyncPageTransportLocation,
             ClientCallback clientCallback,
             ScheduledExecutorService scheduler,
-            Executor pageBufferClientCallbackExecutor)
+            Executor pageBufferClientCallbackExecutor,
+            NodeStatusNotificationManager nodeStatusNotificationManager,
+            BackupPageManager pageManager,
+            TaskId remoteSourceTaskId)
     {
-        this(resultClient, maxErrorDuration, acknowledgePages, location, asyncPageTransportLocation, clientCallback, scheduler, Ticker.systemTicker(), pageBufferClientCallbackExecutor);
+        this(httpClient, maxErrorDuration, acknowledgePages, location, asyncPageTransportLocation, clientCallback, scheduler, Ticker.systemTicker(), pageBufferClientCallbackExecutor, nodeStatusNotificationManager, pageManager, remoteSourceTaskId);
     }
 
     public PageBufferClient(
-            RpcShuffleClient resultClient,
+            HttpClient httpClient,
             Duration maxErrorDuration,
             boolean acknowledgePages,
             URI location,
@@ -143,18 +169,69 @@ public final class PageBufferClient
             ClientCallback clientCallback,
             ScheduledExecutorService scheduler,
             Ticker ticker,
-            Executor pageBufferClientCallbackExecutor)
+            Executor pageBufferClientCallbackExecutor,
+            NodeStatusNotificationManager nodeStatusNotificationManager,
+            BackupPageManager pageManager,
+            TaskId remoteSourceTaskId)
     {
-        this.resultClient = requireNonNull(resultClient, "resultClient is null");
+        this.nodeStatusNotificationManager = nodeStatusNotificationManager;
+        this.pageManager = pageManager;
+        this.remoteSourceTaskId = remoteSourceTaskId;
+        this.httpClient = httpClient;
+        this.resultClient = requireNonNull(getRpcShuffleClient(location, asyncPageTransportLocation), "resultClient is null");
         this.acknowledgePages = acknowledgePages;
         this.location = requireNonNull(location, "location is null");
-        this.asyncPageTransportLocation = requireNonNull(asyncPageTransportLocation, "asyncPageTransportLocation is null");
+        //FIXME
+        this.asyncPageTransportLocation = Optional.empty();
+        //this.asyncPageTransportLocation = requireNonNull(asyncPageTransportLocation, "asyncPageTransportLocation is null");
         this.clientCallback = requireNonNull(clientCallback, "clientCallback is null");
         this.scheduler = requireNonNull(scheduler, "scheduler is null");
         this.pageBufferClientCallbackExecutor = requireNonNull(pageBufferClientCallbackExecutor, "pageBufferClientCallbackExecutor is null");
         requireNonNull(maxErrorDuration, "maxErrorDuration is null");
         requireNonNull(ticker, "ticker is null");
         this.backoff = new Backoff(maxErrorDuration, ticker);
+    }
+
+    public void registerRemoteHostShutdownListener(URI location)
+    {
+        try {
+            remoteAddress = Inet6Address.getByName(location.getHost());
+            this.nodeStatusNotificationManager.getNotificationProvider().registerRemoteHostShutdownEventListener(remoteAddress, this::onWorkerNodeShutdown);
+        }
+        catch (UnknownHostException exception) {
+            log.error(exception, "Unable to parse URI location's host address into IP, skipping registerGracefulShutdownEventListener.");
+            throw new RuntimeException("Unable to registerGracefulShutdownEventListener", exception);
+        }
+    }
+
+    //FIXME port the drift client
+    private RpcShuffleClient getRpcShuffleClient(URI location, Optional<URI> asyncPageTransportLocation)
+    {
+        RpcShuffleClient resultClient;
+        switch (location.getScheme().toLowerCase(Locale.ENGLISH)) {
+            case "http":
+            case "https":
+                resultClient = new HttpRpcShuffleClient(httpClient, location, asyncPageTransportLocation, true, true);
+                break;
+            default:
+                throw new PrestoException(GENERIC_INTERNAL_ERROR, "unsupported task result client scheme " + location.getScheme());
+        }
+        return resultClient;
+    }
+
+    private void onWorkerNodeShutdown()
+    {
+        log.info("onWorkerNodeShutdown got called for location =%s, host = %s", location, remoteAddress);
+        setServerGracefulShutdown();
+    }
+
+    private void setServerGracefulShutdown()
+    {
+        if (!isRemoteHostShuttingdown) {
+            isRemoteHostShuttingdown = true;
+            //reset the backoff
+            this.backoff.success();
+        }
     }
 
     public synchronized PageBufferClientStatus getStatus()
@@ -229,6 +306,7 @@ public final class PageBufferClient
         if (shouldSendDelete) {
             sendDelete();
         }
+        nodeStatusNotificationManager.getNotificationProvider().removeRemoteHostShutdownEventListener(remoteAddress, this::onWorkerNodeShutdown);
     }
 
     public synchronized void scheduleRequest(DataSize maxResponseSize)
@@ -278,104 +356,21 @@ public final class PageBufferClient
         URI uriBase = asyncPageTransportLocation.orElse(location);
         URI uri = HttpUriBuilder.uriBuilderFrom(uriBase).appendPath(String.valueOf(token)).build();
 
-        ListenableFuture<PagesResponse> resultFuture = resultClient.getResults(token, maxResponseSize);
-
+        ListenableFuture<PagesResponse> resultFuture = resultClient.getResults(token, maxResponseSize, false);
+        //log.info("sendGetResults to %s", uri);
         future = resultFuture;
         Futures.addCallback(resultFuture, new FutureCallback<PagesResponse>()
         {
             @Override
             public void onSuccess(PagesResponse result)
             {
-                checkNotHoldsLock(this);
-
-                backoff.success();
-
-                List<SerializedPage> pages;
-                boolean pagesAccepted;
-                try {
-                    boolean shouldAcknowledge = false;
-                    synchronized (PageBufferClient.this) {
-                        if (taskInstanceId == null) {
-                            taskInstanceId = result.getTaskInstanceId();
-                        }
-
-                        if (!isNullOrEmpty(taskInstanceId) && !result.getTaskInstanceId().equals(taskInstanceId)) {
-                            // TODO: update error message
-                            throw new PrestoException(REMOTE_TASK_MISMATCH, format("%s (%s)", REMOTE_TASK_MISMATCH_ERROR, fromUri(uri)));
-                        }
-
-                        if (result.getToken() == token) {
-                            pages = result.getPages();
-                            token = result.getNextToken();
-                            shouldAcknowledge = pages.size() > 0;
-                        }
-                        else {
-                            pages = ImmutableList.of();
-                        }
-                    }
-
-                    if (shouldAcknowledge && acknowledgePages) {
-                        // Acknowledge token without handling the response.
-                        // The next request will also make sure the token is acknowledged.
-                        // This is to fast release the pages on the buffer side.
-                        resultClient.acknowledgeResultsAsync(result.getNextToken());
-                    }
-
-                    for (SerializedPage page : pages) {
-                        if (!isChecksumValid(page)) {
-                            throw new PrestoException(SERIALIZED_PAGE_CHECKSUM_ERROR, format("Received corrupted serialized page from host %s", HostAddress.fromUri(uri)));
-                        }
-                    }
-
-                    // add pages:
-                    // addPages must be called regardless of whether pages is an empty list because
-                    // clientCallback can keep stats of requests and responses. For example, it may
-                    // keep track of how often a client returns empty response and adjust request
-                    // frequency or buffer size.
-                    pagesAccepted = clientCallback.addPages(PageBufferClient.this, pages);
-                }
-                catch (PrestoException e) {
-                    handleFailure(e, resultFuture);
-                    return;
-                }
-
-                // update client stats
-                if (!pages.isEmpty()) {
-                    int pageCount = pages.size();
-                    long rowCount = pages.stream().mapToLong(SerializedPage::getPositionCount).sum();
-                    if (pagesAccepted) {
-                        pagesReceived.addAndGet(pageCount);
-                        rowsReceived.addAndGet(rowCount);
-                    }
-                    else {
-                        pagesRejected.addAndGet(pageCount);
-                        rowsRejected.addAndGet(rowCount);
-                    }
-                }
-                requestsCompleted.incrementAndGet();
-
-                synchronized (PageBufferClient.this) {
-                    if (result.isServerGracefulShutdown()) {
-                        isServerGracefulShutdown = true;
-                    }
-
-                    // client is complete, acknowledge it by sending it a delete in the next request
-                    if (result.isClientComplete()) {
-                        completed = true;
-                    }
-
-                    if (future == resultFuture) {
-                        future = null;
-                    }
-                    lastUpdate = DateTime.now();
-                }
-                clientCallback.requestComplete(PageBufferClient.this);
+                processPageResponse(result, uri, resultFuture);
             }
 
             @Override
             public void onFailure(Throwable t)
             {
-                log.debug("Request to %s failed %s", uri, t);
+                log.debug(t, "Request to %s failed %s", uri, t.getMessage());
                 checkNotHoldsLock(this);
 
                 t = resultClient.rewriteException(t);
@@ -388,14 +383,154 @@ public final class PageBufferClient
                             backoff.getFailureRequestTimeTotal().convertTo(SECONDS));
                     t = new PageTransportTimeoutException(fromUri(uri), message, t);
                 }
+                //Additional check for safety in case smc notification does not work
+                if (isGracefulshutdownError(t)) {
+                    setServerGracefulShutdown();
+                }
+                if (isRemoteHostShuttingdown /*|| pageManager.isRemoteHostShutdown(getBaseUrl(location))*/) {
+                    redirectLocation();
+                }
                 handleFailure(t, resultFuture);
             }
         }, pageBufferClientCallbackExecutor);
     }
 
+    private void redirectLocation()
+    {
+        //FIXME check if thread safety us required
+        if (!isLocationRedirected) {
+            isLocationRedirected = true;
+            log.info("Remote host %s is shutting down, redirecting to data node for pages ", location);
+            //try backup
+            //public ListenableFuture<PageBufferClient.PagesResponse> getResults(long token, DataSize maxResponseSize, TaskId taskId,String taskInstanceID, String bufferID){
+            //FIXME
+            String bufferID = getBufferIDFromLocation(location);
+            location = pageManager.getBackupBufferLocation(remoteSourceTaskId, bufferID);
+            //FIXME refactor page buffer client
+            asyncPageTransportLocation = pageManager.getBackupAsyncPageTransportLocation(location, asyncPageTransportLocation.isPresent());
+            //FIXME check if thread safety is required for resultClient
+            resultClient = getRpcShuffleClient(location, asyncPageTransportLocation);
+            this.backoff.success();
+        }
+    }
+
+    private boolean isGracefulshutdownError(Throwable t)
+    {
+        if (t instanceof PrestoException) {
+            return ((PrestoException) t).getErrorCode() == GRACEFUL_SHUTDOWN.toErrorCode();
+        }
+        return false;
+    }
+
+    public static String getBaseUrl(URI uri)
+    {
+        int port = uri.getPort();
+        String portPart = port == -1 ? "" : ":" + port; // Include port if it's explicitly specified
+        return uri.getScheme() + "://" + uri.getHost() + portPart;
+    }
+
+    private void processPageResponse(PagesResponse result, URI uri, ListenableFuture<PagesResponse> resultFuture)
+    {
+        checkNotHoldsLock(this);
+
+        backoff.success();
+
+        List<SerializedPage> pages;
+        boolean pagesAccepted;
+        try {
+            boolean shouldAcknowledge = false;
+            synchronized (PageBufferClient.this) {
+                if (taskInstanceId == null) {
+                    taskInstanceId = result.getTaskInstanceId();
+                }
+
+                if (!isNullOrEmpty(taskInstanceId) && !result.getTaskInstanceId().equals(taskInstanceId)) {
+                    // TODO: update error message
+                    throw new PrestoException(REMOTE_TASK_MISMATCH, format("%s (%s)", REMOTE_TASK_MISMATCH_ERROR, fromUri(uri)));
+                }
+
+                if (result.getToken() == token) {
+                    pages = result.getPages();
+                    token = result.getNextToken();
+                    shouldAcknowledge = pages.size() > 0;
+                }
+                else {
+                    pages = ImmutableList.of();
+                }
+            }
+
+            if (shouldAcknowledge && acknowledgePages) {
+                // Acknowledge token without handling the response.
+                // The next request will also make sure the token is acknowledged.
+                // This is to fast release the pages on the buffer side.
+                if (currentBackupURI.isPresent() && currentBackupURI.get().equals(uri)) {
+                    pageManager.acknowledgeResultsAsync(remoteSourceTaskId, getBufferIDFromLocation(location), result.getNextToken());
+                }
+                else {
+                    resultClient.acknowledgeResultsAsync(result.getNextToken());
+                }
+            }
+
+            for (SerializedPage page : pages) {
+                if (!isChecksumValid(page)) {
+                    throw new PrestoException(SERIALIZED_PAGE_CHECKSUM_ERROR, format("Received corrupted serialized page from host %s", HostAddress.fromUri(uri)));
+                }
+            }
+
+            // add pages:
+            // addPages must be called regardless of whether pages is an empty list because
+            // clientCallback can keep stats of requests and responses. For example, it may
+            // keep track of how often a client returns empty response and adjust request
+            // frequency or buffer size.
+            pagesAccepted = clientCallback.addPages(PageBufferClient.this, pages);
+        }
+        catch (PrestoException e) {
+            handleFailure(e, resultFuture);
+            return;
+        }
+
+        // update client stats
+        if (!pages.isEmpty()) {
+            int pageCount = pages.size();
+            long rowCount = pages.stream().mapToLong(SerializedPage::getPositionCount).sum();
+            if (pagesAccepted) {
+                pagesReceived.addAndGet(pageCount);
+                rowsReceived.addAndGet(rowCount);
+            }
+            else {
+                pagesRejected.addAndGet(pageCount);
+                rowsRejected.addAndGet(rowCount);
+            }
+        }
+        requestsCompleted.incrementAndGet();
+
+        synchronized (PageBufferClient.this) {
+            if (result.isServerGracefulShutdown()) {
+                isServerGracefulShutdown = true;
+            }
+
+            // client is complete, acknowledge it by sending it a delete in the next request
+            if (result.isClientComplete()) {
+                completed = true;
+            }
+
+            if (this.future == resultFuture) {
+                this.future = null;
+            }
+            lastUpdate = DateTime.now();
+        }
+        clientCallback.requestComplete(PageBufferClient.this);
+    }
+
     private synchronized void sendDelete()
     {
-        ListenableFuture<?> resultFuture = resultClient.abortResults();
+        ListenableFuture<?> resultFuture;
+        if (currentBackupURI.isPresent()) {
+            resultFuture = pageManager.abortResult(remoteSourceTaskId, getBufferIDFromLocation(location));
+        }
+        else {
+            resultFuture = resultClient.abortResults();
+        }
         future = resultFuture;
         Futures.addCallback(resultFuture, new FutureCallback<Object>()
         {
@@ -429,6 +564,7 @@ public final class PageBufferClient
                             backoff.getFailureRequestTimeTotal().convertTo(SECONDS));
                     t = new PrestoException(REMOTE_BUFFER_CLOSE_FAILED, message, t);
                 }
+                //FIXME handle edge case where read was done from leaf worker but before we delete, the host went down.
                 handleFailure(t, resultFuture);
             }
         }, pageBufferClientCallbackExecutor);
@@ -446,9 +582,8 @@ public final class PageBufferClient
 
         requestsFailed.incrementAndGet();
         requestsCompleted.incrementAndGet();
-
         if (t instanceof PrestoException) {
-            clientCallback.clientFailed(PageBufferClient.this, t);
+            handlePrestoException((PrestoException) t);
         }
 
         synchronized (PageBufferClient.this) {
@@ -458,6 +593,44 @@ public final class PageBufferClient
             lastUpdate = DateTime.now();
         }
         clientCallback.requestComplete(PageBufferClient.this);
+    }
+
+    private void handlePrestoException(PrestoException prestoException)
+    {
+        if (prestoException.getErrorCode() == PAGE_CACHE_UNAVAILABLE.toErrorCode() || isRemoteHostShuttingdown) {
+            if (backoff.failure()) {
+                String hostAddress = getLocalhost();
+                pageManager.getEventListenerManager().trackPreemptionLifeCycle(
+                        remoteSourceTaskId,
+                        QueryRecoveryDebugInfo.builder()
+                                .outputBufferID(getBufferIDFromLocation(location))
+                                .extraInfo(new ImmutableMap.Builder<String, String>()
+                                        .put("local", hostAddress)
+                                        .put("remote", location.toString())
+                                        .put("isRemoteHostDetectedAsShutdown", String.valueOf(isRemoteHostShuttingdown))
+                                        .put("errorCode", String.valueOf(prestoException.getErrorCode()))
+                                        .put("state", getStatus().toString())
+                                        .build())
+                                .state(QueryRecoveryState.DATA_PAGE_POLL_FROM_LEAF_FAILED)
+                                .build());
+                clientCallback.clientFailed(PageBufferClient.this, prestoException);
+            }
+        }
+        else {
+            log.error(prestoException, "Failing client for location = %s, error code = %s", location, ((PrestoException) prestoException).getErrorCode());
+            clientCallback.clientFailed(PageBufferClient.this, prestoException);
+        }
+    }
+
+    private String getLocalhost()
+    {
+        try {
+            return InetAddress.getLocalHost().getHostAddress();
+        }
+        catch (UnknownHostException e) {
+            log.error(e, "Unable to get local host address");
+        }
+        return "";
     }
 
     @Override
@@ -575,6 +748,18 @@ public final class PageBufferClient
                     .add("clientComplete", clientComplete)
                     .add("gracefulShutdown", gracefulShutdown)
                     .toString();
+        }
+    }
+
+    public static String getBufferIDFromLocation(URI uri)
+    {
+        Pattern pattern = Pattern.compile("/results/([^/]+)");
+        Matcher matcher = pattern.matcher(uri.toString());
+        if (matcher.find()) {
+            return matcher.group(1);
+        }
+        else {
+            throw new IllegalArgumentException("URL does not contain /results/");
         }
     }
 }

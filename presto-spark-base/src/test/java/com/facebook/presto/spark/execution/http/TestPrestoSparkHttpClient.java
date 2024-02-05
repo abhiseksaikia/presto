@@ -138,7 +138,8 @@ public class TestPrestoSparkHttpClient
         PrestoSparkHttpTaskClient workerClient = createWorkerClient(taskId);
         ListenableFuture<PageBufferClient.PagesResponse> future = workerClient.getResults(
                 0,
-                new DataSize(32, MEGABYTE));
+                new DataSize(32, MEGABYTE),
+                false);
         try {
             PageBufferClient.PagesResponse page = future.get();
             assertEquals(0, page.getToken());

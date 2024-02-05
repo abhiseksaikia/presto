@@ -1,3 +1,4 @@
+
 /*
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -11,20 +12,26 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.facebook.presto.execution.executor;
+package com.facebook.presto.server.remotetask;
 
-public enum QueryRecoveryState
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
+
+import java.net.URI;
+
+public class PageInitUploadRequest
 {
-    INIT_GRACEFUL_PREEMPTION,
-    WAITING_FOR_OUTPUT_BUFFER,
-    WAITING_FOR_RUNNING_SPLITS,
-    WAITING_FOR_BLOCKED_SPLITS,
-    INITIATE_HANDLE_SHUTDOWN,
-    PAGE_TRANSFER_INIT_REQ,
-    DATA_PAGE_POLL_FROM_LEAF_FAILED,
-    DATA_PAGE_TRANSFER_INIT_RECEIVED,
-    DATA_PAGE_TRANSFER_INIT_COMPLETED,
-    DATA_PAGE_TRANSFER_INIT_FAILED,
-    PAGE_TRANSFER_INIT_SUCCESS,
-    PAGE_TRANSFER_INIT_FAILED,
+    private final URI pageLocation;
+
+    @JsonCreator
+    public PageInitUploadRequest(@JsonProperty("pageLocation") URI pageLocation)
+    {
+        this.pageLocation = pageLocation;
+    }
+
+    @JsonProperty
+    public URI getPageLocation()
+    {
+        return pageLocation;
+    }
 }

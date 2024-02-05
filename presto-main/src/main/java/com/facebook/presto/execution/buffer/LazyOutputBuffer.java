@@ -20,6 +20,7 @@ import com.facebook.presto.execution.StateMachine.StateChangeListener;
 import com.facebook.presto.execution.TaskId;
 import com.facebook.presto.execution.buffer.OutputBuffers.OutputBufferId;
 import com.facebook.presto.memory.context.LocalMemoryContext;
+import com.facebook.presto.server.remotetask.BackupPageManager;
 import com.facebook.presto.spi.page.SerializedPage;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
@@ -57,7 +58,7 @@ public class LazyOutputBuffer
     private final Supplier<LocalMemoryContext> systemMemoryContextSupplier;
     private final Executor executor;
     private final SpoolingOutputBufferFactory spoolingOutputBufferFactory;
-
+    private final BackupPageManager pageUploader;
     // Note: this is a write once field, so an unsynchronized volatile read that returns a non-null value is safe, but if a null value is observed instead
     // a subsequent synchronized read is required to ensure the writing thread can complete any in-flight initialization
     @GuardedBy("this")
@@ -70,6 +71,7 @@ public class LazyOutputBuffer
     private final List<PendingRead> pendingReads = new ArrayList<>();
 
     public LazyOutputBuffer(
+            BackupPageManager pageUploader,
             TaskId taskId,
             String taskInstanceId,
             Executor executor,
@@ -77,6 +79,7 @@ public class LazyOutputBuffer
             Supplier<LocalMemoryContext> systemMemoryContextSupplier,
             SpoolingOutputBufferFactory spoolingOutputBufferFactory)
     {
+        this.pageUploader = pageUploader;
         this.taskId = requireNonNull(taskId, "taskId is null");
         this.taskInstanceId = requireNonNull(taskInstanceId, "taskInstanceId is null");
         this.executor = requireNonNull(executor, "executor is null");
@@ -161,16 +164,16 @@ public class LazyOutputBuffer
                     }
                     switch (newOutputBuffers.getType()) {
                         case PARTITIONED:
-                            outputBuffer = new PartitionedOutputBuffer(taskInstanceId, state, newOutputBuffers, maxBufferSize, systemMemoryContextSupplier, executor);
+                            outputBuffer = new PartitionedOutputBuffer(pageUploader, taskId, taskInstanceId, state, newOutputBuffers, maxBufferSize, systemMemoryContextSupplier, executor);
                             break;
                         case BROADCAST:
-                            outputBuffer = new BroadcastOutputBuffer(taskInstanceId, state, maxBufferSize, systemMemoryContextSupplier, executor);
+                            outputBuffer = new BroadcastOutputBuffer(pageUploader, taskId, taskInstanceId, state, maxBufferSize, systemMemoryContextSupplier, executor);
                             break;
                         case ARBITRARY:
-                            outputBuffer = new ArbitraryOutputBuffer(taskInstanceId, state, maxBufferSize, systemMemoryContextSupplier, executor);
+                            outputBuffer = new ArbitraryOutputBuffer(pageUploader, taskId, taskInstanceId, state, maxBufferSize, systemMemoryContextSupplier, executor);
                             break;
                         case DISCARDING:
-                            outputBuffer = new DiscardingOutputBuffer(newOutputBuffers, state);
+                            outputBuffer = new DiscardingOutputBuffer(pageUploader, taskId, newOutputBuffers, state);
                             break;
                         case SPOOLING:
                             outputBuffer = spoolingOutputBufferFactory.createSpoolingOutputBuffer(taskId, taskInstanceId, newOutputBuffers, state);
@@ -198,7 +201,7 @@ public class LazyOutputBuffer
     }
 
     @Override
-    public ListenableFuture<BufferResult> get(OutputBufferId bufferId, long token, DataSize maxSize)
+    public ListenableFuture<BufferResult> get(OutputBufferId bufferId, long token, DataSize maxSize, boolean isRequestForPageBackup)
     {
         OutputBuffer outputBuffer = delegate;
         if (outputBuffer == null) {
@@ -208,14 +211,14 @@ public class LazyOutputBuffer
                         return immediateFuture(emptyResults(taskInstanceId, 0, true));
                     }
 
-                    PendingRead pendingRead = new PendingRead(bufferId, token, maxSize);
+                    PendingRead pendingRead = new PendingRead(bufferId, token, maxSize, isRequestForPageBackup);
                     pendingReads.add(pendingRead);
                     return pendingRead.getFutureResult();
                 }
                 outputBuffer = delegate;
             }
         }
-        return outputBuffer.get(bufferId, token, maxSize);
+        return outputBuffer.get(bufferId, token, maxSize, isRequestForPageBackup);
     }
 
     @Override
@@ -377,14 +380,16 @@ public class LazyOutputBuffer
         private final OutputBufferId bufferId;
         private final long startingSequenceId;
         private final DataSize maxSize;
+        private final boolean force;
 
         private final ExtendedSettableFuture<BufferResult> futureResult = ExtendedSettableFuture.create();
 
-        public PendingRead(OutputBufferId bufferId, long startingSequenceId, DataSize maxSize)
+        public PendingRead(OutputBufferId bufferId, long startingSequenceId, DataSize maxSize, boolean force)
         {
             this.bufferId = requireNonNull(bufferId, "bufferId is null");
             this.startingSequenceId = startingSequenceId;
             this.maxSize = requireNonNull(maxSize, "maxSize is null");
+            this.force = force;
         }
 
         public ExtendedSettableFuture<BufferResult> getFutureResult()
@@ -399,7 +404,7 @@ public class LazyOutputBuffer
             }
 
             try {
-                ListenableFuture<BufferResult> result = delegate.get(bufferId, startingSequenceId, maxSize);
+                ListenableFuture<BufferResult> result = delegate.get(bufferId, startingSequenceId, maxSize, force);
                 futureResult.setAsync(result);
             }
             catch (Exception e) {
@@ -418,5 +423,17 @@ public class LazyOutputBuffer
     public boolean forceNoMoreBufferIfPossibleOrKill()
     {
         return delegate.forceNoMoreBufferIfPossibleOrKill();
+    }
+
+    @Override
+    public void gracefulShutdown()
+    {
+        delegate.gracefulShutdown();
+    }
+
+    @Override
+    public void transferPagesToDataNode()
+    {
+        delegate.transferPagesToDataNode();
     }
 }

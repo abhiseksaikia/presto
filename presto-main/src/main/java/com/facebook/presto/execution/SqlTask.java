@@ -33,6 +33,7 @@ import com.facebook.presto.operator.PipelineStatus;
 import com.facebook.presto.operator.TaskContext;
 import com.facebook.presto.operator.TaskExchangeClientManager;
 import com.facebook.presto.operator.TaskStats;
+import com.facebook.presto.server.remotetask.BackupPageManager;
 import com.facebook.presto.spi.ConnectorId;
 import com.facebook.presto.spi.ConnectorMetadataUpdateHandle;
 import com.facebook.presto.spi.NodePoolType;
@@ -95,6 +96,7 @@ public class SqlTask
     private final boolean isEnableRetryForFailedSplits;
 
     public static SqlTask createSqlTask(
+            BackupPageManager pageUploader,
             TaskId taskId,
             URI location,
             String nodeId,
@@ -111,6 +113,7 @@ public class SqlTask
             boolean isEnableRetryForFailedSplits)
     {
         SqlTask sqlTask = new SqlTask(
+                pageUploader,
                 taskId,
                 location,
                 nodeId,
@@ -128,6 +131,7 @@ public class SqlTask
     }
 
     private SqlTask(
+            BackupPageManager pageUploader,
             TaskId taskId,
             URI location,
             String nodeId,
@@ -157,6 +161,7 @@ public class SqlTask
 
         this.taskExchangeClientManager = new TaskExchangeClientManager(exchangeClientSupplier);
         outputBuffer = new LazyOutputBuffer(
+                pageUploader,
                 taskId,
                 taskInstanceId.getUuidString(),
                 taskNotificationExecutor,
@@ -519,12 +524,12 @@ public class SqlTask
         return taskHolderReference.get().taskExecution.getTaskContext().getTaskMetadataContext();
     }
 
-    public ListenableFuture<BufferResult> getTaskResults(OutputBufferId bufferId, long startingSequenceId, DataSize maxSize)
+    public ListenableFuture<BufferResult> getTaskResults(OutputBufferId bufferId, long startingSequenceId, DataSize maxSize, boolean isRequestForPageBackup)
     {
         requireNonNull(bufferId, "bufferId is null");
         checkArgument(maxSize.toBytes() > 0, "maxSize must be at least 1 byte");
 
-        return outputBuffer.get(bufferId, startingSequenceId, maxSize);
+        return outputBuffer.get(bufferId, startingSequenceId, maxSize, isRequestForPageBackup);
     }
 
     public void acknowledgeTaskResults(OutputBufferId bufferId, long sequenceId)

@@ -49,6 +49,7 @@ import static com.facebook.presto.client.PrestoHeaders.PRESTO_GRACEFUL_SHUTDOWN;
 import static com.facebook.presto.client.PrestoHeaders.PRESTO_MAX_SIZE;
 import static com.facebook.presto.client.PrestoHeaders.PRESTO_PAGE_NEXT_TOKEN;
 import static com.facebook.presto.client.PrestoHeaders.PRESTO_PAGE_TOKEN;
+import static com.facebook.presto.client.PrestoHeaders.PRESTO_REQUEST_PAGE_BACKUP;
 import static com.facebook.presto.client.PrestoHeaders.PRESTO_TASK_INSTANCE_ID;
 import static com.facebook.presto.server.security.RoleType.INTERNAL;
 import static com.facebook.presto.spi.page.PagesSerdeUtil.PAGE_METADATA_SIZE;
@@ -156,7 +157,7 @@ public class AsyncPageTransportServlet
             throws IOException
     {
         DataSize maxSize = DataSize.valueOf(request.getHeader(PRESTO_MAX_SIZE));
-
+        boolean isRequestedByDataNode = Boolean.parseBoolean(request.getHeader(PRESTO_REQUEST_PAGE_BACKUP));
         AsyncContext asyncContext = request.startAsync(request, response);
 
         // wait time to get results
@@ -190,7 +191,7 @@ public class AsyncPageTransportServlet
             }
         });
 
-        ListenableFuture<BufferResult> bufferResultFuture = taskManager.getTaskResults(taskId, bufferId, token, maxSize);
+        ListenableFuture<BufferResult> bufferResultFuture = taskManager.getTaskResults(taskId, bufferId, token, maxSize, isRequestedByDataNode);
         bufferResultFuture = addTimeout(
                 bufferResultFuture,
                 () -> BufferResult.emptyResults(taskManager.getTaskInstanceId(taskId), token, false),

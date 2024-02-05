@@ -167,6 +167,7 @@ public class TestHighMemoryTaskKiller
                                     false);
 
         return createSqlTask(
+                null,
                 taskId,
                 location,
                 "fake",

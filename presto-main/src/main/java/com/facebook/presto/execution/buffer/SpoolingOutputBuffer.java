@@ -288,7 +288,7 @@ public class SpoolingOutputBuffer
     }
 
     @Override
-    public synchronized ListenableFuture<BufferResult> get(OutputBufferId bufferId, long startSequenceId, DataSize maxSize)
+    public synchronized ListenableFuture<BufferResult> get(OutputBufferId bufferId, long startSequenceId, DataSize maxSize, boolean isRequestForPageBackup)
     {
         requireNonNull(bufferId, "outputBufferId is null");
         checkArgument(bufferId.getId() == outputBufferId.getId(), "Invalid buffer id");
@@ -783,5 +783,15 @@ public class SpoolingOutputBuffer
     public boolean forceNoMoreBufferIfPossibleOrKill()
     {
         return state.get() == FLUSHING || state.get() == FINISHED;
+    }
+
+    @Override
+    public void gracefulShutdown()
+    {
+    }
+
+    @Override
+    public void transferPagesToDataNode()
+    {
     }
 }

@@ -27,7 +27,7 @@ import static com.google.common.base.Preconditions.checkState;
 import static java.util.Objects.requireNonNull;
 
 @ThreadSafe
-final class SerializedPageReference
+public final class SerializedPageReference
 {
     private static final AtomicIntegerFieldUpdater<SerializedPageReference> REFERENCE_COUNT_UPDATER = AtomicIntegerFieldUpdater.newUpdater(SerializedPageReference.class, "referenceCount");
 
@@ -71,6 +71,11 @@ final class SerializedPageReference
         return remainingReferences == 0;
     }
 
+    public Lifespan getLifespan()
+    {
+        return lifespan;
+    }
+
     @Override
     public String toString()
     {
@@ -107,6 +112,11 @@ final class SerializedPageReference
         if (currentLifespan != null) {
             onPagesReleased.onPagesReleased(currentLifespan, currentLifespanPages, releasedMemoryBytes);
         }
+    }
+
+    public int getReferenceCount()
+    {
+        return referenceCount;
     }
 
     interface PagesReleasedListener

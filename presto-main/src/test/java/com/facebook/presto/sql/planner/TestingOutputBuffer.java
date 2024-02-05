@@ -67,7 +67,7 @@ public class TestingOutputBuffer
     }
 
     @Override
-    public ListenableFuture<BufferResult> get(OutputBuffers.OutputBufferId bufferId, long token, DataSize maxSize)
+    public ListenableFuture<BufferResult> get(OutputBuffers.OutputBufferId bufferId, long token, DataSize maxSize, boolean isRequestedForPageBackup)
     {
         throw new UnsupportedOperationException();
     }
@@ -154,5 +154,15 @@ public class TestingOutputBuffer
     public boolean forceNoMoreBufferIfPossibleOrKill()
     {
         throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public void gracefulShutdown()
+    {
+    }
+
+    @Override
+    public void transferPagesToDataNode()
+    {
     }
 }

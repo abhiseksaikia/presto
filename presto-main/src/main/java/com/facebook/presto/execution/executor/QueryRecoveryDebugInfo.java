@@ -13,6 +13,7 @@
  */
 package com.facebook.presto.execution.executor;
 
+import java.util.Map;
 import java.util.Optional;
 
 public class QueryRecoveryDebugInfo
@@ -20,12 +21,14 @@ public class QueryRecoveryDebugInfo
     private final QueryRecoveryState state;
     private final Optional<Long> outputBufferSize;
     private final Optional<String> outputBufferID;
+    private final Optional<Map<String, String>> extraInfo;
 
     private QueryRecoveryDebugInfo(Builder builder)
     {
         this.state = builder.state;
         this.outputBufferSize = builder.outputBufferSize;
         this.outputBufferID = builder.outputBufferID;
+        this.extraInfo = builder.extraInfo;
     }
 
     public QueryRecoveryState getState()
@@ -43,6 +46,11 @@ public class QueryRecoveryDebugInfo
         return outputBufferID;
     }
 
+    public Optional<Map<String, String>> getExtraInfo()
+    {
+        return extraInfo;
+    }
+
     public static Builder builder()
     {
         return new Builder();
@@ -53,6 +61,7 @@ public class QueryRecoveryDebugInfo
         private QueryRecoveryState state;
         private Optional<Long> outputBufferSize = Optional.empty();
         private Optional<String> outputBufferID = Optional.empty();
+        private Optional<Map<String, String>> extraInfo = Optional.empty();
 
         private Builder() {}
 
@@ -71,6 +80,12 @@ public class QueryRecoveryDebugInfo
         public Builder outputBufferID(String outputBufferID)
         {
             this.outputBufferID = Optional.of(outputBufferID);
+            return this;
+        }
+
+        public Builder extraInfo(Map<String, String> extraInfo)
+        {
+            this.extraInfo = Optional.of(extraInfo);
             return this;
         }
 

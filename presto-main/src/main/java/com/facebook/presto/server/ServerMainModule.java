@@ -66,6 +66,7 @@ import com.facebook.presto.execution.TaskSource;
 import com.facebook.presto.execution.TaskStatus;
 import com.facebook.presto.execution.TaskThresholdMemoryRevokingScheduler;
 import com.facebook.presto.execution.buffer.SpoolingOutputBufferFactory;
+import com.facebook.presto.execution.executor.FaultInjector;
 import com.facebook.presto.execution.executor.MultilevelSplitQueue;
 import com.facebook.presto.execution.executor.TaskExecutor;
 import com.facebook.presto.execution.scheduler.FlatNetworkTopology;
@@ -111,6 +112,7 @@ import com.facebook.presto.operator.ExchangeClientSupplier;
 import com.facebook.presto.operator.FileFragmentResultCacheConfig;
 import com.facebook.presto.operator.FileFragmentResultCacheManager;
 import com.facebook.presto.operator.ForExchange;
+import com.facebook.presto.operator.ForPageTransfer;
 import com.facebook.presto.operator.FragmentCacheStats;
 import com.facebook.presto.operator.FragmentResultCacheManager;
 import com.facebook.presto.operator.LookupJoinOperators;
@@ -133,7 +135,9 @@ import com.facebook.presto.resourcemanager.ResourceManagerClusterStatusSender;
 import com.facebook.presto.resourcemanager.ResourceManagerConfig;
 import com.facebook.presto.resourcemanager.ResourceManagerInconsistentException;
 import com.facebook.presto.resourcemanager.ResourceManagerResourceGroupService;
+import com.facebook.presto.server.remotetask.BackupPageManager;
 import com.facebook.presto.server.remotetask.HttpLocationFactory;
+import com.facebook.presto.server.remotetask.PageInitUploadRequest;
 import com.facebook.presto.server.thrift.FixedAddressSelector;
 import com.facebook.presto.server.thrift.ThriftServerInfoClient;
 import com.facebook.presto.server.thrift.ThriftServerInfoService;
@@ -399,6 +403,8 @@ public class ServerMainModule
         thriftCodecBinder(binder).bindCustomThriftCodec(SqlFunctionIdCodec.class);
         jsonCodecBinder(binder).bindListJsonCodec(TaskMemoryReservationSummary.class);
         binder.bind(SqlTaskManager.class).in(Scopes.SINGLETON);
+        binder.bind(BackupPageManager.class).in(Scopes.SINGLETON);
+        binder.bind(FaultInjector.class).in(Scopes.SINGLETON);
         binder.bind(TaskManager.class).to(Key.get(SqlTaskManager.class));
         binder.bind(SpoolingOutputBufferFactory.class).in(Scopes.SINGLETON);
 
@@ -544,6 +550,15 @@ public class ServerMainModule
                     config.setMaxConnectionsPerServer(250);
                     config.setMaxContentLength(new DataSize(32, MEGABYTE));
                 });
+        httpClientBinder(binder).bindHttpClient("pageTransfer", ForPageTransfer.class)
+                .withTracing()
+                .withFilter(GenerateTraceTokenRequestFilter.class)
+                .withConfigDefaults(config -> {
+                    config.setRequestTimeout(new Duration(30, SECONDS));
+                    config.setMaxConnectionsPerServer(500);
+                    config.setMaxRequestsQueuedPerDestination(10000);
+                    config.setMaxContentLength(new DataSize(32, MEGABYTE));
+                });
         binder.install(new DriftNettyClientModule());
         driftClientBinder(binder).bindDriftClient(ThriftTaskClient.class, ForExchange.class)
                 .withAddressSelector(((addressSelectorBinder, annotation, prefix) ->
@@ -651,6 +666,8 @@ public class ServerMainModule
 
         // splits
         jsonCodecBinder(binder).bindJsonCodec(TaskUpdateRequest.class);
+        //jsonCodecBinder(binder).bindJsonCodec(PageUploadRequest.class);
+        jsonCodecBinder(binder).bindJsonCodec(PageInitUploadRequest.class);
         jsonCodecBinder(binder).bindJsonCodec(ConnectorSplit.class);
         jsonCodecBinder(binder).bindJsonCodec(PlanFragment.class);
         smileCodecBinder(binder).bindSmileCodec(TaskUpdateRequest.class);

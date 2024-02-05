@@ -22,7 +22,7 @@ import io.airlift.units.DataSize;
  */
 public interface RpcShuffleClient
 {
-    ListenableFuture<PagesResponse> getResults(long token, DataSize maxResponseSize);
+    ListenableFuture<PagesResponse> getResults(long token, DataSize maxResponseSize, boolean isRequestForPageBackup);
 
     /**
      * A fire and forget call to issue the ack to the buffer.

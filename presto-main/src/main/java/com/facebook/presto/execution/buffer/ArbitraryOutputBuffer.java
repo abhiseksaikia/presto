@@ -16,10 +16,12 @@ package com.facebook.presto.execution.buffer;
 import com.facebook.presto.execution.Lifespan;
 import com.facebook.presto.execution.StateMachine;
 import com.facebook.presto.execution.StateMachine.StateChangeListener;
+import com.facebook.presto.execution.TaskId;
 import com.facebook.presto.execution.buffer.ClientBuffer.PagesSupplier;
 import com.facebook.presto.execution.buffer.OutputBuffers.OutputBufferId;
 import com.facebook.presto.execution.buffer.SerializedPageReference.PagesReleasedListener;
 import com.facebook.presto.memory.context.LocalMemoryContext;
+import com.facebook.presto.server.remotetask.BackupPageManager;
 import com.facebook.presto.spi.page.SerializedPage;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
@@ -84,7 +86,10 @@ public class ArbitraryOutputBuffer
     private final AtomicLong totalRowsAdded = new AtomicLong();
 
     private final LifespanSerializedPageTracker pageTracker;
+    private final BackupPageManager pageUploader;
+    private final TaskId taskId;
 
+    //FIXME
     public ArbitraryOutputBuffer(
             String taskInstanceId,
             StateMachine<BufferState> state,
@@ -92,6 +97,19 @@ public class ArbitraryOutputBuffer
             Supplier<LocalMemoryContext> systemMemoryContextSupplier,
             Executor notificationExecutor)
     {
+        this(null, null, taskInstanceId, state, maxBufferSize, systemMemoryContextSupplier, notificationExecutor);
+    }
+
+    public ArbitraryOutputBuffer(
+            BackupPageManager pageUploader,
+            TaskId taskId,
+            String taskInstanceId,
+            StateMachine<BufferState> state,
+            DataSize maxBufferSize,
+            Supplier<LocalMemoryContext> systemMemoryContextSupplier,
+            Executor notificationExecutor)
+    {
+        this.pageUploader = pageUploader;
         this.taskInstanceId = requireNonNull(taskInstanceId, "taskInstanceId is null");
         this.state = requireNonNull(state, "state is null");
         requireNonNull(maxBufferSize, "maxBufferSize is null");
@@ -102,6 +120,7 @@ public class ArbitraryOutputBuffer
                 requireNonNull(notificationExecutor, "notificationExecutor is null"));
         this.pageTracker = new LifespanSerializedPageTracker(memoryManager);
         this.masterBuffer = new MasterBuffer(pageTracker);
+        this.taskId = taskId;
     }
 
     @Override
@@ -279,7 +298,7 @@ public class ArbitraryOutputBuffer
     }
 
     @Override
-    public ListenableFuture<BufferResult> get(OutputBufferId bufferId, long startingSequenceId, DataSize maxSize)
+    public ListenableFuture<BufferResult> get(OutputBufferId bufferId, long startingSequenceId, DataSize maxSize, boolean isRequestForPageBackup)
     {
         checkState(!Thread.holdsLock(this), "Can not get pages while holding a lock on this");
         requireNonNull(bufferId, "bufferId is null");
@@ -393,7 +412,7 @@ public class ArbitraryOutputBuffer
 
         // NOTE: buffers are allowed to be created before they are explicitly declared by setOutputBuffers
         // When no-more-buffers is set, we verify that all created buffers have been declared
-        buffer = new ClientBuffer(taskInstanceId, id, pageTracker);
+        buffer = new ClientBuffer(pageUploader, taskId, taskInstanceId, id, pageTracker);
 
         // buffer may have finished immediately before calling this method
         if (state.get() == FINISHED) {
@@ -551,5 +570,15 @@ public class ArbitraryOutputBuffer
         this.state.compareAndSet(NO_MORE_PAGES, FLUSHING);
 
         return state.get() == FLUSHING || state.get() == FINISHED;
+    }
+
+    @Override
+    public void gracefulShutdown()
+    {
+    }
+
+    @Override
+    public void transferPagesToDataNode()
+    {
     }
 }

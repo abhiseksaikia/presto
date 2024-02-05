@@ -130,13 +130,13 @@ public class TestSqlTaskManager
             taskInfo = sqlTaskManager.getTaskInfo(taskId);
             assertEquals(taskInfo.getTaskStatus().getState(), TaskState.RUNNING);
 
-            BufferResult results = sqlTaskManager.getTaskResults(taskId, OUT, 0, new DataSize(1, Unit.MEGABYTE)).get();
+            BufferResult results = sqlTaskManager.getTaskResults(taskId, OUT, 0, new DataSize(1, Unit.MEGABYTE), false).get();
             assertEquals(results.isBufferComplete(), false);
             assertEquals(results.getSerializedPages().size(), 1);
             assertEquals(results.getSerializedPages().get(0).getPositionCount(), 1);
 
             for (boolean moreResults = true; moreResults; moreResults = !results.isBufferComplete()) {
-                results = sqlTaskManager.getTaskResults(taskId, OUT, results.getToken() + results.getSerializedPages().size(), new DataSize(1, Unit.MEGABYTE)).get();
+                results = sqlTaskManager.getTaskResults(taskId, OUT, results.getToken() + results.getSerializedPages().size(), new DataSize(1, Unit.MEGABYTE), false).get();
             }
             assertEquals(results.isBufferComplete(), true);
             assertEquals(results.getSerializedPages().size(), 0);
@@ -305,7 +305,8 @@ public class TestSqlTaskManager
                 new ObjectMapper(),
                 new SpoolingOutputBufferFactory(new FeaturesConfig()),
                 new ServerConfig(),
-                new QueryManagerConfig());
+                new QueryManagerConfig(),
+                null);
     }
 
     private TaskInfo createTask(SqlTaskManager sqlTaskManager, TaskId taskId, ImmutableSet<ScheduledSplit> splits, OutputBuffers outputBuffers)

@@ -13,17 +13,26 @@
  */
 package com.facebook.presto.operator;
 
+import com.facebook.airlift.discovery.client.testing.InMemoryDiscoveryClient;
 import com.facebook.airlift.http.client.HttpStatus;
 import com.facebook.airlift.http.client.Request;
 import com.facebook.airlift.http.client.Response;
 import com.facebook.airlift.http.client.testing.TestingHttpClient;
 import com.facebook.airlift.http.client.testing.TestingResponse;
+import com.facebook.airlift.node.NodeInfo;
 import com.facebook.airlift.testing.TestingTicker;
 import com.facebook.presto.common.Page;
+import com.facebook.presto.execution.TaskId;
+import com.facebook.presto.execution.TestSqlTaskManager;
+import com.facebook.presto.metadata.InMemoryNodeManager;
 import com.facebook.presto.operator.PageBufferClient.ClientCallback;
+import com.facebook.presto.server.NodeStatusNotificationManager;
+import com.facebook.presto.server.ServerConfig;
+import com.facebook.presto.server.remotetask.BackupPageManager;
 import com.facebook.presto.spi.HostAddress;
 import com.facebook.presto.spi.page.PagesSerde;
 import com.facebook.presto.spi.page.SerializedPage;
+import com.facebook.presto.testing.TestingEventListenerManager;
 import com.google.common.collect.ImmutableListMultimap;
 import io.airlift.units.DataSize;
 import io.airlift.units.DataSize.Unit;
@@ -102,15 +111,19 @@ public class TestPageBufferClient
         TestingClientCallback callback = new TestingClientCallback(requestComplete);
 
         URI location = URI.create("http://localhost:8080");
+        TestingHttpClient httpClient = new TestingHttpClient(processor, scheduler);
         PageBufferClient client = new PageBufferClient(
-                new HttpRpcShuffleClient(new TestingHttpClient(processor, scheduler), location),
+                httpClient,
                 new Duration(1, TimeUnit.MINUTES),
                 true,
                 location,
                 Optional.empty(),
                 callback,
                 scheduler,
-                pageBufferClientCallbackExecutor);
+                pageBufferClientCallbackExecutor,
+                new NodeStatusNotificationManager(),
+                new BackupPageManager(httpClient, new InMemoryNodeManager(), new TestSqlTaskManager.MockLocationFactory(), new InMemoryDiscoveryClient(new NodeInfo("test")), new TestingEventListenerManager(), new ServerConfig()),
+                new TaskId("test", 1, 0, 1, 0));
 
         assertStatus(client, location, "queued", 0, 0, 0, 0, "not scheduled");
 
@@ -189,15 +202,19 @@ public class TestPageBufferClient
         TestingClientCallback callback = new TestingClientCallback(requestComplete);
 
         URI location = URI.create("http://localhost:8080");
+        TestingHttpClient httpClient = new TestingHttpClient(processor, scheduler);
         PageBufferClient client = new PageBufferClient(
-                new HttpRpcShuffleClient(new TestingHttpClient(processor, scheduler), location),
+                httpClient,
                 new Duration(1, TimeUnit.MINUTES),
                 true,
                 location,
                 Optional.empty(),
                 callback,
                 scheduler,
-                pageBufferClientCallbackExecutor);
+                pageBufferClientCallbackExecutor,
+                new NodeStatusNotificationManager(),
+                new BackupPageManager(httpClient, new InMemoryNodeManager(), new TestSqlTaskManager.MockLocationFactory(), new InMemoryDiscoveryClient(new NodeInfo("test")), new TestingEventListenerManager(), new ServerConfig()),
+                new TaskId("test", 1, 0, 1, 0));
 
         assertStatus(client, location, "queued", 0, 0, 0, 0, "not scheduled");
 
@@ -231,15 +248,19 @@ public class TestPageBufferClient
         TestingClientCallback callback = new TestingClientCallback(requestComplete);
 
         URI location = URI.create("http://localhost:8080");
+        TestingHttpClient httpClient = new TestingHttpClient(processor, scheduler);
         PageBufferClient client = new PageBufferClient(
-                new HttpRpcShuffleClient(new TestingHttpClient(processor, scheduler), location),
+                httpClient,
                 new Duration(1, TimeUnit.MINUTES),
                 true,
                 location,
                 Optional.empty(),
                 callback,
                 scheduler,
-                pageBufferClientCallbackExecutor);
+                pageBufferClientCallbackExecutor,
+                new NodeStatusNotificationManager(),
+                new BackupPageManager(httpClient, new InMemoryNodeManager(), new TestSqlTaskManager.MockLocationFactory(), new InMemoryDiscoveryClient(new NodeInfo("test")), new TestingEventListenerManager(), new ServerConfig()),
+                new TaskId("test", 1, 0, 1, 0));
 
         assertStatus(client, location, "queued", 0, 0, 0, 0, "not scheduled");
 
@@ -301,15 +322,19 @@ public class TestPageBufferClient
         TestingClientCallback callback = new TestingClientCallback(requestComplete);
 
         URI location = URI.create("http://localhost:8080");
+        TestingHttpClient httpClient = new TestingHttpClient(processor, scheduler);
         PageBufferClient client = new PageBufferClient(
-                new HttpRpcShuffleClient(new TestingHttpClient(processor, scheduler), location),
+                httpClient,
                 new Duration(1, TimeUnit.MINUTES),
                 true,
                 location,
                 Optional.empty(),
                 callback,
                 scheduler,
-                pageBufferClientCallbackExecutor);
+                pageBufferClientCallbackExecutor,
+                new NodeStatusNotificationManager(),
+                new BackupPageManager(httpClient, new InMemoryNodeManager(), new TestSqlTaskManager.MockLocationFactory(), new InMemoryDiscoveryClient(new NodeInfo("test")), new TestingEventListenerManager(), new ServerConfig()),
+                new TaskId("test", 1, 0, 1, 0));
 
         assertStatus(client, location, "queued", 0, 0, 0, 0, "not scheduled");
 
@@ -357,8 +382,9 @@ public class TestPageBufferClient
         TestingClientCallback callback = new TestingClientCallback(requestComplete);
 
         URI location = URI.create("http://localhost:8080");
+        TestingHttpClient httpClient = new TestingHttpClient(processor, scheduler);
         PageBufferClient client = new PageBufferClient(
-                new HttpRpcShuffleClient(new TestingHttpClient(processor, scheduler), location),
+                httpClient,
                 new Duration(30, TimeUnit.SECONDS),
                 true,
                 location,
@@ -366,7 +392,10 @@ public class TestPageBufferClient
                 callback,
                 scheduler,
                 ticker,
-                pageBufferClientCallbackExecutor);
+                pageBufferClientCallbackExecutor,
+                new NodeStatusNotificationManager(),
+                new BackupPageManager(httpClient, new InMemoryNodeManager(), new TestSqlTaskManager.MockLocationFactory(), new InMemoryDiscoveryClient(new NodeInfo("test")), new TestingEventListenerManager(), new ServerConfig()),
+                new TaskId("test", 1, 0, 1, 0));
 
         assertStatus(client, location, "queued", 0, 0, 0, 0, "not scheduled");
 

@@ -13,8 +13,11 @@
  */
 package com.facebook.presto.execution.buffer;
 
+import com.facebook.airlift.http.client.Response;
+import com.facebook.presto.execution.TaskId;
 import com.facebook.presto.execution.buffer.OutputBuffers.OutputBufferId;
 import com.facebook.presto.execution.buffer.SerializedPageReference.PagesReleasedListener;
+import com.facebook.presto.server.remotetask.BackupPageManager;
 import com.facebook.presto.spi.page.SerializedPage;
 import com.google.common.collect.ImmutableList;
 import com.google.common.util.concurrent.ListenableFuture;
@@ -52,7 +55,7 @@ class ClientBuffer
 
     private final AtomicLong rowsAdded = new AtomicLong();
     private final AtomicLong pagesAdded = new AtomicLong();
-
+    private final AtomicBoolean isGracefulShutdown = new AtomicBoolean();
     private final AtomicLong bufferedBytes = new AtomicLong();
 
     @GuardedBy("this")
@@ -71,12 +74,21 @@ class ClientBuffer
 
     @GuardedBy("this")
     private PendingRead pendingRead;
+    private final BackupPageManager pageUploader;
+    private final TaskId taskId;
 
-    public ClientBuffer(String taskInstanceId, OutputBufferId bufferId, PagesReleasedListener onPagesReleased)
+    public ClientBuffer(BackupPageManager pageUploader, TaskId taskId, String taskInstanceId, OutputBufferId bufferId, PagesReleasedListener onPagesReleased)
     {
         this.taskInstanceId = requireNonNull(taskInstanceId, "taskInstanceId is null");
         this.bufferId = requireNonNull(bufferId, "bufferId is null");
         this.onPagesReleased = requireNonNull(onPagesReleased, "onPagesReleased is null");
+        this.pageUploader = pageUploader;
+        this.taskId = taskId;
+    }
+
+    public ClientBuffer(String taskInstanceId, OutputBufferId bufferId, PagesReleasedListener onPagesReleased)
+    {
+        this(null, null, taskInstanceId, bufferId, onPagesReleased);
     }
 
     public BufferInfo getInfo()
@@ -437,6 +449,19 @@ class ClientBuffer
                 .add("sequenceId", sequenceId)
                 .add("destroyed", destroyed)
                 .toString();
+    }
+
+    public ListenableFuture<Response> gracefulShutdown()
+    {
+        isGracefulShutdown.set(true);
+        return transferPages();
+    }
+
+    private synchronized ListenableFuture<Response> transferPages()
+    {
+        checkArgument(isGracefulShutdown.get(), "graceful shutdown needs to be initiated before initiating the transfer");
+        //transfer the pages along with seq number
+        return pageUploader.requestPageUpload(taskId, taskInstanceId, bufferId.toString(), pages.size(), currentSequenceId.get());
     }
 
     @Immutable

@@ -67,7 +67,12 @@ public interface OutputBuffer
      * If the buffer result is marked as complete, the client must call abort to acknowledge
      * receipt of the final state.
      */
-    ListenableFuture<BufferResult> get(OutputBufferId bufferId, long token, DataSize maxSize);
+    ListenableFuture<BufferResult> get(OutputBufferId bufferId, long token, DataSize maxSize, boolean isRequestForPageBackup);
+
+    default ListenableFuture<BufferResult> get(OutputBufferId bufferId, long token, DataSize maxSize)
+    {
+        return get(bufferId, token, maxSize, false);
+    }
 
     /**
      * Acknowledges the previously received pages from the output buffer.
@@ -116,6 +121,7 @@ public interface OutputBuffer
     /**
      * Notify buffer that no more pages will be added for the given lifespan.
      * Any future calls to enqueue a page of that lifespan are ignored.
+     *
      * @see OutputBuffer#setNoMorePages()
      */
     void setNoMorePagesForLifespan(Lifespan lifespan);
@@ -129,6 +135,7 @@ public interface OutputBuffer
     /**
      * A buffer is finished for the given lifespan once no-more-pages has been set for that lifespan
      * and all pages has been acknowledged.
+     *
      * @see OutputBuffer#isFinished()
      */
     boolean isFinishedForLifespan(Lifespan lifespan);
@@ -141,4 +148,10 @@ public interface OutputBuffer
     boolean isAllPagesConsumed();
 
     boolean forceNoMoreBufferIfPossibleOrKill();
+
+    void gracefulShutdown();
+
+    //FIXME remove this
+    @Deprecated
+    void transferPagesToDataNode();
 }

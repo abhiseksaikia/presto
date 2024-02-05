@@ -22,6 +22,7 @@ import com.facebook.airlift.http.client.ResponseTooLargeException;
 import com.facebook.airlift.log.Logger;
 import com.facebook.presto.operator.PageBufferClient.PagesResponse;
 import com.facebook.presto.spi.HostAddress;
+import com.facebook.presto.spi.PrestoException;
 import com.facebook.presto.spi.page.SerializedPage;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
@@ -52,9 +53,11 @@ import static com.facebook.presto.client.PrestoHeaders.PRESTO_GRACEFUL_SHUTDOWN;
 import static com.facebook.presto.client.PrestoHeaders.PRESTO_MAX_SIZE;
 import static com.facebook.presto.client.PrestoHeaders.PRESTO_PAGE_NEXT_TOKEN;
 import static com.facebook.presto.client.PrestoHeaders.PRESTO_PAGE_TOKEN;
+import static com.facebook.presto.client.PrestoHeaders.PRESTO_REQUEST_PAGE_BACKUP;
 import static com.facebook.presto.client.PrestoHeaders.PRESTO_TASK_INSTANCE_ID;
 import static com.facebook.presto.operator.PageBufferClient.PagesResponse.createEmptyPagesResponse;
 import static com.facebook.presto.operator.PageBufferClient.PagesResponse.createPagesResponse;
+import static com.facebook.presto.spi.StandardErrorCode.PAGE_CACHE_UNAVAILABLE;
 import static com.facebook.presto.spi.page.PagesSerdeUtil.readSerializedPages;
 import static com.google.common.net.HttpHeaders.CONTENT_TYPE;
 import static java.lang.String.format;
@@ -89,12 +92,13 @@ public final class HttpRpcShuffleClient
     }
 
     @Override
-    public ListenableFuture<PagesResponse> getResults(long token, DataSize maxResponseSize)
+    public ListenableFuture<PagesResponse> getResults(long token, DataSize maxResponseSize, boolean isRequestForPageBackup)
     {
         URI uriBase = asyncPageTransportLocation.orElse(location);
         URI uri = uriBuilderFrom(uriBase).appendPath(String.valueOf(token)).build();
         return httpClient.executeAsync(
                 prepareGet()
+                        .setHeader(PRESTO_REQUEST_PAGE_BACKUP, String.valueOf(isRequestForPageBackup))
                         .setHeader(PRESTO_MAX_SIZE, maxResponseSize.toString())
                         .setUri(uri).build(),
                 new PageResponseHandler(isEnableGracefulShutdown, isEnableRetryForFailedSplits));
@@ -154,6 +158,7 @@ public final class HttpRpcShuffleClient
         @Override
         public PagesResponse handleException(Request request, Exception exception)
         {
+            log.error(exception, "Failed to get results for request uri %s", request.getUri());
             throw propagate(request, exception);
         }
 
@@ -189,12 +194,16 @@ public final class HttpRpcShuffleClient
                     catch (RuntimeException | IOException e) {
                         // Ignored. Just return whatever message we were able to decode
                     }
+                    String errorMessage = body.toString();
+                    if (errorMessage.contains("page cache not available for task")) {
+                        throw new PrestoException(PAGE_CACHE_UNAVAILABLE, "page cache not available");
+                    }
                     throw new PageTransportErrorException(
                             HostAddress.fromUri(request.getUri()),
                             format("Expected response code to be 200, but was %s %s:%n%s",
                                     response.getStatusCode(),
                                     response.getStatusMessage(),
-                                    body.toString()));
+                                    errorMessage));
                 }
 
                 // invalid content type can happen when an error page is returned, but is unlikely given the above 200

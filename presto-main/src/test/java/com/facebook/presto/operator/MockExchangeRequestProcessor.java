@@ -33,7 +33,9 @@ import io.airlift.units.DataSize;
 
 import java.net.URI;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
@@ -60,7 +62,7 @@ public class MockExchangeRequestProcessor
     private static final String TASK_INSTANCE_ID = "task-instance-id";
 
     private final LoadingCache<URI, MockBuffer> buffers = CacheBuilder.newBuilder().build(CacheLoader.from(MockBuffer::new));
-
+    private final Map<URI, Exception> faultInjectionMap = new HashMap<>();
     private final DataSize expectedMaxSize;
     private final PagesSerde pagesSerde;
     private final Function<byte[], byte[]> dataChanger;
@@ -84,6 +86,11 @@ public class MockExchangeRequestProcessor
         buffers.getUnchecked(location).addPage(page, pagesSerde);
     }
 
+    public void addFaultInjection(URI location, Exception exception)
+    {
+        faultInjectionMap.put(location, exception);
+    }
+
     public void setComplete(URI location)
     {
         buffers.getUnchecked(location).setCompleted();
@@ -104,16 +111,19 @@ public class MockExchangeRequestProcessor
 
         RequestLocation requestLocation = new RequestLocation(request.getUri());
         URI location = requestLocation.getLocation();
-
+        Exception exception = faultInjectionMap.get(location);
         BufferResult result = buffers.getUnchecked(location).getPages(requestLocation.getSequenceId(), maxSize);
 
         byte[] bytes = new byte[0];
         HttpStatus status;
-        if (!result.getSerializedPages().isEmpty()) {
+        if (exception == null && !result.getSerializedPages().isEmpty()) {
             DynamicSliceOutput sliceOutput = new DynamicSliceOutput(64);
             PagesSerdeUtil.writeSerializedPages(sliceOutput, result.getSerializedPages());
             bytes = dataChanger.apply(sliceOutput.slice().getBytes());
             status = HttpStatus.OK;
+        }
+        else if (exception != null) {
+            status = HttpStatus.INTERNAL_SERVER_ERROR;
         }
         else {
             status = HttpStatus.NO_CONTENT;

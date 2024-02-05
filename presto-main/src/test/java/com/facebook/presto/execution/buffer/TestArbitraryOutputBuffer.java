@@ -127,7 +127,7 @@ public class TestArbitraryOutputBuffer
         assertQueueState(buffer, 0, FIRST, 3, 0);
 
         // acknowledge first three pages
-        buffer.get(FIRST, 3, sizeOfPages(1)).cancel(true);
+        buffer.get(FIRST, 3, sizeOfPages(1), false).cancel(true);
         // pages now acknowledged
         assertQueueState(buffer, 0, FIRST, 0, 3);
 
@@ -280,7 +280,7 @@ public class TestArbitraryOutputBuffer
         assertQueueState(buffer, 3, FIRST, 0, 3);
 
         // getting new pages will again acknowledge the previously acknowledged pages but this is ok
-        buffer.get(FIRST, 3, sizeOfPages(1)).cancel(true);
+        buffer.get(FIRST, 3, sizeOfPages(1), false).cancel(true);
         assertQueueState(buffer, 2, FIRST, 1, 3);
     }
 
@@ -420,7 +420,7 @@ public class TestArbitraryOutputBuffer
         assertFalse(buffer.isFinished());
 
         // get a page from a buffer that doesn't exist yet
-        ListenableFuture<BufferResult> future = buffer.get(FIRST, 0L, sizeOfPages(1));
+        ListenableFuture<BufferResult> future = buffer.get(FIRST, 0L, sizeOfPages(1), false);
         assertFalse(future.isDone());
 
         // add a page and verify the future is complete

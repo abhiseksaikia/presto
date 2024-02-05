@@ -66,6 +66,7 @@ import org.testng.annotations.Test;
 
 import javax.inject.Singleton;
 
+import java.net.URI;
 import java.util.List;
 import java.util.Optional;
 
@@ -221,7 +222,7 @@ public class TestThriftServerInfoIntegration
                 }
 
                 @Override
-                public ListenableFuture<BufferResult> getTaskResults(TaskId taskId, OutputBufferId bufferId, long startingSequenceId, DataSize maxSize)
+                public ListenableFuture<BufferResult> getTaskResults(TaskId taskId, OutputBufferId bufferId, long startingSequenceId, DataSize maxSize, boolean isRequestForPageBackup)
                 {
                     throw new UnsupportedOperationException();
                 }
@@ -254,6 +255,16 @@ public class TestThriftServerInfoIntegration
                 public void updateMetadataResults(TaskId taskId, MetadataUpdates metadataUpdates)
                 {
                     throw new UnsupportedOperationException();
+                }
+
+                @Override
+                public void initializeUploadPages(URI bufferLocation, TaskId taskId, String taskInstanceID, String bufferId, long token, int numberOfPages)
+                {
+                }
+
+                @Override
+                public void ackUploadPages(String taskId, String bufferId, String token)
+                {
                 }
             };
         }

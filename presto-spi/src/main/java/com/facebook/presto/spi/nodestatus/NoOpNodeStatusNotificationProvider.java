@@ -13,9 +13,17 @@
  */
 package com.facebook.presto.spi.nodestatus;
 
+import java.net.InetAddress;
+import java.util.HashSet;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
+
 public class NoOpNodeStatusNotificationProvider
         implements NodeStatusNotificationProvider
 {
+    private final ConcurrentMap<InetAddress, Set<GracefulShutdownEventListener>> remoteHostShutdownEventListeners = new ConcurrentHashMap<>();
+
     @Override
     public void registerGracefulShutdownEventListener(GracefulShutdownEventListener listener)
     {
@@ -24,5 +32,19 @@ public class NoOpNodeStatusNotificationProvider
     @Override
     public void removeGracefulShutdownEventListener(GracefulShutdownEventListener listener)
     {
+    }
+
+    @Override
+    public void registerRemoteHostShutdownEventListener(InetAddress inetAddress, GracefulShutdownEventListener listener)
+    {
+        remoteHostShutdownEventListeners.computeIfAbsent(inetAddress, id -> new HashSet<>()).add(listener);
+    }
+
+    @Override
+    public void removeRemoteHostShutdownEventListener(InetAddress inetAddress, GracefulShutdownEventListener listener)
+    {
+        if (remoteHostShutdownEventListeners.containsKey(inetAddress)) {
+            remoteHostShutdownEventListeners.get(inetAddress).remove(listener);
+        }
     }
 }

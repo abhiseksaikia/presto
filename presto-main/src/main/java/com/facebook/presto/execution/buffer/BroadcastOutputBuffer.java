@@ -16,8 +16,10 @@ package com.facebook.presto.execution.buffer;
 import com.facebook.presto.execution.Lifespan;
 import com.facebook.presto.execution.StateMachine;
 import com.facebook.presto.execution.StateMachine.StateChangeListener;
+import com.facebook.presto.execution.TaskId;
 import com.facebook.presto.execution.buffer.OutputBuffers.OutputBufferId;
 import com.facebook.presto.memory.context.LocalMemoryContext;
+import com.facebook.presto.server.remotetask.BackupPageManager;
 import com.facebook.presto.spi.page.SerializedPage;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
@@ -60,7 +62,7 @@ public class BroadcastOutputBuffer
     private final StateMachine<BufferState> state;
     private final OutputBufferMemoryManager memoryManager;
     private final LifespanSerializedPageTracker pageTracker;
-
+    private final BackupPageManager pageUploader;
     @GuardedBy("this")
     private OutputBuffers outputBuffers = OutputBuffers.createInitialEmptyOutputBuffers(BROADCAST);
 
@@ -73,14 +75,19 @@ public class BroadcastOutputBuffer
     private final AtomicLong totalPagesAdded = new AtomicLong();
     private final AtomicLong totalRowsAdded = new AtomicLong();
     private final AtomicLong totalBufferedPages = new AtomicLong();
+    private final TaskId taskId;
 
     public BroadcastOutputBuffer(
+            BackupPageManager pageUploader,
+            TaskId taskId,
             String taskInstanceId,
             StateMachine<BufferState> state,
             DataSize maxBufferSize,
             Supplier<LocalMemoryContext> systemMemoryContextSupplier,
             Executor notificationExecutor)
     {
+        this.pageUploader = pageUploader;
+        this.taskId = taskId;
         this.taskInstanceId = requireNonNull(taskInstanceId, "taskInstanceId is null");
         this.state = requireNonNull(state, "state is null");
         this.memoryManager = new OutputBufferMemoryManager(
@@ -90,6 +97,11 @@ public class BroadcastOutputBuffer
         this.pageTracker = new LifespanSerializedPageTracker(memoryManager, Optional.of((lifespan, releasedPageCount, releasedSizeInBytes) -> {
             checkState(totalBufferedPages.addAndGet(-releasedPageCount) >= 0);
         }));
+    }
+
+    public BroadcastOutputBuffer(String taskInstanceId, StateMachine<BufferState> state, DataSize maxBufferSize, Supplier<LocalMemoryContext> systemMemoryContextSupplier, Executor executor)
+    {
+        this(null, null, taskInstanceId, state, maxBufferSize, systemMemoryContextSupplier, executor);
     }
 
     @Override
@@ -258,7 +270,7 @@ public class BroadcastOutputBuffer
     }
 
     @Override
-    public ListenableFuture<BufferResult> get(OutputBufferId outputBufferId, long startingSequenceId, DataSize maxSize)
+    public ListenableFuture<BufferResult> get(OutputBufferId outputBufferId, long startingSequenceId, DataSize maxSize, boolean isRequestForPageBackup)
     {
         checkState(!Thread.holdsLock(this), "Can not get pages while holding a lock on this");
         requireNonNull(outputBufferId, "outputBufferId is null");
@@ -366,7 +378,7 @@ public class BroadcastOutputBuffer
 
         // NOTE: buffers are allowed to be created before they are explicitly declared by setOutputBuffers
         // When no-more-buffers is set, we verify that all created buffers have been declared
-        buffer = new ClientBuffer(taskInstanceId, id, pageTracker);
+        buffer = new ClientBuffer(pageUploader, taskId, taskInstanceId, id, pageTracker);
 
         // do not setup the new buffer if we are already failed
         if (state != FAILED) {
@@ -445,5 +457,15 @@ public class BroadcastOutputBuffer
     public boolean forceNoMoreBufferIfPossibleOrKill()
     {
         return state.get() == FLUSHING || state.get() == FINISHED;
+    }
+
+    @Override
+    public void gracefulShutdown()
+    {
+    }
+
+    @Override
+    public void transferPagesToDataNode()
+    {
     }
 }

@@ -789,6 +789,7 @@ public class TestMemoryRevokingScheduler
         URI location = URI.create("fake://task/" + taskId);
 
         return createSqlTask(
+                null,
                 taskId,
                 location,
                 "fake",

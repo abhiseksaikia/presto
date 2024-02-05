@@ -15,6 +15,8 @@ package com.facebook.presto.execution.buffer;
 
 import com.facebook.presto.execution.Lifespan;
 import com.facebook.presto.execution.StateMachine;
+import com.facebook.presto.execution.TaskId;
+import com.facebook.presto.server.remotetask.BackupPageManager;
 import com.facebook.presto.spi.page.SerializedPage;
 import com.google.common.collect.ImmutableList;
 import com.google.common.util.concurrent.ListenableFuture;
@@ -41,11 +43,20 @@ public class DiscardingOutputBuffer
 
     private final AtomicLong totalPagesAdded = new AtomicLong();
     private final AtomicLong totalRowsAdded = new AtomicLong();
+    private final BackupPageManager pageUploader;
+    private final TaskId taskId;
 
-    public DiscardingOutputBuffer(OutputBuffers outputBuffers, StateMachine<BufferState> state)
+    public DiscardingOutputBuffer(BackupPageManager pageUploader, TaskId taskId, OutputBuffers outputBuffers, StateMachine<BufferState> state)
     {
         this.outputBuffers = requireNonNull(outputBuffers, "outputBuffers is null");
         this.state = requireNonNull(state, "state is null");
+        this.pageUploader = pageUploader;
+        this.taskId = taskId;
+    }
+
+    public DiscardingOutputBuffer(OutputBuffers newOutputBuffers, StateMachine<BufferState> state)
+    {
+        this(null, null, newOutputBuffers, state);
     }
 
     @Override
@@ -105,7 +116,7 @@ public class DiscardingOutputBuffer
     }
 
     @Override
-    public ListenableFuture<BufferResult> get(OutputBuffers.OutputBufferId bufferId, long token, DataSize maxSize)
+    public ListenableFuture<BufferResult> get(OutputBuffers.OutputBufferId bufferId, long token, DataSize maxSize, boolean isRequestedForPageBackup)
     {
         throw new UnsupportedOperationException("DiscardingOutputBuffer must not have any active readers");
     }
@@ -193,5 +204,15 @@ public class DiscardingOutputBuffer
     public boolean forceNoMoreBufferIfPossibleOrKill()
     {
         return state.get() == FLUSHING || state.get() == FINISHED;
+    }
+
+    @Override
+    public void gracefulShutdown()
+    {
+    }
+
+    @Override
+    public void transferPagesToDataNode()
+    {
     }
 }

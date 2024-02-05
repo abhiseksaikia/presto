@@ -11,20 +11,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.facebook.presto.execution.executor;
+package com.facebook.presto.operator;
 
-public enum QueryRecoveryState
+import javax.inject.Qualifier;
+
+import java.lang.annotation.Retention;
+import java.lang.annotation.Target;
+
+import static java.lang.annotation.ElementType.FIELD;
+import static java.lang.annotation.ElementType.METHOD;
+import static java.lang.annotation.ElementType.PARAMETER;
+import static java.lang.annotation.RetentionPolicy.RUNTIME;
+
+@Retention(RUNTIME)
+@Target({FIELD, PARAMETER, METHOD})
+@Qualifier
+public @interface ForPageTransfer
 {
-    INIT_GRACEFUL_PREEMPTION,
-    WAITING_FOR_OUTPUT_BUFFER,
-    WAITING_FOR_RUNNING_SPLITS,
-    WAITING_FOR_BLOCKED_SPLITS,
-    INITIATE_HANDLE_SHUTDOWN,
-    PAGE_TRANSFER_INIT_REQ,
-    DATA_PAGE_POLL_FROM_LEAF_FAILED,
-    DATA_PAGE_TRANSFER_INIT_RECEIVED,
-    DATA_PAGE_TRANSFER_INIT_COMPLETED,
-    DATA_PAGE_TRANSFER_INIT_FAILED,
-    PAGE_TRANSFER_INIT_SUCCESS,
-    PAGE_TRANSFER_INIT_FAILED,
 }

@@ -132,7 +132,15 @@ public class EventListenerManager
     public void trackPreemptionLifeCycle(TaskId taskId, QueryRecoveryDebugInfo queryRecoveryDebugInfo)
     {
         if (configuredEventListener.get().isPresent()) {
-            configuredEventListener.get().get().trackGracefulPreemption(new GracefulPreemptionEvent(taskId.getQueryId().toString(), taskId.toString(), DateTime.now().getMillis(), queryRecoveryDebugInfo.getState().name(), queryRecoveryDebugInfo.getOutputBufferSize(), queryRecoveryDebugInfo.getOutputBufferID()));
+            configuredEventListener.get().get().trackGracefulPreemption(
+                    new GracefulPreemptionEvent(
+                            taskId.getQueryId().toString(),
+                            taskId.toString(),
+                            DateTime.now().getMillis(),
+                            queryRecoveryDebugInfo.getState().name(),
+                            queryRecoveryDebugInfo.getOutputBufferSize(),
+                            queryRecoveryDebugInfo.getOutputBufferID(),
+                            queryRecoveryDebugInfo.getExtraInfo()));
         }
     }
 }

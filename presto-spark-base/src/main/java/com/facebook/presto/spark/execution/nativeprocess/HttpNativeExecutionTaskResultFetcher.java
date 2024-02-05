@@ -157,7 +157,7 @@ public class HttpNativeExecutionTaskResultFetcher
         }
 
         try {
-            PageBufferClient.PagesResponse pagesResponse = workerClient.getResults(token, MAX_RESPONSE_SIZE).get();
+            PageBufferClient.PagesResponse pagesResponse = workerClient.getResults(token, MAX_RESPONSE_SIZE, false).get();
             onSuccess(pagesResponse);
         }
         catch (Throwable t) {

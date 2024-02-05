@@ -39,6 +39,7 @@ import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
 import com.google.common.collect.ComparisonChain;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.util.concurrent.ListenableFuture;
 import io.airlift.units.Duration;
 import org.weakref.jmx.Managed;
@@ -298,9 +299,9 @@ public class TaskExecutor
                             long logFrequencyMillis = 30_000;
                             long lastLogTime = System.currentTimeMillis();  // to track when we last logged
                             long startTime = System.nanoTime();
-
+                            log.info("Initiating graceful shutdown for output buffer for task %s", taskId);
+                            outputBuffer.gracefulShutdown();
                             log.info("Output buffer for task %s= %s", taskId, taskHandle.getOutputBuffer().get().getInfo());
-
                             while (!taskHandle.isTotalRunningSplitEmpty()) {
                                 checkState(!taskHandle.isTaskDone(), "Task is done while waiting for total running split empty");
                                 if (blockedSplits.size() > 0) {
@@ -333,34 +334,19 @@ public class TaskExecutor
                                 taskHandle.forceFailure(String.format("The output buffer for task %s is not drainable. outputBuffer type: %s", taskId, outputBuffer.getInfo().getType()));
                                 return;
                             }
-
                             //wait for output buffer to be empty
                             startTime = System.nanoTime();
-                            while (!taskHandle.isOutputBufferEmpty()) {
-                                try {
-                                    outputBuffer.getInfo().getBuffers().forEach(
-                                            bufferInfo -> eventListenerManager.trackPreemptionLifeCycle(
-                                                    taskHandle.getTaskId(),
-                                                    QueryRecoveryDebugInfo.builder()
-                                                            .state(QueryRecoveryState.WAITING_FOR_OUTPUT_BUFFER)
-                                                            .outputBufferID(String.valueOf(bufferInfo.getBufferId().getId()))
-                                                            .outputBufferSize(bufferInfo.getPageBufferInfo().getBufferedBytes())
-                                                            .build()));
+                            //FIXME wait for pending page ack before we closed the buffer gate (i.e before initiated transfer)
 
-                                    log.warn("GracefulShutdown:: Waiting for output buffer to be empty for task- %s, outputbuffer info = %s", taskId, outputBuffer.getInfo());
-                                    Thread.sleep(waitTimeMillis);
-                                }
-                                catch (InterruptedException e) {
-                                    log.error(e, "GracefulShutdown got interrupted for task %s", taskId);
-                                }
-                            }
+                            waitForOutputBufferFlush(taskHandle, taskId, outputBuffer);
+
                             outputBufferEmptyWaitTime.add(Duration.nanosSince(startTime));
                             log.warn("GracefulShutdown:: calling handleShutDown for task- %s, buffer info : %s", taskId, outputBuffer.getInfo());
                             eventListenerManager.trackPreemptionLifeCycle(taskHandle.getTaskId(), QueryRecoveryDebugInfo.builder().state(QueryRecoveryState.INITIATE_HANDLE_SHUTDOWN).build());
                             taskHandle.handleShutDown();
                         }
                         catch (Throwable ex) {
-                            log.error("Exception while doing graceful preemption for task %s", taskId, ex);
+                            log.error(ex, "Exception while doing graceful preemption for task %s", taskId);
                         }
                         finally {
                             latch.countDown();
@@ -374,6 +360,29 @@ public class TaskExecutor
         }
         catch (InterruptedException e) {
             // TODO Handle interruption
+        }
+    }
+
+    private void waitForOutputBufferFlush(TaskHandle taskHandle, TaskId taskId, OutputBuffer outputBuffer)
+    {
+        while (!taskHandle.isOutputBufferEmpty()) {
+            try {
+                outputBuffer.getInfo().getBuffers().forEach(
+                        bufferInfo -> eventListenerManager.trackPreemptionLifeCycle(
+                                taskHandle.getTaskId(),
+                                QueryRecoveryDebugInfo.builder()
+                                        .state(QueryRecoveryState.WAITING_FOR_OUTPUT_BUFFER)
+                                        .outputBufferID(String.valueOf(bufferInfo.getBufferId().getId()))
+                                        .outputBufferSize(bufferInfo.getPageBufferInfo().getBufferedBytes())
+                                        .extraInfo(new ImmutableMap.Builder<String, String>().put("type", outputBuffer.getClass().getSimpleName()).build())
+                                        .build()));
+
+                log.warn("GracefulShutdown:: Waiting for output buffer to be empty for task- %s, outputbuffer info = %s", taskId, outputBuffer.getInfo());
+                Thread.sleep(5);
+            }
+            catch (InterruptedException e) {
+                log.error(e, "GracefulShutdown got interrupted for task %s", taskId);
+            }
         }
     }
 
@@ -902,6 +911,11 @@ public class TaskExecutor
     public synchronized int getTasks()
     {
         return tasks.size();
+    }
+
+    public synchronized List<TaskHandle> getTaskList()
+    {
+        return tasks;
     }
 
     @Managed

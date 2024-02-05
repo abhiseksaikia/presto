@@ -40,6 +40,7 @@ import com.facebook.presto.operator.ExchangeClientSupplier;
 import com.facebook.presto.operator.FragmentResultCacheManager;
 import com.facebook.presto.operator.TaskMemoryReservationSummary;
 import com.facebook.presto.server.ServerConfig;
+import com.facebook.presto.server.remotetask.BackupPageManager;
 import com.facebook.presto.spi.PrestoException;
 import com.facebook.presto.spi.QueryId;
 import com.facebook.presto.spi.connector.ConnectorMetadataUpdater;
@@ -68,6 +69,7 @@ import javax.annotation.concurrent.GuardedBy;
 import javax.inject.Inject;
 
 import java.io.Closeable;
+import java.net.URI;
 import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
@@ -89,6 +91,7 @@ import static com.facebook.presto.SystemSessionProperties.resourceOvercommit;
 import static com.facebook.presto.execution.SqlTask.createSqlTask;
 import static com.facebook.presto.memory.LocalMemoryManager.GENERAL_POOL;
 import static com.facebook.presto.memory.LocalMemoryManager.RESERVED_POOL;
+import static com.facebook.presto.spi.NodePoolType.DATA;
 import static com.facebook.presto.spi.StandardErrorCode.ABANDONED_TASK;
 import static com.facebook.presto.spi.StandardErrorCode.SERVER_SHUTTING_DOWN;
 import static com.google.common.base.Preconditions.checkArgument;
@@ -126,6 +129,8 @@ public class SqlTaskManager
     private final Map<String, Long> currentMemoryPoolAssignmentVersions = new Object2LongOpenHashMap<>();
 
     private final CounterStat failedTasks = new CounterStat();
+    private final BackupPageManager pageManager;
+    private final ServerConfig serverConfig;
 
     @Inject
     public SqlTaskManager(
@@ -149,13 +154,14 @@ public class SqlTaskManager
             ObjectMapper objectMapper,
             SpoolingOutputBufferFactory spoolingOutputBufferFactory,
             ServerConfig serverConfig,
-            QueryManagerConfig queryManagerConfig)
+            QueryManagerConfig queryManagerConfig,
+            BackupPageManager pageManager)
     {
         requireNonNull(nodeInfo, "nodeInfo is null");
         requireNonNull(config, "config is null");
         infoCacheTime = config.getInfoMaxAge();
         clientTimeout = config.getClientTimeout();
-
+        this.serverConfig = serverConfig;
         DataSize maxBufferSize = config.getSinkMaxBufferSize();
 
         taskNotificationExecutor = newFixedThreadPool(config.getTaskNotificationThreads(), threadsNamed("task-notification-%s"));
@@ -188,6 +194,7 @@ public class SqlTaskManager
 
         tasks = CacheBuilder.newBuilder().build(CacheLoader.from(
                 taskId -> createSqlTask(
+                        pageManager,
                         taskId,
                         locationFactory.createLocalTaskLocation(taskId),
                         nodeInfo.getNodeId(),
@@ -205,6 +212,7 @@ public class SqlTaskManager
                         serverConfig.getPoolType(),
                         queryManagerConfig.isEnableGracefulShutdown(),
                         queryManagerConfig.isEnableRetryForFailedSplits())));
+        this.pageManager = pageManager;
     }
 
     private QueryContext createQueryContext(
@@ -448,14 +456,29 @@ public class SqlTaskManager
     }
 
     @Override
-    public ListenableFuture<BufferResult> getTaskResults(TaskId taskId, OutputBufferId bufferId, long startingSequenceId, DataSize maxSize)
+    public void initializeUploadPages(URI bufferLocation, TaskId taskId, String taskInstanceID, String bufferId, long token, int numberOfPages)
     {
+        pageManager.processUploadRequest(bufferLocation, taskId, taskInstanceID, bufferId, token);
+    }
+
+    @Override
+    public void ackUploadPages(String taskId, String bufferId, String token)
+    {
+        //we need to do something here if we chunk up the data
+    }
+
+    @Override
+    public ListenableFuture<BufferResult> getTaskResults(TaskId taskId, OutputBufferId bufferId, long startingSequenceId, DataSize maxSize, boolean isRequestForPageBackup)
+    {
+        if (serverConfig.getPoolType() == DATA) {
+            return pageManager.getTaskResultsFromCache(taskId, bufferId, startingSequenceId, maxSize);
+        }
         requireNonNull(taskId, "taskId is null");
         requireNonNull(bufferId, "bufferId is null");
         checkArgument(startingSequenceId >= 0, "startingSequenceId is negative");
         requireNonNull(maxSize, "maxSize is null");
 
-        return tasks.getUnchecked(taskId).getTaskResults(bufferId, startingSequenceId, maxSize);
+        return tasks.getUnchecked(taskId).getTaskResults(bufferId, startingSequenceId, maxSize, isRequestForPageBackup);
     }
 
     @Override
@@ -464,8 +487,13 @@ public class SqlTaskManager
         requireNonNull(taskId, "taskId is null");
         requireNonNull(bufferId, "bufferId is null");
         checkArgument(sequenceId >= 0, "sequenceId is negative");
-
-        tasks.getUnchecked(taskId).acknowledgeTaskResults(bufferId, sequenceId);
+        if (serverConfig.getPoolType() == DATA) {
+            log.info("acknowledgeTaskResults:: going to ack task result from data node");
+            pageManager.acknowledgeCachedPage(taskId, bufferId, sequenceId);
+        }
+        else {
+            tasks.getUnchecked(taskId).acknowledgeTaskResults(bufferId, sequenceId);
+        }
     }
 
     @Override
@@ -473,8 +501,12 @@ public class SqlTaskManager
     {
         requireNonNull(taskId, "taskId is null");
         requireNonNull(bufferId, "bufferId is null");
-
-        return tasks.getUnchecked(taskId).abortTaskResults(bufferId);
+        if (serverConfig.getPoolType() == DATA) {
+            return pageManager.abortTaskResult(taskId, bufferId);
+        }
+        else {
+            return tasks.getUnchecked(taskId).abortTaskResults(bufferId);
+        }
     }
 
     @Override

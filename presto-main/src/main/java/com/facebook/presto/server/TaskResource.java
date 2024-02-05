@@ -31,6 +31,7 @@ import com.facebook.presto.execution.buffer.OutputBuffers.OutputBufferId;
 import com.facebook.presto.metadata.HandleResolver;
 import com.facebook.presto.metadata.MetadataUpdates;
 import com.facebook.presto.metadata.SessionPropertyManager;
+import com.facebook.presto.server.remotetask.PageInitUploadRequest;
 import com.facebook.presto.spi.page.SerializedPage;
 import com.facebook.presto.sql.planner.PlanFragment;
 import com.google.common.collect.ImmutableList;
@@ -82,6 +83,7 @@ import static com.facebook.presto.client.PrestoHeaders.PRESTO_MAX_SIZE;
 import static com.facebook.presto.client.PrestoHeaders.PRESTO_MAX_WAIT;
 import static com.facebook.presto.client.PrestoHeaders.PRESTO_PAGE_NEXT_TOKEN;
 import static com.facebook.presto.client.PrestoHeaders.PRESTO_PAGE_TOKEN;
+import static com.facebook.presto.client.PrestoHeaders.PRESTO_REQUEST_PAGE_BACKUP;
 import static com.facebook.presto.client.PrestoHeaders.PRESTO_TASK_INSTANCE_ID;
 import static com.facebook.presto.server.TaskResourceUtils.convertToThriftTaskInfo;
 import static com.facebook.presto.server.TaskResourceUtils.failWithTaskInfo;
@@ -328,13 +330,13 @@ public class TaskResource
             @PathParam("bufferId") OutputBufferId bufferId,
             @PathParam("token") final long token,
             @HeaderParam(PRESTO_MAX_SIZE) DataSize maxSize,
+            @HeaderParam(PRESTO_REQUEST_PAGE_BACKUP) boolean isRequestedByDataNode,
             @Suspended AsyncResponse asyncResponse)
     {
         requireNonNull(taskId, "taskId is null");
         requireNonNull(bufferId, "bufferId is null");
-
         if (shutdownHandler.getNoTaskAtGracefulShutdown().get()) {
-            ListenableFuture<BufferResult> bufferResultFuture = taskManager.getTaskResults(taskId, bufferId, token, maxSize);
+            ListenableFuture<BufferResult> bufferResultFuture = taskManager.getTaskResults(taskId, bufferId, token, maxSize, isRequestedByDataNode);
             ListenableFuture<Response> responseFuture = Futures.transform(bufferResultFuture, result -> {
                 GenericEntity<?> entity = null;
                 Status status = Status.NO_CONTENT;
@@ -362,7 +364,7 @@ public class TaskResource
         }
 
         long start = System.nanoTime();
-        ListenableFuture<BufferResult> bufferResultFuture = taskManager.getTaskResults(taskId, bufferId, token, maxSize);
+        ListenableFuture<BufferResult> bufferResultFuture = taskManager.getTaskResults(taskId, bufferId, token, maxSize, isRequestedByDataNode);
         Duration waitTime = randomizeWaitTime(DEFAULT_MAX_WAIT_TIME);
         bufferResultFuture = addTimeout(
                 bufferResultFuture,
@@ -408,6 +410,37 @@ public class TaskResource
         responseFuture.addListener(() -> readFromOutputBufferTime.add(Duration.nanosSince(start)), directExecutor());
         asyncResponse.register((CompletionCallback) throwable -> resultsRequestTime.add(Duration.nanosSince(start)));
     }
+
+    @POST
+    @Path("{taskId}/{taskInstanceID}/buffers/{bufferId}/{token}/{numberOfPages}")
+    @Produces(APPLICATION_JSON)
+    @Consumes({APPLICATION_JSON, APPLICATION_JACKSON_SMILE})
+    public Response initializeUploadPages(
+            @PathParam("taskId") TaskId taskId,
+            @PathParam("taskInstanceID") String taskInstanceID,
+            @PathParam("bufferId") String bufferId,
+            @PathParam("token") long token,
+            @PathParam("numberOfPages") int numberOfPages,
+            PageInitUploadRequest initUploadRequest)
+    {
+        //TODO not handling sequence id
+        taskManager.initializeUploadPages(initUploadRequest.getPageLocation(), taskId, taskInstanceID, bufferId, token, numberOfPages);
+        return Response.ok().build();
+    }
+
+    /*@PUT
+    @Path("{taskId}/{taskInstanceId}/buffers/{bufferId}/{token}")
+    @Consumes({APPLICATION_JSON, APPLICATION_JACKSON_SMILE})
+    public Response uploadPages(
+            @PathParam("taskId") String taskId,
+            @PathParam("taskInstanceId") String taskInstanceId,
+            @PathParam("bufferId") String bufferId,
+            @PathParam("token") long token,
+            PageUploadRequest pageUploadRequest)
+    {
+        taskManager.uploadPages(taskId, taskInstanceId, bufferId, pageUploadRequest.getPages(), token);
+        return Response.ok().build();
+    }*/
 
     @GET
     @Path("{taskId}/results/{bufferId}/{token}/acknowledge")

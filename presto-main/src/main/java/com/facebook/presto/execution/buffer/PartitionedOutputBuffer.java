@@ -13,11 +13,16 @@
  */
 package com.facebook.presto.execution.buffer;
 
+import com.facebook.airlift.http.client.Response;
+import com.facebook.airlift.log.Logger;
 import com.facebook.presto.execution.Lifespan;
 import com.facebook.presto.execution.StateMachine;
 import com.facebook.presto.execution.StateMachine.StateChangeListener;
+import com.facebook.presto.execution.TaskId;
 import com.facebook.presto.execution.buffer.OutputBuffers.OutputBufferId;
 import com.facebook.presto.memory.context.LocalMemoryContext;
+import com.facebook.presto.server.remotetask.BackupPageManager;
+import com.facebook.presto.spi.PrestoException;
 import com.facebook.presto.spi.page.SerializedPage;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
@@ -25,10 +30,13 @@ import com.google.common.util.concurrent.ListenableFuture;
 import io.airlift.units.DataSize;
 
 import java.util.List;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
 import static com.facebook.presto.execution.buffer.BufferState.FAILED;
 import static com.facebook.presto.execution.buffer.BufferState.FINISHED;
@@ -38,13 +46,16 @@ import static com.facebook.presto.execution.buffer.BufferState.NO_MORE_PAGES;
 import static com.facebook.presto.execution.buffer.BufferState.OPEN;
 import static com.facebook.presto.execution.buffer.OutputBuffers.BufferType.PARTITIONED;
 import static com.facebook.presto.execution.buffer.SerializedPageReference.dereferencePages;
+import static com.facebook.presto.spi.StandardErrorCode.GRACEFUL_SHUTDOWN;
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkState;
 import static java.util.Objects.requireNonNull;
+import static javax.ws.rs.core.Response.Status.OK;
 
 public class PartitionedOutputBuffer
         implements OutputBuffer
 {
+    private static final Logger log = Logger.get(PartitionedOutputBuffer.class);
     private final StateMachine<BufferState> state;
     private final OutputBuffers outputBuffers;
     private final OutputBufferMemoryManager memoryManager;
@@ -54,8 +65,11 @@ public class PartitionedOutputBuffer
 
     private final AtomicLong totalPagesAdded = new AtomicLong();
     private final AtomicLong totalRowsAdded = new AtomicLong();
+    private final AtomicBoolean isGracefulShutdown = new AtomicBoolean();
 
     public PartitionedOutputBuffer(
+            BackupPageManager pageUploader,
+            TaskId taskId,
             String taskInstanceId,
             StateMachine<BufferState> state,
             OutputBuffers outputBuffers,
@@ -78,7 +92,7 @@ public class PartitionedOutputBuffer
 
         ImmutableList.Builder<ClientBuffer> partitions = ImmutableList.builder();
         for (OutputBufferId bufferId : outputBuffers.getBuffers().keySet()) {
-            ClientBuffer partition = new ClientBuffer(taskInstanceId, bufferId, pageTracker);
+            ClientBuffer partition = new ClientBuffer(pageUploader, taskId, taskInstanceId, bufferId, pageTracker);
             partitions.add(partition);
         }
         this.partitions = partitions.build();
@@ -86,6 +100,12 @@ public class PartitionedOutputBuffer
         state.compareAndSet(OPEN, NO_MORE_BUFFERS);
         state.compareAndSet(NO_MORE_PAGES, FLUSHING);
         checkFlushComplete();
+    }
+
+    //FIXME for test
+    public PartitionedOutputBuffer(String taskInstanceId, StateMachine<BufferState> state, OutputBuffers newOutputBuffers, DataSize maxBufferSize, Supplier<LocalMemoryContext> systemMemoryContextSupplier, Executor executor)
+    {
+        this(null, null, taskInstanceId, state, newOutputBuffers, maxBufferSize, systemMemoryContextSupplier, executor);
     }
 
     @Override
@@ -230,11 +250,15 @@ public class PartitionedOutputBuffer
     }
 
     @Override
-    public ListenableFuture<BufferResult> get(OutputBufferId outputBufferId, long startingSequenceId, DataSize maxSize)
+    public ListenableFuture<BufferResult> get(OutputBufferId outputBufferId, long startingSequenceId, DataSize maxSize, boolean isRequestForPageBackup)
     {
         requireNonNull(outputBufferId, "outputBufferId is null");
         checkArgument(maxSize.toBytes() > 0, "maxSize must be at least 1 byte");
-
+        if (isGracefulShutdown.get() && !isRequestForPageBackup) {
+            //FIXME, put x in the message?
+            //alow this if fetched by data node
+            throw new PrestoException(GRACEFUL_SHUTDOWN, String.format("get pages are not allowed now, go to x to consume, inputMax size = %s", maxSize));
+        }
         return partitions.get(outputBufferId.getId()).getPages(startingSequenceId, maxSize);
     }
 
@@ -334,5 +358,35 @@ public class PartitionedOutputBuffer
     public boolean forceNoMoreBufferIfPossibleOrKill()
     {
         return state.get() == FLUSHING || state.get() == FINISHED;
+    }
+
+    @Override
+    public void gracefulShutdown()
+    {
+        isGracefulShutdown.set(true);
+        List<ListenableFuture<Response>> shutdownFutures = partitions.stream()
+                .map(ClientBuffer::gracefulShutdown)
+                .collect(Collectors.toList());
+        shutdownFutures.stream()
+                .forEach(future -> {
+                    try {
+                        Response response = future.get();
+                        checkArgument(response.getStatusCode() == OK.getStatusCode(), "Failed to gracefully shutdown output buffer");
+                    }
+                    catch (ExecutionException e) {
+                        log.error(e, "ExecutionException to gracefully shutdown output buffer");
+                        throw new RuntimeException("Failed to gracefully shutdown output buffer", e);
+                    }
+                    catch (InterruptedException e) {
+                        log.error(e, "InterruptedException to gracefully shutdown output buffer");
+                        throw new RuntimeException("Failed to gracefully shutdown output buffer", e);
+                    }
+                });
+    }
+
+    @Override
+    public void transferPagesToDataNode()
+    {
+        throw new UnsupportedOperationException("Avoid using push based transfer");
     }
 }
