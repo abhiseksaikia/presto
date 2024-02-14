@@ -232,11 +232,11 @@ public class BackupPageManager
             public Response handle(Request request, Response response)
             {
                 /**  eventListenerManager.trackPreemptionLifeCycle(
-                        taskId,
-                        QueryRecoveryDebugInfo.builder()
-                                .outputBufferID(bufferID)
-                                .state(QueryRecoveryState.PAGE_TRANSFER_INIT_SUCCESS)
-                                .build());
+                 taskId,
+                 QueryRecoveryDebugInfo.builder()
+                 .outputBufferID(bufferID)
+                 .state(QueryRecoveryState.PAGE_TRANSFER_INIT_SUCCESS)
+                 .build());
                  */
                 log.info("Client::initPageUpload succeeded for requestURI : %s , clientBufferInfos:%s", requestURI, clientBufferInfos);
                 return response;
@@ -395,7 +395,9 @@ public class BackupPageManager
                 if (dataNodeBaseURL.isPresent()) {
                     return;
                 }
-                dataNodeBaseURL = Optional.of(new URL(getDataNodeService().getProperties().get("http")));
+                ServiceDescriptor dataNodeService = getDataNodeService();
+                log.info("Data node service properties  = %s", dataNodeService.getProperties());
+                dataNodeBaseURL = Optional.of(new URL(dataNodeService.getProperties().get("http")));
             }
             catch (MalformedURLException e) {
                 log.error(e, "unable to get data node");

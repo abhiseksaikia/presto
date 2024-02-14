@@ -532,19 +532,19 @@ public class SqlTask
         return outputBuffer.get(bufferId, startingSequenceId, maxSize, isRequestForPageBackup);
     }
 
-    public void acknowledgeTaskResults(OutputBufferId bufferId, long sequenceId)
+    public void acknowledgeTaskResults(OutputBufferId bufferId, long sequenceId, boolean isRequestForPageBackup)
     {
         requireNonNull(bufferId, "bufferId is null");
 
-        outputBuffer.acknowledge(bufferId, sequenceId);
+        outputBuffer.acknowledge(bufferId, sequenceId, isRequestForPageBackup);
     }
 
-    public TaskInfo abortTaskResults(OutputBufferId bufferId)
+    public TaskInfo abortTaskResults(OutputBufferId bufferId, boolean isRequestForPageBackup)
     {
         requireNonNull(bufferId, "bufferId is null");
 
         log.debug("Aborting task %s output %s", taskId, bufferId);
-        outputBuffer.abort(bufferId);
+        outputBuffer.abort(bufferId, isRequestForPageBackup);
 
         return getTaskInfo();
     }

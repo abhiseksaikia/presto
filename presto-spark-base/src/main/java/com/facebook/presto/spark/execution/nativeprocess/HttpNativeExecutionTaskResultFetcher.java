@@ -188,11 +188,11 @@ public class HttpNativeExecutionTaskResultFetcher
         bufferMemoryBytes.addAndGet(bytes);
         long nextToken = pagesResponse.getNextToken();
         if (pages.size() > 0) {
-            workerClient.acknowledgeResultsAsync(nextToken);
+            workerClient.acknowledgeResultsAsync(nextToken, false);
         }
         token = nextToken;
         if (pagesResponse.isClientComplete()) {
-            workerClient.abortResults();
+            workerClient.abortResults(false);
             scheduledFuture.cancel(false);
         }
         if (!pages.isEmpty()) {
@@ -211,7 +211,7 @@ public class HttpNativeExecutionTaskResultFetcher
         catch (PrestoException e) {
             // Entering here means that we are unable to get any results from the CPP process
             // likely because process has crashed.
-            workerClient.abortResults();
+            workerClient.abortResults(false);
             stop(false);
             lastException.set(e);
             synchronized (taskHasResult) {

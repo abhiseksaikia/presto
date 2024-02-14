@@ -228,13 +228,13 @@ public class TestThriftServerInfoIntegration
                 }
 
                 @Override
-                public void acknowledgeTaskResults(TaskId taskId, OutputBufferId bufferId, long sequenceId)
+                public void acknowledgeTaskResults(TaskId taskId, OutputBufferId bufferId, long sequenceId, boolean isRequestForPageBackup)
                 {
                     throw new UnsupportedOperationException();
                 }
 
                 @Override
-                public TaskInfo abortTaskResults(TaskId taskId, OutputBufferId bufferId)
+                public TaskInfo abortTaskResults(TaskId taskId, OutputBufferId bufferId, boolean isRequestForPageBackup)
                 {
                     throw new UnsupportedOperationException();
                 }

@@ -30,12 +30,12 @@ public interface RpcShuffleClient
      * {@param nextToken} N represents token N - 1 is to be acknowledged.
      * The implementation needs to guarantee the function is non-blocking and result or failure is not important.
      */
-    void acknowledgeResultsAsync(long nextToken);
+    void acknowledgeResultsAsync(long nextToken, boolean isRequestForPageBackup);
 
     /**
      * Close remote buffer
      */
-    ListenableFuture<?> abortResults();
+    ListenableFuture<?> abortResults(boolean isRequestForPageBackup);
 
     /**
      * Rewrite network related exception to Presto exception

@@ -73,7 +73,19 @@ public class TestingOutputBuffer
     }
 
     @Override
+    public void acknowledge(OutputBuffers.OutputBufferId bufferId, long token, boolean isRequestForPageBackup)
+    {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
     public void acknowledge(OutputBuffers.OutputBufferId bufferId, long token)
+    {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public void abort(OutputBuffers.OutputBufferId bufferId, boolean isRequestForPageBackup)
     {
         throw new UnsupportedOperationException();
     }

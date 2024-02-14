@@ -280,7 +280,7 @@ public class BroadcastOutputBuffer
     }
 
     @Override
-    public void acknowledge(OutputBufferId bufferId, long sequenceId)
+    public void acknowledge(OutputBufferId bufferId, long sequenceId, boolean isRequestForPageBackup)
     {
         checkState(!Thread.holdsLock(this), "Can not acknowledge pages while holding a lock on this");
         requireNonNull(bufferId, "bufferId is null");
@@ -289,7 +289,7 @@ public class BroadcastOutputBuffer
     }
 
     @Override
-    public void abort(OutputBufferId bufferId)
+    public void abort(OutputBufferId bufferId, boolean isRequestForPageBackup)
     {
         checkState(!Thread.holdsLock(this), "Can not abort while holding a lock on this");
         requireNonNull(bufferId, "bufferId is null");

@@ -192,9 +192,9 @@ public class LazyOutputBuffer
         }
 
         outputBuffer.setOutputBuffers(newOutputBuffers);
-
+        final OutputBuffer finalOutputBuffer = outputBuffer;
         // process pending aborts and reads outside of synchronized lock
-        abortedBuffers.forEach(outputBuffer::abort);
+        abortedBuffers.forEach(bufferID -> finalOutputBuffer.abort(bufferID, false)); // setoutputbuffer is called for update task which is blocked anyway when graceful preemption starts
         for (PendingRead pendingRead : pendingReads) {
             pendingRead.process(outputBuffer);
         }
@@ -222,14 +222,14 @@ public class LazyOutputBuffer
     }
 
     @Override
-    public void acknowledge(OutputBufferId bufferId, long token)
+    public void acknowledge(OutputBufferId bufferId, long token, boolean isRequestForPageBackup)
     {
         OutputBuffer outputBuffer = getDelegateOutputBufferOrFail();
-        outputBuffer.acknowledge(bufferId, token);
+        outputBuffer.acknowledge(bufferId, token, isRequestForPageBackup);
     }
 
     @Override
-    public void abort(OutputBufferId bufferId)
+    public void abort(OutputBufferId bufferId, boolean isRequestForPageBackup)
     {
         OutputBuffer outputBuffer = delegate;
         if (outputBuffer == null) {
@@ -243,7 +243,7 @@ public class LazyOutputBuffer
                 outputBuffer = delegate;
             }
         }
-        outputBuffer.abort(bufferId);
+        outputBuffer.abort(bufferId, isRequestForPageBackup);
     }
 
     @Override

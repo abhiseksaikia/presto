@@ -77,12 +77,22 @@ public interface OutputBuffer
     /**
      * Acknowledges the previously received pages from the output buffer.
      */
-    void acknowledge(OutputBufferId bufferId, long token);
+    void acknowledge(OutputBufferId bufferId, long token, boolean isRequestForPageBackup);
+
+    default void acknowledge(OutputBufferId bufferId, long token)
+    {
+        acknowledge(bufferId, token, false);
+    }
 
     /**
      * Closes the specified output buffer.
      */
-    void abort(OutputBufferId bufferId);
+    void abort(OutputBufferId bufferId, boolean isRequestForPageBackup);
+
+    default void abort(OutputBufferId bufferId)
+    {
+        abort(bufferId, false);
+    }
 
     /**
      * Get a future that will be completed when the buffer is not full.

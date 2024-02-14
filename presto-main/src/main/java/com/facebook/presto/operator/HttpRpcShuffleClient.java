@@ -106,33 +106,43 @@ public final class HttpRpcShuffleClient
     }
 
     @Override
-    public void acknowledgeResultsAsync(long nextToken)
+    public void acknowledgeResultsAsync(long nextToken, boolean isRequestForPageBackup)
     {
         URI uri = uriBuilderFrom(location).appendPath(String.valueOf(nextToken)).appendPath("acknowledge").build();
-        httpClient.executeAsync(prepareGet().setUri(uri).build(), new ResponseHandler<Void, RuntimeException>()
-        {
-            @Override
-            public Void handleException(Request request, Exception exception)
-            {
-                log.debug(exception, "Acknowledge request failed: %s", uri);
-                return null;
-            }
+        httpClient.executeAsync(
+                prepareGet()
+                        .setHeader(PRESTO_REQUEST_PAGE_BACKUP, String.valueOf(isRequestForPageBackup))
+                        .setUri(uri)
+                        .build(),
+                new ResponseHandler<Void, RuntimeException>()
+                {
+                    @Override
+                    public Void handleException(Request request, Exception exception)
+                    {
+                        log.debug(exception, "Acknowledge request failed: %s", uri);
+                        return null;
+                    }
 
-            @Override
-            public Void handle(Request request, Response response)
-            {
-                if (familyForStatusCode(response.getStatusCode()) != HttpStatus.Family.SUCCESSFUL) {
-                    log.debug("Unexpected acknowledge response code: %s", response.getStatusCode());
-                }
-                return null;
-            }
-        });
+                    @Override
+                    public Void handle(Request request, Response response)
+                    {
+                        if (familyForStatusCode(response.getStatusCode()) != HttpStatus.Family.SUCCESSFUL) {
+                            log.debug("Unexpected acknowledge response code: %s", response.getStatusCode());
+                        }
+                        return null;
+                    }
+                });
     }
 
     @Override
-    public ListenableFuture<?> abortResults()
+    public ListenableFuture<?> abortResults(boolean isRequestForPageBackup)
     {
-        return httpClient.executeAsync(prepareDelete().setUri(location).build(), createStatusResponseHandler());
+        return httpClient.executeAsync(
+                prepareDelete()
+                        .setHeader(PRESTO_REQUEST_PAGE_BACKUP, String.valueOf(isRequestForPageBackup))
+                        .setUri(location)
+                        .build(),
+                createStatusResponseHandler());
     }
 
     @Override

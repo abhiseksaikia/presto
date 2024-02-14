@@ -64,7 +64,7 @@ public class PageDataFetcher
     public void close()
     {
         log.info("Going to abort result at %s", location);
-        rpcShuffleClient.abortResults();
+        rpcShuffleClient.abortResults(true);
         log.info("abort result successful at %s", location);
         //FIXME mark finish as true for the iterator
     }
@@ -130,7 +130,7 @@ public class PageDataFetcher
                     nextToken = result.getNextToken();
                     if (nextPages.size() > 0) {
                         // Acknowledge the receipt of the pages after reading one batch
-                        rpcShuffleClient.acknowledgeResultsAsync(result.getToken());
+                        rpcShuffleClient.acknowledgeResultsAsync(result.getToken(), true);
                     }
                     // Update the starting sequence ID for the next batch
                     startingSeqId = nextToken;

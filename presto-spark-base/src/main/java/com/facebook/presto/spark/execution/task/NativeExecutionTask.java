@@ -199,7 +199,7 @@ public class NativeExecutionTask
     {
         taskInfoFetcher.stop();
         taskResultFetcher.ifPresent(fetcher -> fetcher.stop(success));
-        workerClient.abortResults();
+        workerClient.abortResults(false);
     }
 
     private TaskInfo sendUpdateRequest()

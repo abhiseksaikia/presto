@@ -460,7 +460,7 @@ public final class PageBufferClient
                 // Acknowledge token without handling the response.
                 // The next request will also make sure the token is acknowledged.
                 // This is to fast release the pages on the buffer side.
-                resultClient.acknowledgeResultsAsync(result.getNextToken());
+                resultClient.acknowledgeResultsAsync(result.getNextToken(), false);
             }
 
             for (SerializedPage page : pages) {
@@ -516,7 +516,7 @@ public final class PageBufferClient
 
     private synchronized void sendDelete()
     {
-        ListenableFuture<?> resultFuture = resultClient.abortResults();
+        ListenableFuture<?> resultFuture = resultClient.abortResults(false);
         future = resultFuture;
         Futures.addCallback(resultFuture, new FutureCallback<Object>()
         {

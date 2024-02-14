@@ -71,14 +71,14 @@ public final class ThriftRpcShuffleClient
     }
 
     @Override
-    public void acknowledgeResultsAsync(long nextToken)
+    public void acknowledgeResultsAsync(long nextToken, boolean isRequestForPageBackup)
     {
         // no need to handle the future
         thriftClient.acknowledgeResults(taskId, outputBufferId, nextToken);
     }
 
     @Override
-    public ListenableFuture<?> abortResults()
+    public ListenableFuture<?> abortResults(boolean isRequestForPageBackup)
     {
         return thriftClient.abortResults(taskId, outputBufferId);
     }

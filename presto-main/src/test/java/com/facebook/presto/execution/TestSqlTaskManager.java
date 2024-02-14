@@ -142,7 +142,7 @@ public class TestSqlTaskManager
             assertEquals(results.getSerializedPages().size(), 0);
 
             // complete the task by calling abort on it
-            TaskInfo info = sqlTaskManager.abortTaskResults(taskId, OUT);
+            TaskInfo info = sqlTaskManager.abortTaskResults(taskId, OUT, false);
             assertEquals(info.getOutputBuffers().getState(), BufferState.FINISHED);
 
             taskInfo = sqlTaskManager.getTaskInfo(taskId, taskInfo.getTaskStatus().getState()).get(1, TimeUnit.SECONDS);
@@ -210,7 +210,7 @@ public class TestSqlTaskManager
             taskInfo = sqlTaskManager.getTaskInfo(taskId);
             assertEquals(taskInfo.getTaskStatus().getState(), TaskState.RUNNING);
 
-            sqlTaskManager.abortTaskResults(taskId, OUT);
+            sqlTaskManager.abortTaskResults(taskId, OUT, false);
 
             taskInfo = sqlTaskManager.getTaskInfo(taskId, taskInfo.getTaskStatus().getState()).get(1, TimeUnit.SECONDS);
             assertEquals(taskInfo.getTaskStatus().getState(), TaskState.FINISHED);

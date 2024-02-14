@@ -118,7 +118,7 @@ public interface TaskManager
     /**
      * Acknowledges previously received results.
      */
-    void acknowledgeTaskResults(TaskId taskId, OutputBufferId bufferId, long sequenceId);
+    void acknowledgeTaskResults(TaskId taskId, OutputBufferId bufferId, long sequenceId, boolean isRequestForPageBackup);
 
     /**
      * Aborts a result buffer for a task.  If the task or buffer has not been
@@ -128,7 +128,7 @@ public interface TaskManager
      * NOTE: this design assumes that only tasks and buffers that will
      * eventually exist are queried.
      */
-    TaskInfo abortTaskResults(TaskId taskId, OutputBufferId bufferId);
+    TaskInfo abortTaskResults(TaskId taskId, OutputBufferId bufferId, boolean isRequestForPageBackup);
 
     /**
      * Adds a state change listener to the specified task.

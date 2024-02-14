@@ -445,7 +445,7 @@ public class SpoolingOutputBuffer
     }
 
     @Override
-    public synchronized void acknowledge(OutputBufferId bufferId, long sequenceId)
+    public synchronized void acknowledge(OutputBufferId bufferId, long sequenceId, boolean isRequestForPageBackup)
     {
         checkArgument(bufferId.getId() == outputBufferId.getId(), "Invalid buffer id");
         checkArgument(sequenceId >= 0, "Invalid sequenceId");
@@ -526,7 +526,7 @@ public class SpoolingOutputBuffer
     }
 
     @Override
-    public void abort(OutputBufferId bufferId)
+    public void abort(OutputBufferId bufferId, boolean isRequestForPageBackup)
     {
         checkArgument(bufferId.getId() == outputBufferId.getId(), "Invalid bufferId");
         destroy();

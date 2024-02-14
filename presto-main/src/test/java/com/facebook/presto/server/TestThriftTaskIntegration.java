@@ -247,7 +247,7 @@ public class TestThriftTaskIntegration
                 }
 
                 @Override
-                public void acknowledgeTaskResults(TaskId taskId, OutputBufferId bufferId, long sequenceId)
+                public void acknowledgeTaskResults(TaskId taskId, OutputBufferId bufferId, long sequenceId, boolean isRequestForPageBackup)
                 {
                     assertEquals(taskId, TaskId.valueOf("queryid.0.0.0.0"));
                     assertEquals(bufferId, new OutputBufferId(1));
@@ -255,7 +255,7 @@ public class TestThriftTaskIntegration
                 }
 
                 @Override
-                public TaskInfo abortTaskResults(TaskId taskId, OutputBufferId bufferId)
+                public TaskInfo abortTaskResults(TaskId taskId, OutputBufferId bufferId, boolean isRequestForPageBackup)
                 {
                     assertEquals(taskId, TaskId.valueOf("queryid.0.0.0.0"));
                     assertEquals(bufferId, new OutputBufferId(1));

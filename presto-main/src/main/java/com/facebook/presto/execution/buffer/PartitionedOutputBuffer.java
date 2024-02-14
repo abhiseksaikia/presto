@@ -265,18 +265,26 @@ public class PartitionedOutputBuffer
     }
 
     @Override
-    public void acknowledge(OutputBufferId outputBufferId, long sequenceId)
+    public void acknowledge(OutputBufferId outputBufferId, long sequenceId, boolean isRequestForPageBackup)
     {
         requireNonNull(outputBufferId, "bufferId is null");
-
+        if (isGracefulShutdown.get() && !isRequestForPageBackup) {
+            //FIXME, put x in the message?
+            //alow this if fetched by data node
+            throw new PrestoException(GRACEFUL_SHUTDOWN, String.format("get pages are not allowed now, go to x to consume"));
+        }
         partitions.get(outputBufferId.getId()).acknowledgePages(sequenceId);
     }
 
     @Override
-    public void abort(OutputBufferId bufferId)
+    public void abort(OutputBufferId bufferId, boolean isRequestForPageBackup)
     {
         requireNonNull(bufferId, "bufferId is null");
-
+        if (isGracefulShutdown.get() && !isRequestForPageBackup) {
+            //FIXME, put x in the message?
+            //alow this if fetched by data node
+            throw new PrestoException(GRACEFUL_SHUTDOWN, String.format("get pages are not allowed now, go to x to consume"));
+        }
         partitions.get(bufferId.getId()).destroy();
 
         checkFlushComplete();
@@ -367,6 +375,7 @@ public class PartitionedOutputBuffer
     {
         isGracefulShutdown.set(true);
         List<ClientBufferState> clientBufferStates = partitions.stream()
+                .filter(clientBuffer -> !clientBuffer.isDestroyed())
                 .map(ClientBuffer::gracefulShutdown)
                 .collect(Collectors.toList());
         pageUploader.requestPageUpload(taskId, taskInstanceId, clientBufferStates);

@@ -158,7 +158,7 @@ public class TestPrestoSparkHttpClient
         TaskId taskId = new TaskId("testid", 0, 0, 0, 0);
 
         PrestoSparkHttpTaskClient workerClient = createWorkerClient(taskId);
-        workerClient.acknowledgeResultsAsync(1);
+        workerClient.acknowledgeResultsAsync(1, false);
     }
 
     private PrestoSparkHttpTaskClient createWorkerClient(TaskId taskId)
@@ -201,7 +201,7 @@ public class TestPrestoSparkHttpClient
         TaskId taskId = new TaskId("testid", 0, 0, 0, 0);
 
         PrestoSparkHttpTaskClient workerClient = createWorkerClient(taskId);
-        ListenableFuture<?> future = workerClient.abortResults();
+        ListenableFuture<?> future = workerClient.abortResults(false);
         try {
             future.get();
         }
@@ -589,7 +589,8 @@ public class TestPrestoSparkHttpClient
     }
 
     @Test
-    public void testResultFetcherTransportErrorFail() throws InterruptedException
+    public void testResultFetcherTransportErrorFail()
+            throws InterruptedException
     {
         TaskId taskId = new TaskId("testid", 0, 0, 0, 0);
 

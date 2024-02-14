@@ -169,7 +169,7 @@ public class TestSqlTask
         assertEquals(results.getSerializedPages().size(), 0);
 
         // complete the task by calling abort on it
-        TaskInfo info = sqlTask.abortTaskResults(OUT);
+        TaskInfo info = sqlTask.abortTaskResults(OUT, false);
         assertEquals(info.getOutputBuffers().getState(), BufferState.FINISHED);
 
         taskInfo = sqlTask.getTaskInfo(taskInfo.getTaskStatus().getState()).get(1, SECONDS);
@@ -223,7 +223,7 @@ public class TestSqlTask
         taskInfo = sqlTask.getTaskInfo();
         assertEquals(taskInfo.getTaskStatus().getState(), TaskState.RUNNING);
 
-        sqlTask.abortTaskResults(OUT);
+        sqlTask.abortTaskResults(OUT, false);
 
         taskInfo = sqlTask.getTaskInfo(taskInfo.getTaskStatus().getState()).get(1, SECONDS);
         assertEquals(taskInfo.getTaskStatus().getState(), TaskState.FINISHED);
@@ -248,7 +248,7 @@ public class TestSqlTask
         updateTask(sqlTask, ImmutableList.of(new TaskSource(TABLE_SCAN_NODE_ID, ImmutableSet.of(), true)), outputBuffers);
 
         // finish the task by calling abort on it
-        sqlTask.abortTaskResults(OUT);
+        sqlTask.abortTaskResults(OUT, false);
 
         // buffer will be closed by cancel event (wait for event to fire)
         bufferResult.get(1, SECONDS);

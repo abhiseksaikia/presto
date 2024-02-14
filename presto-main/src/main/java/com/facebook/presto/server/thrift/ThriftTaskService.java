@@ -72,17 +72,17 @@ public class ThriftTaskService
     }
 
     @ThriftMethod
-    public ListenableFuture<Void> acknowledgeResults(TaskId taskId, OutputBufferId bufferId, long token)
+    public ListenableFuture<Void> acknowledgeResults(TaskId taskId, OutputBufferId bufferId, long token, boolean isRequestedForPageBackup)
     {
         requireNonNull(taskId, "taskId is null");
         requireNonNull(bufferId, "bufferId is null");
 
-        taskManager.acknowledgeTaskResults(taskId, bufferId, token);
+        taskManager.acknowledgeTaskResults(taskId, bufferId, token, isRequestedForPageBackup);
         return Futures.immediateFuture(null);
     }
 
     @ThriftMethod
-    public ListenableFuture<Void> abortResults(TaskId taskId, OutputBufferId bufferId)
+    public ListenableFuture<Void> abortResults(TaskId taskId, OutputBufferId bufferId, boolean isRequestedForPageBackup)
     {
         requireNonNull(taskId, "taskId is null");
         requireNonNull(bufferId, "bufferId is null");
@@ -92,7 +92,7 @@ public class ThriftTaskService
         // TaskManager does not support async calls with a thread pool.
         // Even getTaskResults is a fake async call with an immediate future wrapping around ClientBuffer::processRead.
         // It might worth exploring true async RPC for /v1/task endpoint
-        taskManager.abortTaskResults(taskId, bufferId);
+        taskManager.abortTaskResults(taskId, bufferId, isRequestedForPageBackup);
         return Futures.immediateFuture(null);
     }
 }

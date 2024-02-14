@@ -482,7 +482,7 @@ public class SqlTaskManager
     }
 
     @Override
-    public void acknowledgeTaskResults(TaskId taskId, OutputBufferId bufferId, long sequenceId)
+    public void acknowledgeTaskResults(TaskId taskId, OutputBufferId bufferId, long sequenceId, boolean isRequestForPageBackup)
     {
         requireNonNull(taskId, "taskId is null");
         requireNonNull(bufferId, "bufferId is null");
@@ -492,12 +492,12 @@ public class SqlTaskManager
             pageManager.acknowledgeCachedPage(taskId, bufferId, sequenceId);
         }
         else {
-            tasks.getUnchecked(taskId).acknowledgeTaskResults(bufferId, sequenceId);
+            tasks.getUnchecked(taskId).acknowledgeTaskResults(bufferId, sequenceId, isRequestForPageBackup);
         }
     }
 
     @Override
-    public TaskInfo abortTaskResults(TaskId taskId, OutputBufferId bufferId)
+    public TaskInfo abortTaskResults(TaskId taskId, OutputBufferId bufferId, boolean isRequestForPageBackup)
     {
         requireNonNull(taskId, "taskId is null");
         requireNonNull(bufferId, "bufferId is null");
@@ -505,7 +505,7 @@ public class SqlTaskManager
             return pageManager.abortTaskResult(taskId, bufferId);
         }
         else {
-            return tasks.getUnchecked(taskId).abortTaskResults(bufferId);
+            return tasks.getUnchecked(taskId).abortTaskResults(bufferId, isRequestForPageBackup);
         }
     }
 

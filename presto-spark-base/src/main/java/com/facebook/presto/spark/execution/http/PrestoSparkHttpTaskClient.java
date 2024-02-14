@@ -122,7 +122,7 @@ public class PrestoSparkHttpTaskClient
     }
 
     @Override
-    public void acknowledgeResultsAsync(long nextToken)
+    public void acknowledgeResultsAsync(long nextToken, boolean isRequestForPageBackup)
     {
         URI uri = uriBuilderFrom(taskUri)
                 .appendPath("/results/0")
@@ -133,7 +133,7 @@ public class PrestoSparkHttpTaskClient
     }
 
     @Override
-    public ListenableFuture<?> abortResults()
+    public ListenableFuture<?> abortResults(boolean isRequestForPageBackup)
     {
         return httpClient.executeAsync(
                 prepareDelete().setUri(

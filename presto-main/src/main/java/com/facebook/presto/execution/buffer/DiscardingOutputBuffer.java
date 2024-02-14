@@ -122,13 +122,13 @@ public class DiscardingOutputBuffer
     }
 
     @Override
-    public void acknowledge(OutputBuffers.OutputBufferId bufferId, long token)
+    public void acknowledge(OutputBuffers.OutputBufferId bufferId, long token, boolean isRequestForPageBackup)
     {
         throw new UnsupportedOperationException("DiscardingOutputBuffer must not have any active readers");
     }
 
     @Override
-    public void abort(OutputBuffers.OutputBufferId bufferId) {}
+    public void abort(OutputBuffers.OutputBufferId bufferId, boolean isRequestForPageBackup) {}
 
     @Override
     public ListenableFuture<?> isFull()

@@ -445,23 +445,24 @@ public class TaskResource
     public void acknowledgeResults(
             @PathParam("taskId") TaskId taskId,
             @PathParam("bufferId") OutputBufferId bufferId,
-            @PathParam("token") final long token)
+            @PathParam("token") final long token,
+            @HeaderParam(PRESTO_REQUEST_PAGE_BACKUP) boolean isRequestedByDataNode)
     {
         requireNonNull(taskId, "taskId is null");
         requireNonNull(bufferId, "bufferId is null");
 
-        taskManager.acknowledgeTaskResults(taskId, bufferId, token);
+        taskManager.acknowledgeTaskResults(taskId, bufferId, token, isRequestedByDataNode);
     }
 
     @DELETE
     @Path("{taskId}/results/{bufferId}")
     @Produces(APPLICATION_JSON)
-    public void abortResults(@PathParam("taskId") TaskId taskId, @PathParam("bufferId") OutputBufferId bufferId, @Context UriInfo uriInfo)
+    public void abortResults(@PathParam("taskId") TaskId taskId, @PathParam("bufferId") OutputBufferId bufferId, @Context UriInfo uriInfo, @HeaderParam(PRESTO_REQUEST_PAGE_BACKUP) boolean isRequestedByDataNode)
     {
         requireNonNull(taskId, "taskId is null");
         requireNonNull(bufferId, "bufferId is null");
 
-        taskManager.abortTaskResults(taskId, bufferId);
+        taskManager.abortTaskResults(taskId, bufferId, isRequestedByDataNode);
     }
 
     @DELETE
