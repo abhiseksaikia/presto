@@ -13,7 +13,6 @@
  */
 package com.facebook.presto.execution.buffer;
 
-import com.facebook.airlift.http.client.Response;
 import com.facebook.airlift.log.Logger;
 import com.facebook.presto.execution.Lifespan;
 import com.facebook.presto.execution.StateMachine;
@@ -30,7 +29,6 @@ import com.google.common.util.concurrent.ListenableFuture;
 import io.airlift.units.DataSize;
 
 import java.util.List;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
@@ -50,7 +48,6 @@ import static com.facebook.presto.spi.StandardErrorCode.GRACEFUL_SHUTDOWN;
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkState;
 import static java.util.Objects.requireNonNull;
-import static javax.ws.rs.core.Response.Status.OK;
 
 public class PartitionedOutputBuffer
         implements OutputBuffer
@@ -66,6 +63,9 @@ public class PartitionedOutputBuffer
     private final AtomicLong totalPagesAdded = new AtomicLong();
     private final AtomicLong totalRowsAdded = new AtomicLong();
     private final AtomicBoolean isGracefulShutdown = new AtomicBoolean();
+    private final BackupPageManager pageUploader;
+    private final TaskId taskId;
+    private final String taskInstanceId;
 
     public PartitionedOutputBuffer(
             BackupPageManager pageUploader,
@@ -78,7 +78,9 @@ public class PartitionedOutputBuffer
             Executor notificationExecutor)
     {
         this.state = requireNonNull(state, "state is null");
-
+        this.pageUploader = requireNonNull(pageUploader, "pageUploader is null");
+        this.taskId = requireNonNull(taskId, "taskId is null");
+        this.taskInstanceId = requireNonNull(taskInstanceId, "taskInstanceId is null");
         requireNonNull(outputBuffers, "outputBuffers is null");
         checkArgument(outputBuffers.getType() == PARTITIONED, "Expected a PARTITIONED output buffer descriptor");
         checkArgument(outputBuffers.isNoMoreBufferIds(), "Expected a final output buffer descriptor");
@@ -364,24 +366,10 @@ public class PartitionedOutputBuffer
     public void gracefulShutdown()
     {
         isGracefulShutdown.set(true);
-        List<ListenableFuture<Response>> shutdownFutures = partitions.stream()
+        List<ClientBufferState> clientBufferStates = partitions.stream()
                 .map(ClientBuffer::gracefulShutdown)
                 .collect(Collectors.toList());
-        shutdownFutures.stream()
-                .forEach(future -> {
-                    try {
-                        Response response = future.get();
-                        checkArgument(response.getStatusCode() == OK.getStatusCode(), "Failed to gracefully shutdown output buffer");
-                    }
-                    catch (ExecutionException e) {
-                        log.error(e, "ExecutionException to gracefully shutdown output buffer");
-                        throw new RuntimeException("Failed to gracefully shutdown output buffer", e);
-                    }
-                    catch (InterruptedException e) {
-                        log.error(e, "InterruptedException to gracefully shutdown output buffer");
-                        throw new RuntimeException("Failed to gracefully shutdown output buffer", e);
-                    }
-                });
+        pageUploader.requestPageUpload(taskId, taskInstanceId, clientBufferStates);
     }
 
     @Override

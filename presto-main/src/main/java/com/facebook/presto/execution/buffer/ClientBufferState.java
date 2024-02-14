@@ -1,4 +1,3 @@
-
 /*
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -12,29 +11,40 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.facebook.presto.server.remotetask;
+package com.facebook.presto.execution.buffer;
 
-import com.facebook.presto.execution.buffer.ClientBufferInfo;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
-import java.util.List;
-
-import static java.util.Objects.requireNonNull;
-
-public class PageInitUploadRequest
+public class ClientBufferState
 {
-    private final List<ClientBufferInfo> clientBufferInfos;
+    private final String bufferId;
+    private final int pageSize;
+    private final long currentSequenceID;
 
     @JsonCreator
-    public PageInitUploadRequest(@JsonProperty("clientBufferStates") List<ClientBufferInfo> clientBufferInfos)
+    public ClientBufferState(@JsonProperty("bufferId") String bufferId, @JsonProperty("pageSize") int pageSize, @JsonProperty("currentSequenceID") long currentSequenceID)
     {
-        this.clientBufferInfos = requireNonNull(clientBufferInfos, "clientBufferInfos is null");
+        this.bufferId = bufferId;
+        this.pageSize = pageSize;
+        this.currentSequenceID = currentSequenceID;
     }
 
     @JsonProperty
-    public List<ClientBufferInfo> getClientBufferInfos()
+    public String getBufferId()
     {
-        return clientBufferInfos;
+        return bufferId;
+    }
+
+    @JsonProperty
+    public int getPageSize()
+    {
+        return pageSize;
+    }
+
+    @JsonProperty
+    public long getCurrentSequenceID()
+    {
+        return currentSequenceID;
     }
 }

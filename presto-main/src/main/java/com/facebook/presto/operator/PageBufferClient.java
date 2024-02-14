@@ -52,6 +52,7 @@ import java.util.OptionalLong;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.regex.Matcher;
@@ -125,7 +126,7 @@ public final class PageBufferClient
     private String taskInstanceId;
     @GuardedBy("this")
     private boolean isServerGracefulShutdown;
-    private boolean isRemoteHostShuttingdown;
+    private AtomicBoolean isRemoteHostShuttingdown = new AtomicBoolean();
 
     private final AtomicLong rowsReceived = new AtomicLong();
     private final AtomicInteger pagesReceived = new AtomicInteger();
@@ -140,7 +141,6 @@ public final class PageBufferClient
     private final Executor pageBufferClientCallbackExecutor;
     private final BackupPageManager pageManager;
     private final TaskId remoteSourceTaskId;
-    private Optional<URI> currentBackupURI = Optional.empty();
     private final HttpClient httpClient;
     private boolean isLocationRedirected;
 
@@ -227,11 +227,7 @@ public final class PageBufferClient
 
     private void setServerGracefulShutdown()
     {
-        if (!isRemoteHostShuttingdown) {
-            isRemoteHostShuttingdown = true;
-            //reset the backoff
-            this.backoff.success();
-        }
+        isRemoteHostShuttingdown.set(true);
     }
 
     public synchronized PageBufferClientStatus getStatus()
@@ -385,9 +381,10 @@ public final class PageBufferClient
                 }
                 //Additional check for safety in case smc notification does not work
                 if (isGracefulshutdownError(t)) {
+                    log.info("Graceful shutdown error detected for %s", location);
                     setServerGracefulShutdown();
                 }
-                if (isRemoteHostShuttingdown /*|| pageManager.isRemoteHostShutdown(getBaseUrl(location))*/) {
+                if (isRemoteHostShuttingdown.get() /*|| pageManager.isRemoteHostShutdown(getBaseUrl(location))*/) {
                     redirectLocation();
                 }
                 handleFailure(t, resultFuture);
@@ -395,7 +392,7 @@ public final class PageBufferClient
         }, pageBufferClientCallbackExecutor);
     }
 
-    private void redirectLocation()
+    private synchronized void redirectLocation()
     {
         //FIXME check if thread safety us required
         if (!isLocationRedirected) {
@@ -463,12 +460,7 @@ public final class PageBufferClient
                 // Acknowledge token without handling the response.
                 // The next request will also make sure the token is acknowledged.
                 // This is to fast release the pages on the buffer side.
-                if (currentBackupURI.isPresent() && currentBackupURI.get().equals(uri)) {
-                    pageManager.acknowledgeResultsAsync(remoteSourceTaskId, getBufferIDFromLocation(location), result.getNextToken());
-                }
-                else {
-                    resultClient.acknowledgeResultsAsync(result.getNextToken());
-                }
+                resultClient.acknowledgeResultsAsync(result.getNextToken());
             }
 
             for (SerializedPage page : pages) {
@@ -524,13 +516,7 @@ public final class PageBufferClient
 
     private synchronized void sendDelete()
     {
-        ListenableFuture<?> resultFuture;
-        if (currentBackupURI.isPresent()) {
-            resultFuture = pageManager.abortResult(remoteSourceTaskId, getBufferIDFromLocation(location));
-        }
-        else {
-            resultFuture = resultClient.abortResults();
-        }
+        ListenableFuture<?> resultFuture = resultClient.abortResults();
         future = resultFuture;
         Futures.addCallback(resultFuture, new FutureCallback<Object>()
         {
@@ -597,7 +583,7 @@ public final class PageBufferClient
 
     private void handlePrestoException(PrestoException prestoException)
     {
-        if (prestoException.getErrorCode() == PAGE_CACHE_UNAVAILABLE.toErrorCode() || isRemoteHostShuttingdown) {
+        if (prestoException.getErrorCode() == PAGE_CACHE_UNAVAILABLE.toErrorCode() || isRemoteHostShuttingdown.get()) {
             if (backoff.failure()) {
                 String hostAddress = getLocalhost();
                 pageManager.getEventListenerManager().trackPreemptionLifeCycle(

@@ -32,6 +32,8 @@ import com.facebook.presto.execution.PageKey;
 import com.facebook.presto.execution.TaskId;
 import com.facebook.presto.execution.TaskInfo;
 import com.facebook.presto.execution.buffer.BufferResult;
+import com.facebook.presto.execution.buffer.ClientBufferInfo;
+import com.facebook.presto.execution.buffer.ClientBufferState;
 import com.facebook.presto.execution.buffer.OutputBuffers;
 import com.facebook.presto.execution.executor.QueryRecoveryDebugInfo;
 import com.facebook.presto.execution.executor.QueryRecoveryState;
@@ -88,6 +90,7 @@ import static com.facebook.presto.spi.NodePoolType.DEFAULT;
 import static com.facebook.presto.spi.StandardErrorCode.PAGE_CACHE_UNAVAILABLE;
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Verify.verify;
+import static com.google.common.collect.ImmutableList.toImmutableList;
 import static com.google.common.util.concurrent.Futures.immediateFuture;
 import static java.lang.Math.toIntExact;
 import static java.nio.charset.StandardCharsets.UTF_8;
@@ -129,7 +132,7 @@ public class BackupPageManager
                     .build();
             //FIXME use rocksdb?
             //this.pageCache = new ConcurrentHashMap<>();
-            pageDownloadScheduler = Optional.of(newScheduledThreadPool(100, threadsNamed("task-page-download-%s")));
+            pageDownloadScheduler = Optional.of(newScheduledThreadPool(5, threadsNamed("task-page-download-%s")));
         }
         else {
             //FIXME, should we use Optional
@@ -182,6 +185,66 @@ public class BackupPageManager
         }
     }
 
+    public ListenableFuture<Response> requestPageUpload(TaskId taskId, String taskInstanceID, List<ClientBufferState> clientBufferStates)
+    {
+        log.info("Client::initPageUpload task : %s , taskInstanceId:%s, clientBufferStates: %s", taskId, taskInstanceID, clientBufferStates);
+        //construct the space trequired to store the numberOfPages
+        URI taskLocation = getTaskLocation(taskId);
+        URI internalUri = nodeManager.getCurrentNode().getInternalUri();
+        List<ClientBufferInfo> clientBufferInfos = clientBufferStates.stream()
+                .map(state -> new ClientBufferInfo(
+                        state.getBufferId(),
+                        state.getPageSize(),
+                        state.getCurrentSequenceID(),
+                        uriBuilderFrom(internalUri).appendPath("/v1/task").appendPath(taskId.toString()).appendPath("results").appendPath(state.getBufferId()).build()))
+                .collect(toImmutableList());
+        //FIXME URL is changed now, provide bufferLocation
+        URI requestURI = uriBuilderFrom(taskLocation)
+                .appendPath(taskInstanceID)
+                .build();
+        log.info("Client::initPageUpload requestURI : %s , clientBufferInfos:%s", requestURI, clientBufferInfos);
+
+        PageInitUploadRequest initUploadRequest = new PageInitUploadRequest(clientBufferInfos);
+        byte[] taskUpdateRequestJson = pageInitUploadRequestJsonCodec.toBytes(initUploadRequest);
+
+        Request request = setContentTypeHeaders(false, preparePost())
+                .setBodyGenerator(createStaticBodyGenerator(taskUpdateRequestJson))
+                .setUri(requestURI).build();
+        // Define a ResponseHandler
+        ResponseHandler<Response, RuntimeException> responseHandler = new ResponseHandler<Response, RuntimeException>()
+        {
+            @Override
+            public Response handleException(Request request, Exception exception)
+            {
+                clientBufferInfos.stream().forEach(clientBufferInfo -> eventListenerManager.trackPreemptionLifeCycle(
+                        taskId,
+                        QueryRecoveryDebugInfo.builder()
+                                .outputBufferID(clientBufferInfo.getBufferId())
+                                .state(QueryRecoveryState.PAGE_TRANSFER_INIT_FAILED)
+                                .extraInfo(ImmutableMap.of("msg", exception.getMessage()))
+                                .build()));
+
+                log.error(exception, "Client::initPageUpload failed for requestURI : %s , clientBufferInfo:%s, error = %s", requestURI, clientBufferInfos, exception.getMessage());
+                throw propagate(request, exception);
+            }
+
+            @Override
+            public Response handle(Request request, Response response)
+            {
+                /**  eventListenerManager.trackPreemptionLifeCycle(
+                        taskId,
+                        QueryRecoveryDebugInfo.builder()
+                                .outputBufferID(bufferID)
+                                .state(QueryRecoveryState.PAGE_TRANSFER_INIT_SUCCESS)
+                                .build());
+                 */
+                log.info("Client::initPageUpload succeeded for requestURI : %s , clientBufferInfos:%s", requestURI, clientBufferInfos);
+                return response;
+            }
+        };
+        return httpClient.executeAsync(request, responseHandler);
+    }
+    /*
     public ListenableFuture<Response> requestPageUpload(TaskId taskId, String taskInstanceID, String bufferID, int numberOfPages, long currentSequenceID)
     {
         log.info("Client::initPageUpload task : %s , taskInstanceId:%s, bufferID:%s, page size: %s", taskId, taskInstanceID, bufferID, numberOfPages);
@@ -242,6 +305,7 @@ public class BackupPageManager
         };
         return httpClient.executeAsync(request, responseHandler);
     }
+    */
 
     private static NodePoolType getPoolType(ServiceDescriptor service)
     {
@@ -445,22 +509,41 @@ public class BackupPageManager
                         .state(QueryRecoveryState.DATA_PAGE_TRANSFER_INIT_RECEIVED)
                         .build());
         pageDownloadScheduler.get().execute(() -> {
+            long start = System.nanoTime();
+            LinkedList<SerializedPage> serializedPages = new LinkedList<>();
             try {
                 //temporary placeholder to provide empty page to consumer before page data is fetched from worker
                 pageCache.put(new PageKey(taskId.toString(), bufferId), new PageData(token, taskInstanceID));
-                long start = System.nanoTime();
+                eventListenerManager.trackPreemptionLifeCycle(
+                        taskId,
+                        QueryRecoveryDebugInfo.builder()
+                                .outputBufferID(bufferId)
+                                .state(QueryRecoveryState.DATA_PAGE_TRANSFER_IN_PROGRESS)
+                                .extraInfo(ImmutableMap.of(
+                                        "size", String.valueOf(getByteSize(serializedPages)),
+                                        "duration", String.valueOf(Duration.nanosSince(start).roundTo(TimeUnit.SECONDS))))
+                                .build());
                 log.info("Going to fetch pages from location =%s", bufferLocation);
                 PageDataFetcher pageBackupClient = new PageDataFetcher(httpClient, bufferLocation, token);
                 Iterator<List<SerializedPage>> pages = pageBackupClient.getPages();
 
-                LinkedList<SerializedPage> serializedPages = new LinkedList<>();
                 while (pages.hasNext()) {
                     List<SerializedPage> nextPages = pages.next();
                     if (!nextPages.isEmpty()) {
                         serializedPages.addAll(nextPages);
                     }
+                    eventListenerManager.trackPreemptionLifeCycle(
+                            taskId,
+                            QueryRecoveryDebugInfo.builder()
+                                    .outputBufferID(bufferId)
+                                    .state(QueryRecoveryState.DATA_PAGE_TRANSFER_IN_PROGRESS)
+                                    .extraInfo(ImmutableMap.of(
+                                            "size", String.valueOf(getByteSize(serializedPages)),
+                                            "duration", String.valueOf(Duration.nanosSince(start).roundTo(TimeUnit.SECONDS))))
+                                    .build());
                 }
                 log.info("Page fetching is successful from location =%s", bufferLocation);
+                //FIXME need to have callback
                 pageBackupClient.close();
                 log.info("Abort is successful to location =%s", bufferLocation);
 
@@ -468,15 +551,14 @@ public class BackupPageManager
                 PageData pageData = new PageData(token, taskInstanceID);
                 pageData.updatePages(serializedPages);
                 pageCache.put(new PageKey(taskId.toString(), bufferId), pageData);
-                long duration = Duration.nanosSince(start).roundTo(TimeUnit.SECONDS);
                 eventListenerManager.trackPreemptionLifeCycle(
                         taskId,
                         QueryRecoveryDebugInfo.builder()
                                 .outputBufferID(bufferId)
-                                .state(QueryRecoveryState.DATA_PAGE_TRANSFER_INIT_COMPLETED)
+                                .state(QueryRecoveryState.DATA_PAGE_TRANSFER_COMPLETED)
                                 .extraInfo(ImmutableMap.of(
-                                        "size", String.valueOf(serializedPages.size()),
-                                        "duration", String.valueOf(duration)))
+                                        "size", String.valueOf(getByteSize(serializedPages)),
+                                        "duration", String.valueOf(Duration.nanosSince(start).roundTo(TimeUnit.SECONDS))))
                                 .build());
             }
             catch (Throwable ex) {
@@ -485,11 +567,19 @@ public class BackupPageManager
                         taskId,
                         QueryRecoveryDebugInfo.builder()
                                 .outputBufferID(bufferId)
-                                .state(QueryRecoveryState.DATA_PAGE_TRANSFER_INIT_FAILED)
-                                .extraInfo(new ImmutableMap.Builder<String, String>().put("bufferLocation", String.valueOf(bufferLocation)).build())
+                                .state(QueryRecoveryState.DATA_PAGE_TRANSFER_FAILED)
+                                .extraInfo(ImmutableMap.of(
+                                        "size", String.valueOf(getByteSize(serializedPages)),
+                                        "bufferLocation", String.valueOf(bufferLocation),
+                                        "duration", String.valueOf(Duration.nanosSince(start).roundTo(TimeUnit.SECONDS))))
                                 .build());
             }
         });
+    }
+
+    private long getByteSize(LinkedList<SerializedPage> serializedPages)
+    {
+        return serializedPages.stream().mapToLong(SerializedPage::getSizeInBytes).sum();
     }
 
     public ListenableFuture<BufferResult> getTaskResultsFromCache(TaskId taskId, OutputBuffers.OutputBufferId bufferId, long sequenceId, DataSize maxSize)

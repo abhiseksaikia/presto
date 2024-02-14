@@ -57,6 +57,7 @@ import static com.facebook.presto.client.PrestoHeaders.PRESTO_REQUEST_PAGE_BACKU
 import static com.facebook.presto.client.PrestoHeaders.PRESTO_TASK_INSTANCE_ID;
 import static com.facebook.presto.operator.PageBufferClient.PagesResponse.createEmptyPagesResponse;
 import static com.facebook.presto.operator.PageBufferClient.PagesResponse.createPagesResponse;
+import static com.facebook.presto.spi.StandardErrorCode.GRACEFUL_SHUTDOWN;
 import static com.facebook.presto.spi.StandardErrorCode.PAGE_CACHE_UNAVAILABLE;
 import static com.facebook.presto.spi.page.PagesSerdeUtil.readSerializedPages;
 import static com.google.common.net.HttpHeaders.CONTENT_TYPE;
@@ -234,6 +235,10 @@ public final class HttpRpcShuffleClient
                 }
             }
             catch (PageTransportErrorException e) {
+                log.error("Error for uri: %s, error message:%s", request.getUri().toASCIIString(), e.getMessage());
+                if (e.getMessage().contains("get pages are not allowed now, go to x to consume")) {
+                    throw new PrestoException(GRACEFUL_SHUTDOWN, String.format("get pages are not allowed now, go to x to consume"));
+                }
                 throw new PageTransportErrorException(
                         e.getRemoteHost(),
                         "Error fetching " + request.getUri().toASCIIString(),

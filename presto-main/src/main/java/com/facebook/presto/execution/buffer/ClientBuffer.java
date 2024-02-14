@@ -13,7 +13,6 @@
  */
 package com.facebook.presto.execution.buffer;
 
-import com.facebook.airlift.http.client.Response;
 import com.facebook.presto.execution.TaskId;
 import com.facebook.presto.execution.buffer.OutputBuffers.OutputBufferId;
 import com.facebook.presto.execution.buffer.SerializedPageReference.PagesReleasedListener;
@@ -451,17 +450,10 @@ class ClientBuffer
                 .toString();
     }
 
-    public ListenableFuture<Response> gracefulShutdown()
+    public ClientBufferState gracefulShutdown()
     {
         isGracefulShutdown.set(true);
-        return transferPages();
-    }
-
-    private synchronized ListenableFuture<Response> transferPages()
-    {
-        checkArgument(isGracefulShutdown.get(), "graceful shutdown needs to be initiated before initiating the transfer");
-        //transfer the pages along with seq number
-        return pageUploader.requestPageUpload(taskId, taskInstanceId, bufferId.toString(), pages.size(), currentSequenceId.get());
+        return new ClientBufferState(bufferId.toString(), pages.size(), currentSequenceId.get());
     }
 
     @Immutable

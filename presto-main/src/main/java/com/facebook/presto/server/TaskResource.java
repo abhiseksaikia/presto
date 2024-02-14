@@ -412,19 +412,17 @@ public class TaskResource
     }
 
     @POST
-    @Path("{taskId}/{taskInstanceID}/buffers/{bufferId}/{token}/{numberOfPages}")
+    @Path("{taskId}/{taskInstanceID}")
     @Produces(APPLICATION_JSON)
     @Consumes({APPLICATION_JSON, APPLICATION_JACKSON_SMILE})
     public Response initializeUploadPages(
             @PathParam("taskId") TaskId taskId,
             @PathParam("taskInstanceID") String taskInstanceID,
-            @PathParam("bufferId") String bufferId,
-            @PathParam("token") long token,
-            @PathParam("numberOfPages") int numberOfPages,
             PageInitUploadRequest initUploadRequest)
     {
         //TODO not handling sequence id
-        taskManager.initializeUploadPages(initUploadRequest.getPageLocation(), taskId, taskInstanceID, bufferId, token, numberOfPages);
+        initUploadRequest.getClientBufferInfos().stream()
+                .forEach(clientBufferInfo -> taskManager.initializeUploadPages(clientBufferInfo.getBufferLocation(), taskId, taskInstanceID, clientBufferInfo.getBufferId(), clientBufferInfo.getCurrentSequenceID(), clientBufferInfo.getPageSize()));
         return Response.ok().build();
     }
 
