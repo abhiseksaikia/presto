@@ -596,8 +596,10 @@ public final class PageBufferClient
                                         .put("isRemoteHostDetectedAsShutdown", String.valueOf(isRemoteHostShuttingdown))
                                         .put("errorCode", String.valueOf(prestoException.getErrorCode()))
                                         .put("state", getStatus().toString())
+                                        .put("failureCount", String.valueOf(backoff.getFailureCount()))
+                                        .put("failureDuration", String.valueOf(backoff.getFailureDuration().convertTo(SECONDS)))
                                         .build())
-                                .state(QueryRecoveryState.DATA_PAGE_POLL_FROM_LEAF_FAILED)
+                                .state(QueryRecoveryState.PAGE_POLL_FROM_DATA_NODE_FAILED)
                                 .build());
                 clientCallback.clientFailed(PageBufferClient.this, prestoException);
             }

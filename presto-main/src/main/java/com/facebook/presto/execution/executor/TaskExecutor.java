@@ -25,7 +25,9 @@ import com.facebook.presto.execution.SplitRunner;
 import com.facebook.presto.execution.TaskId;
 import com.facebook.presto.execution.TaskManagerConfig;
 import com.facebook.presto.execution.TaskManagerConfig.TaskPriorityTracking;
+import com.facebook.presto.execution.buffer.BufferInfo;
 import com.facebook.presto.execution.buffer.OutputBuffer;
+import com.facebook.presto.execution.buffer.OutputBufferInfo;
 import com.facebook.presto.operator.scalar.JoniRegexpFunctions;
 import com.facebook.presto.server.ServerConfig;
 import com.facebook.presto.spi.PrestoException;
@@ -276,6 +278,16 @@ public class TaskExecutor
         //FIXME this is just to test scribe
         checkState(enableGracefulShutdown || enableRetryForFailedSplits, "gracefulShutdown should only be called when enableGracefulShutdown or enableRetryForFailedSplits is set to true");
         currentTasksSnapshot.stream().forEach(taskHandle -> taskHandle.gracefulShutdown());
+        long startOfGracefulShutdown = System.nanoTime();
+        Thread thread = new Thread(() -> {
+            try {
+                stop(startOfGracefulShutdown, currentTasksSnapshot);
+            }
+            catch (Exception e) {
+                log.error(e, "Trying to shut down");
+            }
+        });
+        Runtime.getRuntime().addShutdownHook(thread);
         //wait for running splits to be over
         long waitTimeMillis = 5; // Wait for 5 milliseconds between checks to avoid cpu spike
         //before killing the tasks,  make sure output buffer data is consumed.
@@ -324,9 +336,9 @@ public class TaskExecutor
 
                             waitForRunningSplitTime.add(Duration.nanosSince(startTime));
 
-                            log.info("Sending no more pages to output buffer for task %s= %s", taskId, outputBuffer.getInfo());
+                            log.info("Sending no more pages to output buffer for task %s= %s", taskId, getLoggingInfo(outputBuffer.getInfo()));
                             outputBuffer.setNoMorePages();
-                            log.info("After Sending no more pages to output buffer for task %s= %s", taskId, outputBuffer.getInfo());
+                            log.info("After Sending no more pages to output buffer for task %s= %s", taskId, getLoggingInfo(outputBuffer.getInfo()));
 
                             if (!outputBuffer.forceNoMoreBufferIfPossibleOrKill()) {
                                 log.info("The output buffer for task %s is not drainable, fail the output buffer to notify downstream.", taskId);
@@ -341,7 +353,7 @@ public class TaskExecutor
                             waitForOutputBufferFlush(taskHandle, taskId, outputBuffer);
 
                             outputBufferEmptyWaitTime.add(Duration.nanosSince(startTime));
-                            log.warn("GracefulShutdown:: calling handleShutDown for task- %s, buffer info : %s", taskId, outputBuffer.getInfo());
+                            log.warn("GracefulShutdown:: calling handleShutDown for task- %s, buffer info : %s", taskId, getLoggingInfo(outputBuffer.getInfo()));
                             eventListenerManager.trackPreemptionLifeCycle(taskHandle.getTaskId(), QueryRecoveryDebugInfo.builder().state(QueryRecoveryState.INITIATE_HANDLE_SHUTDOWN).build());
                             taskHandle.handleShutDown();
                         }
@@ -358,9 +370,23 @@ public class TaskExecutor
             log.info("Waiting for shutdown of all tasks");
             latch.await();
         }
-        catch (InterruptedException e) {
+        catch (Throwable ex) {
+            log.error(ex, "GracefulShutdown failed");
             // TODO Handle interruption
         }
+    }
+
+    private void stop(long startOfGracefulShutdown, List<TaskHandle> currentTasksSnapshot)
+    {
+        Duration duration = Duration.nanosSince(startOfGracefulShutdown).convertTo(SECONDS);
+        log.warn("TaskExecutor is shutting down after %s" + duration);
+        currentTasksSnapshot.stream()
+                .forEach(task -> eventListenerManager.trackPreemptionLifeCycle(
+                        task.getTaskId(),
+                        QueryRecoveryDebugInfo.builder()
+                                .state(QueryRecoveryState.SERVER_SHUTDOWN)
+                                .extraInfo(ImmutableMap.of("duration", duration.toString()))
+                                .build()));
     }
 
     private void waitForOutputBufferFlush(TaskHandle taskHandle, TaskId taskId, OutputBuffer outputBuffer)
@@ -374,16 +400,33 @@ public class TaskExecutor
                                         .state(QueryRecoveryState.WAITING_FOR_OUTPUT_BUFFER)
                                         .outputBufferID(String.valueOf(bufferInfo.getBufferId().getId()))
                                         .outputBufferSize(bufferInfo.getPageBufferInfo().getBufferedBytes())
-                                        .extraInfo(new ImmutableMap.Builder<String, String>().put("type", outputBuffer.getClass().getSimpleName()).build())
+                                        .extraInfo(new ImmutableMap.Builder<String, String>().put("type", outputBuffer.getInfo().getType()).build())
                                         .build()));
 
-                log.warn("GracefulShutdown:: Waiting for output buffer to be empty for task- %s, outputbuffer info = %s", taskId, outputBuffer.getInfo());
+                log.warn("GracefulShutdown:: Waiting for output buffer to be empty for task- %s, outputbuffer info = %s", taskId, getLoggingInfo(outputBuffer.getInfo()));
                 Thread.sleep(5);
             }
             catch (InterruptedException e) {
                 log.error(e, "GracefulShutdown got interrupted for task %s", taskId);
             }
         }
+    }
+
+    private String getLoggingInfo(OutputBufferInfo info)
+    {
+        StringBuilder builder = new StringBuilder();
+        builder.append(info.getType());
+        builder.append("/");
+        builder.append(info.getState());
+        builder.append("[");
+        for (BufferInfo bufferInfo : info.getBuffers()) {
+            builder.append(bufferInfo.getBufferId());
+            builder.append("/finished=");
+            builder.append(bufferInfo.isFinished());
+            builder.append(",");
+        }
+        builder.append("]");
+        return builder.toString();
     }
 
     @VisibleForTesting

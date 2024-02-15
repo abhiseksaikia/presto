@@ -37,14 +37,12 @@ import com.facebook.presto.execution.buffer.ClientBufferState;
 import com.facebook.presto.execution.buffer.OutputBuffers;
 import com.facebook.presto.execution.executor.QueryRecoveryDebugInfo;
 import com.facebook.presto.execution.executor.QueryRecoveryState;
-import com.facebook.presto.metadata.InternalNode;
 import com.facebook.presto.metadata.InternalNodeManager;
 import com.facebook.presto.operator.ForPageTransfer;
 import com.facebook.presto.operator.HttpRpcShuffleClient;
 import com.facebook.presto.operator.PageBufferClient;
 import com.facebook.presto.server.ServerConfig;
 import com.facebook.presto.spi.NodePoolType;
-import com.facebook.presto.spi.NodeState;
 import com.facebook.presto.spi.PrestoException;
 import com.facebook.presto.spi.page.SerializedPage;
 import com.google.common.cache.Cache;
@@ -55,23 +53,28 @@ import com.google.common.util.concurrent.ListenableFuture;
 import io.airlift.units.DataSize;
 import io.airlift.units.Duration;
 
+import javax.annotation.PostConstruct;
 import javax.inject.Inject;
 
 import java.io.File;
 import java.io.IOException;
-import java.net.MalformedURLException;
+import java.net.InetAddress;
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.net.URL;
+import java.net.UnknownHostException;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
+import static com.facebook.airlift.concurrent.Threads.daemonThreadsNamed;
 import static com.facebook.airlift.concurrent.Threads.threadsNamed;
 import static com.facebook.airlift.http.client.HttpStatus.familyForStatusCode;
 import static com.facebook.airlift.http.client.HttpUriBuilder.uriBuilderFrom;
@@ -89,12 +92,14 @@ import static com.facebook.presto.spi.NodePoolType.DATA;
 import static com.facebook.presto.spi.NodePoolType.DEFAULT;
 import static com.facebook.presto.spi.StandardErrorCode.PAGE_CACHE_UNAVAILABLE;
 import static com.google.common.base.Preconditions.checkArgument;
-import static com.google.common.base.Verify.verify;
 import static com.google.common.collect.ImmutableList.toImmutableList;
 import static com.google.common.util.concurrent.Futures.immediateFuture;
 import static java.lang.Math.toIntExact;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.concurrent.Executors.newScheduledThreadPool;
+import static java.util.concurrent.Executors.newSingleThreadScheduledExecutor;
+import static java.util.concurrent.TimeUnit.MILLISECONDS;
+import static java.util.concurrent.TimeUnit.SECONDS;
 
 public class BackupPageManager
 {
@@ -104,7 +109,7 @@ public class BackupPageManager
     private final DiscoveryLookupClient lookupClient;
     private final LocationFactory locationFactory;
     //added for local testing
-    private Optional<URL> dataNodeBaseURL = Optional.empty();
+    private AtomicReference<List<URI>> sortedDataNodeList = new AtomicReference<>();
     private final JsonCodec<PageInitUploadRequest> pageInitUploadRequestJsonCodec = JsonCodec.jsonCodec(PageInitUploadRequest.class);
 
     //added for fault injection
@@ -115,6 +120,8 @@ public class BackupPageManager
     private final Cache<PageKey, PageData> pageCache;
     //private final ConcurrentMap<PageKey, PageData> pageCache;
     private final Optional<ScheduledExecutorService> pageDownloadScheduler;
+    private final ScheduledExecutorService refreshExecutor = newSingleThreadScheduledExecutor(daemonThreadsNamed("backup-page-manager-refresh"));
+    private Duration refreshInterval = new Duration(30, SECONDS);
 
     @Inject
     public BackupPageManager(@ForPageTransfer HttpClient httpClient, InternalNodeManager nodeManager, LocationFactory locationFactory, DiscoveryLookupClient lookupClient, EventListenerManager eventListenerManager, ServerConfig serverConfig)
@@ -132,7 +139,7 @@ public class BackupPageManager
                     .build();
             //FIXME use rocksdb?
             //this.pageCache = new ConcurrentHashMap<>();
-            pageDownloadScheduler = Optional.of(newScheduledThreadPool(5, threadsNamed("task-page-download-%s")));
+            pageDownloadScheduler = Optional.of(newScheduledThreadPool(30, threadsNamed("task-page-download-%s")));
         }
         else {
             //FIXME, should we use Optional
@@ -141,15 +148,41 @@ public class BackupPageManager
         }
     }
 
-    private ServiceDescriptor getDataNodeService()
+    @PostConstruct
+    public void start()
+    {
+        refreshExecutor.scheduleWithFixedDelay(this::refresh, 0, refreshInterval.toMillis(), MILLISECONDS);
+    }
+
+    public void refresh()
+    {
+        try {
+            List<URI> dataNodeService = getDataNodeService();
+            sortedDataNodeList.set(dataNodeService);
+            log.info("Data node list updated = %s", dataNodeService);
+        }
+        catch (Throwable t) {
+            log.error(t, "Error updating coordinators");
+        }
+    }
+
+    private List<URI> getDataNodeService()
     {
         try {
             ListenableFuture<ServiceDescriptors> services = lookupClient.getServices("presto");
-            Optional<ServiceDescriptor> dataNodeServiceDescriptor = services.get().getServiceDescriptors().stream()
+            return services.get().getServiceDescriptors().stream()
                     .filter(serviceDescriptor -> NodePoolType.valueOf(serviceDescriptor.getProperties().getOrDefault("pool_type", "DEFAULT")) == DATA)
-                    .findFirst();
-            checkArgument(dataNodeServiceDescriptor.isPresent(), "Data node not found");
-            return dataNodeServiceDescriptor.get();
+                    .map(dataNodeService -> {
+                        try {
+                            return new URI(dataNodeService.getProperties().get("http"));
+                        }
+                        catch (URISyntaxException e) {
+                            return null;
+                        }
+                    })
+                    .filter(Objects::nonNull)
+                    .sorted(Comparator.comparing(URI::toString))
+                    .collect(toImmutableList());
         }
         catch (ExecutionException e) {
             log.error(e, "Failed to discover data node");
@@ -221,7 +254,7 @@ public class BackupPageManager
                         QueryRecoveryDebugInfo.builder()
                                 .outputBufferID(clientBufferInfo.getBufferId())
                                 .state(QueryRecoveryState.PAGE_TRANSFER_INIT_FAILED)
-                                .extraInfo(ImmutableMap.of("msg", exception.getMessage()))
+                                .extraInfo(ImmutableMap.of("msg", abbreviate(exception.getMessage(), 100)))
                                 .build()));
 
                 log.error(exception, "Client::initPageUpload failed for requestURI : %s , clientBufferInfo:%s, error = %s", requestURI, clientBufferInfos, exception.getMessage());
@@ -243,6 +276,17 @@ public class BackupPageManager
             }
         };
         return httpClient.executeAsync(request, responseHandler);
+    }
+
+    private String abbreviate(String input, int length)
+    {
+// Check if the string is null or its length is 100 or less
+        if (input == null || input.length() <= length) {
+            return input; // Return the original string
+        }
+        else {
+            return input.substring(0, 100); // Return the first 100 characters
+        }
     }
     /*
     public ListenableFuture<Response> requestPageUpload(TaskId taskId, String taskInstanceID, String bufferID, int numberOfPages, long currentSequenceID)
@@ -361,63 +405,27 @@ public class BackupPageManager
 
     public URI getBackupBufferLocation(TaskId taskId, String bufferID)
     {
-        initDataNode();
-        if (dataNodeBaseURL.isPresent()) {
-            try {
-                HttpUriBuilder builder = uriBuilderFrom(dataNodeBaseURL.get().toURI());
-                return builder.appendPath("/v1/task")
-                        .appendPath(taskId.toString())
-                        .appendPath("results")
-                        .appendPath(bufferID)
-                        .build();
-            }
-            catch (URISyntaxException e) {
-                throw new RuntimeException("Invalid data node url" + dataNodeBaseURL.get());
-            }
-        }
-        Optional<InternalNode> dataNode = nodeManager.getNodes(NodeState.ACTIVE).stream().filter(node -> node.getPoolType() == NodePoolType.DATA).findFirst();
-        if (dataNode.isPresent()) {
-            //hack for local
-            InternalNode internalNode = dataNode.get();
-            URI taskLocation = this.locationFactory.createTaskLocation(internalNode, taskId);
-            return uriBuilderFrom(taskLocation).appendPath(bufferID).build();
-        }
-        throw new RuntimeException("Data node not available to upload pages");
-    }
-
-    private void initDataNode()
-    {
-        if (dataNodeBaseURL.isPresent()) {
-            return;
-        }
-        synchronized (this) {
-            try {
-                if (dataNodeBaseURL.isPresent()) {
-                    return;
-                }
-                ServiceDescriptor dataNodeService = getDataNodeService();
-                log.info("Data node service properties  = %s", dataNodeService.getProperties());
-                dataNodeBaseURL = Optional.of(new URL(dataNodeService.getProperties().get("http")));
-            }
-            catch (MalformedURLException e) {
-                log.error(e, "unable to get data node");
-                throw new RuntimeException("unable to get data node", e);
-            }
-        }
+        List<URI> uriList = sortedDataNodeList.get();
+        checkArgument(uriList != null);
+        checkArgument(uriList.size() == 10);
+        URI dataNode = pickDataNode(taskId, uriList);
+        HttpUriBuilder builder = uriBuilderFrom(dataNode);
+        return builder.appendPath("/v1/task")
+                .appendPath(taskId.toString())
+                .appendPath("results")
+                .appendPath(bufferID)
+                .build();
     }
 
     public URI getTaskLocation(TaskId taskId)
     {
-        initDataNode();
-        if (dataNodeBaseURL.isPresent()) {
-            try {
-                HttpUriBuilder builder = uriBuilderFrom(dataNodeBaseURL.get().toURI());
-                return builder.appendPath("/v1/task").appendPath(taskId.toString()).build();
-            }
-            catch (URISyntaxException e) {
-                throw new RuntimeException("Invalid data node url" + dataNodeBaseURL.get());
-            }
-        }
+        List<URI> uris = sortedDataNodeList.get();
+        checkArgument(uris != null, "sortedDataNodeList is null");
+        checkArgument(uris.size() == 10);
+        URI dataNode = pickDataNode(taskId, uris);
+        HttpUriBuilder builder = uriBuilderFrom(dataNode);
+        return builder.appendPath("/v1/task").appendPath(taskId.toString()).build();
+        /*
         Optional<InternalNode> dataNode = nodeManager.getNodes(NodeState.ACTIVE).stream().filter(node -> node.getPoolType() == NodePoolType.DATA).findFirst();
         if (dataNode.isPresent()) {
             //hack for local
@@ -426,6 +434,13 @@ public class BackupPageManager
             return taskLocation;
         }
         throw new RuntimeException("Data node not available to upload pages");
+        */
+    }
+
+    public static URI pickDataNode(TaskId taskID, List<URI> dataNodes)
+    {
+        int index = Math.abs(taskID.hashCode()) % dataNodes.size();
+        return dataNodes.get(index);
     }
 
     //FIXME this is purely for local debugging, make the smc based remote shutdown working for local environment and remove this
@@ -513,6 +528,7 @@ public class BackupPageManager
         pageDownloadScheduler.get().execute(() -> {
             long start = System.nanoTime();
             LinkedList<SerializedPage> serializedPages = new LinkedList<>();
+            PageDataFetcher pageBackupClient = new PageDataFetcher(httpClient, bufferLocation, token);
             try {
                 //temporary placeholder to provide empty page to consumer before page data is fetched from worker
                 pageCache.put(new PageKey(taskId.toString(), bufferId), new PageData(token, taskInstanceID));
@@ -526,7 +542,6 @@ public class BackupPageManager
                                         "duration", String.valueOf(Duration.nanosSince(start).roundTo(TimeUnit.SECONDS))))
                                 .build());
                 log.info("Going to fetch pages from location =%s", bufferLocation);
-                PageDataFetcher pageBackupClient = new PageDataFetcher(httpClient, bufferLocation, token);
                 Iterator<List<SerializedPage>> pages = pageBackupClient.getPages();
 
                 while (pages.hasNext()) {
@@ -541,6 +556,7 @@ public class BackupPageManager
                                     .state(QueryRecoveryState.DATA_PAGE_TRANSFER_IN_PROGRESS)
                                     .extraInfo(ImmutableMap.of(
                                             "size", String.valueOf(getByteSize(serializedPages)),
+                                            "local", getLocalhost(),
                                             "duration", String.valueOf(Duration.nanosSince(start).roundTo(TimeUnit.SECONDS))))
                                     .build());
                 }
@@ -560,6 +576,7 @@ public class BackupPageManager
                                 .state(QueryRecoveryState.DATA_PAGE_TRANSFER_COMPLETED)
                                 .extraInfo(ImmutableMap.of(
                                         "size", String.valueOf(getByteSize(serializedPages)),
+                                        "local", getLocalhost(),
                                         "duration", String.valueOf(Duration.nanosSince(start).roundTo(TimeUnit.SECONDS))))
                                 .build());
             }
@@ -573,7 +590,9 @@ public class BackupPageManager
                                 .extraInfo(ImmutableMap.of(
                                         "size", String.valueOf(getByteSize(serializedPages)),
                                         "bufferLocation", String.valueOf(bufferLocation),
-                                        "duration", String.valueOf(Duration.nanosSince(start).roundTo(TimeUnit.SECONDS))))
+                                        "duration", String.valueOf(Duration.nanosSince(start).roundTo(TimeUnit.SECONDS)),
+                                        "bytes", String.valueOf(pageBackupClient.getBytesRead()),
+                                        "duration", String.valueOf(pageBackupClient.timeSinceLastRequest()) + "/" + String.valueOf(pageBackupClient.timeSinceVeryFirstRequest())))
                                 .build());
             }
         });
@@ -639,7 +658,8 @@ public class BackupPageManager
         // will advance the sequence id to at least the request position, unless
         // the buffer is destroyed, and in that case the buffer will be empty with
         // no more pages set, which is checked above
-        verify(sequenceId == pageData.getCurrentSequenceID(), "Invalid sequence id");
+        //FIXME check when this can happen!!!
+        //verify(sequenceId == pageData.getCurrentSequenceID(), "Invalid sequence id, current =%s, sequenceId=%s", pageData.getCurrentSequenceID(), sequenceId);
 
         // read the new pages
         long maxBytes = maxSize.toBytes();
@@ -690,5 +710,16 @@ public class BackupPageManager
     public EventListenerManager getEventListenerManager()
     {
         return eventListenerManager;
+    }
+
+    private String getLocalhost()
+    {
+        try {
+            return InetAddress.getLocalHost().getHostAddress();
+        }
+        catch (UnknownHostException e) {
+            log.error(e, "Unable to get local host address");
+        }
+        return "";
     }
 }
