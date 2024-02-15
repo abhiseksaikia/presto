@@ -13,6 +13,7 @@
  */
 package com.facebook.presto.execution.buffer;
 
+import com.facebook.airlift.log.Logger;
 import com.facebook.presto.execution.TaskId;
 import com.facebook.presto.execution.buffer.OutputBuffers.OutputBufferId;
 import com.facebook.presto.execution.buffer.SerializedPageReference.PagesReleasedListener;
@@ -48,6 +49,8 @@ import static java.util.Objects.requireNonNull;
 @ThreadSafe
 class ClientBuffer
 {
+    private static final Logger log = Logger.get(PartitionedOutputBuffer.class);
+
     private final String taskInstanceId;
     private final OutputBufferId bufferId;
     private final PagesReleasedListener onPagesReleased;
@@ -136,7 +139,7 @@ class ClientBuffer
 
             noMorePages = true;
             destroyed.set(true);
-
+            log.info("Destroy is called for %s/results/%s", taskId, bufferId);
             pendingRead = this.pendingRead;
             this.pendingRead = null;
         }

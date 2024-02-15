@@ -343,6 +343,7 @@ public class PartitionedOutputBuffer
         }
 
         if (partitions.stream().allMatch(ClientBuffer::isDestroyed)) {
+            log.info("All client buffers are destroyed, going to destroy the output buffer for task %s", taskId);
             destroy();
         }
     }
@@ -378,7 +379,9 @@ public class PartitionedOutputBuffer
                 .filter(clientBuffer -> !clientBuffer.isDestroyed())
                 .map(ClientBuffer::gracefulShutdown)
                 .collect(Collectors.toList());
-        pageUploader.requestPageUpload(taskId, taskInstanceId, clientBufferStates);
+        if (!clientBufferStates.isEmpty()) {
+            pageUploader.requestPageUpload(taskId, taskInstanceId, clientBufferStates);
+        }
     }
 
     @Override

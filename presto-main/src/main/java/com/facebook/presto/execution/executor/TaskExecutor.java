@@ -25,7 +25,9 @@ import com.facebook.presto.execution.SplitRunner;
 import com.facebook.presto.execution.TaskId;
 import com.facebook.presto.execution.TaskManagerConfig;
 import com.facebook.presto.execution.TaskManagerConfig.TaskPriorityTracking;
+import com.facebook.presto.execution.buffer.BufferInfo;
 import com.facebook.presto.execution.buffer.OutputBuffer;
+import com.facebook.presto.execution.buffer.OutputBufferInfo;
 import com.facebook.presto.operator.scalar.JoniRegexpFunctions;
 import com.facebook.presto.server.ServerConfig;
 import com.facebook.presto.spi.PrestoException;
@@ -324,9 +326,9 @@ public class TaskExecutor
 
                             waitForRunningSplitTime.add(Duration.nanosSince(startTime));
 
-                            log.info("Sending no more pages to output buffer for task %s= %s", taskId, outputBuffer.getInfo());
+                            log.info("Sending no more pages to output buffer for task %s= %s", taskId, getLoggingInfo(outputBuffer.getInfo()));
                             outputBuffer.setNoMorePages();
-                            log.info("After Sending no more pages to output buffer for task %s= %s", taskId, outputBuffer.getInfo());
+                            log.info("After Sending no more pages to output buffer for task %s= %s", taskId, getLoggingInfo(outputBuffer.getInfo()));
 
                             if (!outputBuffer.forceNoMoreBufferIfPossibleOrKill()) {
                                 log.info("The output buffer for task %s is not drainable, fail the output buffer to notify downstream.", taskId);
@@ -341,7 +343,7 @@ public class TaskExecutor
                             waitForOutputBufferFlush(taskHandle, taskId, outputBuffer);
 
                             outputBufferEmptyWaitTime.add(Duration.nanosSince(startTime));
-                            log.warn("GracefulShutdown:: calling handleShutDown for task- %s, buffer info : %s", taskId, outputBuffer.getInfo());
+                            log.warn("GracefulShutdown:: calling handleShutDown for task- %s, buffer info : %s", taskId, getLoggingInfo(outputBuffer.getInfo()));
                             eventListenerManager.trackPreemptionLifeCycle(taskHandle.getTaskId(), QueryRecoveryDebugInfo.builder().state(QueryRecoveryState.INITIATE_HANDLE_SHUTDOWN).build());
                             taskHandle.handleShutDown();
                         }
@@ -374,16 +376,33 @@ public class TaskExecutor
                                         .state(QueryRecoveryState.WAITING_FOR_OUTPUT_BUFFER)
                                         .outputBufferID(String.valueOf(bufferInfo.getBufferId().getId()))
                                         .outputBufferSize(bufferInfo.getPageBufferInfo().getBufferedBytes())
-                                        .extraInfo(new ImmutableMap.Builder<String, String>().put("type", outputBuffer.getClass().getSimpleName()).build())
+                                        .extraInfo(new ImmutableMap.Builder<String, String>().put("type", outputBuffer.getInfo().getType()).build())
                                         .build()));
 
-                log.warn("GracefulShutdown:: Waiting for output buffer to be empty for task- %s, outputbuffer info = %s", taskId, outputBuffer.getInfo());
+                log.warn("GracefulShutdown:: Waiting for output buffer to be empty for task- %s, outputbuffer info = %s", taskId, getLoggingInfo(outputBuffer.getInfo()));
                 Thread.sleep(5);
             }
             catch (InterruptedException e) {
                 log.error(e, "GracefulShutdown got interrupted for task %s", taskId);
             }
         }
+    }
+
+    private String getLoggingInfo(OutputBufferInfo info)
+    {
+        StringBuilder builder = new StringBuilder();
+        builder.append(info.getType());
+        builder.append("/");
+        builder.append(info.getState());
+        builder.append("[");
+        for (BufferInfo bufferInfo : info.getBuffers()) {
+            builder.append(bufferInfo.getBufferId());
+            builder.append("/finished=");
+            builder.append(bufferInfo.isFinished());
+            builder.append(",");
+        }
+        builder.append("]");
+        return builder.toString();
     }
 
     @VisibleForTesting

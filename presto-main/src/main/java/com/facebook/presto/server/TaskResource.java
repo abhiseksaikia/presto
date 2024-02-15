@@ -461,7 +461,6 @@ public class TaskResource
     {
         requireNonNull(taskId, "taskId is null");
         requireNonNull(bufferId, "bufferId is null");
-
         taskManager.abortTaskResults(taskId, bufferId, isRequestedByDataNode);
     }
 
