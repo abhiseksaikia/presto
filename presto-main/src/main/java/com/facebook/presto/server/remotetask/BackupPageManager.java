@@ -524,6 +524,7 @@ public class BackupPageManager
                 QueryRecoveryDebugInfo.builder()
                         .outputBufferID(bufferId)
                         .state(QueryRecoveryState.DATA_PAGE_TRANSFER_INIT_RECEIVED)
+                        .extraInfo(ImmutableMap.of("local", getLocalhost()))
                         .build());
         pageDownloadScheduler.get().execute(() -> {
             long start = System.nanoTime();
@@ -536,9 +537,10 @@ public class BackupPageManager
                         taskId,
                         QueryRecoveryDebugInfo.builder()
                                 .outputBufferID(bufferId)
-                                .state(QueryRecoveryState.DATA_PAGE_TRANSFER_IN_PROGRESS)
+                                .state(QueryRecoveryState.DATA_PAGE_TRANSFER_STARTED)
                                 .extraInfo(ImmutableMap.of(
                                         "size", String.valueOf(getByteSize(serializedPages)),
+                                        "local", getLocalhost(),
                                         "duration", String.valueOf(Duration.nanosSince(start).roundTo(TimeUnit.SECONDS))))
                                 .build());
                 log.info("Going to fetch pages from location =%s", bufferLocation);

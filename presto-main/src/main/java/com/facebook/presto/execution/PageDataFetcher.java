@@ -32,6 +32,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
 
 import static com.facebook.presto.spi.HostAddress.fromUri;
 import static com.facebook.presto.spi.StandardErrorCode.REMOTE_TASK_MISMATCH;
@@ -57,6 +58,8 @@ public class PageDataFetcher
     private long lastRequestStart;
     private long veryFirstRequestStart;
     private long bytesRead;
+    private Duration endToEndTime;
+    private Duration lastRequestDuration;
 
     public PageDataFetcher(HttpClient httpClient, URI location, long startingSeqId)
     {
@@ -64,6 +67,8 @@ public class PageDataFetcher
         this.rpcShuffleClient = new HttpRpcShuffleClient(httpClient, location);
         this.startingSeqId = startingSeqId;
         this.ticker = Ticker.systemTicker();
+        this.endToEndTime = new Duration(0, TimeUnit.SECONDS);
+        this.lastRequestDuration = new Duration(0, TimeUnit.SECONDS);
     }
 
     public synchronized void startRequest()
@@ -73,7 +78,7 @@ public class PageDataFetcher
 
     public synchronized void success()
     {
-        lastRequestStart = 0;
+        lastRequestDuration = new Duration(ticker.read() - lastRequestStart, NANOSECONDS).convertTo(MILLISECONDS);
     }
 
     public PageIterator getPages()
@@ -85,7 +90,8 @@ public class PageDataFetcher
     {
         log.info("Going to abort result at %s, bytes read=%s, timeSinceLastRequest=%s, timeSinceVeryFirstRequest=%s", location, bytesRead, timeSinceLastRequest(), timeSinceVeryFirstRequest());
         rpcShuffleClient.abortResults(true);
-        log.info("abort result successful at %s", location);
+        endToEndTime = timeSinceVeryFirstRequest();
+        log.info("abort result successful at %s, end to end time =%s", location, endToEndTime);
         //FIXME mark finish as true for the iterator
     }
 
@@ -133,7 +139,7 @@ public class PageDataFetcher
                 startRequest();
                 ListenableFuture<PageBufferClient.PagesResponse> resultData = rpcShuffleClient.getResults(startingSeqId, PAGE_FETCHER_PAGE_SIZE, true);
                 checkArgument(resultData != null, "Failed to get results from RPC shuffle client");
-                PageBufferClient.PagesResponse result = resultData.get();
+                PageBufferClient.PagesResponse result = resultData.get(60, TimeUnit.SECONDS);
                 if (taskInstanceId == null) {
                     taskInstanceId = result.getTaskInstanceId();
                 }
@@ -191,7 +197,7 @@ public class PageDataFetcher
 
     public Duration timeSinceLastRequest()
     {
-        return new Duration(ticker.read() - lastRequestStart, NANOSECONDS).convertTo(MILLISECONDS);
+        return lastRequestDuration;
     }
 
     public Duration timeSinceVeryFirstRequest()

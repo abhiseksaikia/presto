@@ -13,6 +13,7 @@
  */
 package com.facebook.presto.operator;
 
+import com.facebook.presto.common.RuntimeStats;
 import com.facebook.presto.memory.context.LocalMemoryContext;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
@@ -39,9 +40,9 @@ public class TaskExchangeClientManager
         this.exchangeClients = new ArrayList<>();
     }
 
-    public synchronized ExchangeClient createExchangeClient(LocalMemoryContext systemMemoryContext)
+    public synchronized ExchangeClient createExchangeClient(LocalMemoryContext systemMemoryContext, RuntimeStats runtimeStats)
     {
-        ExchangeClient exchangeClient = supplier.get(systemMemoryContext);
+        ExchangeClient exchangeClient = supplier.get(systemMemoryContext, runtimeStats);
         exchangeClients.add(exchangeClient);
         return exchangeClient;
     }

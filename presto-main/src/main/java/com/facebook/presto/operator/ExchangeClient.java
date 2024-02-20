@@ -17,6 +17,8 @@ import com.facebook.airlift.http.client.HttpClient;
 import com.facebook.airlift.http.client.HttpUriBuilder;
 import com.facebook.airlift.log.Logger;
 import com.facebook.drift.client.DriftClient;
+import com.facebook.presto.common.RuntimeStats;
+import com.facebook.presto.common.RuntimeUnit;
 import com.facebook.presto.execution.TaskId;
 import com.facebook.presto.memory.context.LocalMemoryContext;
 import com.facebook.presto.operator.PageBufferClient.ClientCallback;
@@ -54,6 +56,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
+import static com.facebook.presto.common.RuntimeMetricName.PAGE_DATA_FROM_REDIRECTED_NODE;
 import static com.facebook.presto.common.block.PageBuilderStatus.DEFAULT_MAX_PAGE_SIZE_IN_BYTES;
 import static com.facebook.presto.spi.StandardErrorCode.UNRECOVERABLE_HOST_SHUTTING_DOWN;
 import static com.google.common.base.Preconditions.checkArgument;
@@ -135,6 +138,7 @@ public class ExchangeClient
     //FIXME remove this, added to introduce slowness to reproduce waiting for outoutbuffer in local
     private static long currentSleepTime = 5000; // Start with 2 sec
     private static final double decayFactor = 0.9;
+    private final RuntimeStats runtimeStats;
 
     // ExchangeClientStatus.mergeWith assumes all clients have the same bufferCapacity.
     // Please change that method accordingly when this assumption becomes not true.
@@ -154,7 +158,8 @@ public class ExchangeClient
             boolean isEnableGracefulShutdown,
             boolean isEnableRetryForFailedSplits,
             NodeStatusNotificationManager nodeStatusNotificationManager,
-            BackupPageManager pageManager)
+            BackupPageManager pageManager,
+            RuntimeStats runtimeStats)
     {
         this.nodeStatusNotificationManager = nodeStatusNotificationManager;
         this.pageManager = pageManager;
@@ -174,6 +179,7 @@ public class ExchangeClient
         this.responseSizeExponentialMovingAverage = new ExponentialMovingAverage(responseSizeExponentialMovingAverageDecayingAlpha, DEFAULT_MAX_PAGE_SIZE_IN_BYTES);
         this.isEnableGracefulShutdown = isEnableGracefulShutdown;
         this.isEnableRetryForFailedSplits = isEnableRetryForFailedSplits;
+        this.runtimeStats = runtimeStats;
     }
 
     public ExchangeClientStatus getStatus()
@@ -441,7 +447,7 @@ public class ExchangeClient
         }
     }
 
-    private boolean addPages(List<SerializedPage> pages)
+    private boolean addPages(PageBufferClient client, List<SerializedPage> pages)
     {
         // Compute stats before acquiring the lock
         long pagesRetainedSizeInBytes = 0;
@@ -449,6 +455,9 @@ public class ExchangeClient
         for (SerializedPage page : pages) {
             pagesRetainedSizeInBytes += page.getRetainedSizeInBytes();
             responseSize += page.getSizeInBytes();
+        }
+        if (client.isLocationRedirected() && runtimeStats != null) {
+            runtimeStats.addMetricValueIgnoreZero(PAGE_DATA_FROM_REDIRECTED_NODE, RuntimeUnit.BYTE, responseSize);
         }
 
         List<SettableFuture<?>> notify = ImmutableList.of();
@@ -555,7 +564,7 @@ public class ExchangeClient
         {
             requireNonNull(client, "client is null");
             requireNonNull(pages, "pages is null");
-            return ExchangeClient.this.addPages(pages);
+            return ExchangeClient.this.addPages(client, pages);
         }
 
         @Override

@@ -15,6 +15,7 @@ package com.facebook.presto.execution;
 
 import com.facebook.airlift.node.NodeInfo;
 import com.facebook.airlift.stats.TestingGcMonitor;
+import com.facebook.presto.common.RuntimeStats;
 import com.facebook.presto.common.block.BlockEncodingManager;
 import com.facebook.presto.execution.buffer.BufferResult;
 import com.facebook.presto.execution.buffer.BufferState;
@@ -344,7 +345,7 @@ public class TestSqlTaskManager
             implements ExchangeClientSupplier
     {
         @Override
-        public ExchangeClient get(LocalMemoryContext systemMemoryContext)
+        public ExchangeClient get(LocalMemoryContext systemMemoryContext, RuntimeStats runtimeStats)
         {
             throw new UnsupportedOperationException();
         }

@@ -16,6 +16,7 @@ package com.facebook.presto.operator;
 import com.facebook.airlift.concurrent.ThreadPoolExecutorMBean;
 import com.facebook.airlift.http.client.HttpClient;
 import com.facebook.drift.client.DriftClient;
+import com.facebook.presto.common.RuntimeStats;
 import com.facebook.presto.execution.QueryManagerConfig;
 import com.facebook.presto.memory.context.LocalMemoryContext;
 import com.facebook.presto.server.NodeStatusNotificationManager;
@@ -145,7 +146,7 @@ public class ExchangeClientFactory
     }
 
     @Override
-    public ExchangeClient get(LocalMemoryContext systemMemoryContext)
+    public ExchangeClient get(LocalMemoryContext systemMemoryContext, RuntimeStats runtimeStats)
     {
         return new ExchangeClient(
                 maxBufferedBytes,
@@ -163,6 +164,7 @@ public class ExchangeClientFactory
                 queryManagerConfig.isEnableGracefulShutdown(),
                 queryManagerConfig.isEnableRetryForFailedSplits(),
                 nodeStatusNotificationManager,
-                pageManager);
+                pageManager,
+                runtimeStats);
     }
 }

@@ -21,6 +21,7 @@ import com.facebook.airlift.http.client.testing.TestingHttpClient;
 import com.facebook.airlift.node.NodeInfo;
 import com.facebook.presto.block.BlockAssertions;
 import com.facebook.presto.common.Page;
+import com.facebook.presto.common.RuntimeStats;
 import com.facebook.presto.execution.TaskId;
 import com.facebook.presto.execution.TestSqlTaskManager;
 import com.facebook.presto.memory.context.SimpleLocalMemoryContext;
@@ -621,7 +622,8 @@ public class TestExchangeClient
                 false,
                 false,
                 nodeStatusNotificationManager,
-                backupPageManager);
+                backupPageManager,
+                new RuntimeStats());
     }
 
     private class MockNotificationProviderManager

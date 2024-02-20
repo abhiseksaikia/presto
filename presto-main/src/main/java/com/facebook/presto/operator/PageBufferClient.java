@@ -750,4 +750,9 @@ public final class PageBufferClient
             throw new IllegalArgumentException("URL does not contain /results/");
         }
     }
+
+    public boolean isLocationRedirected()
+    {
+        return isLocationRedirected;
+    }
 }

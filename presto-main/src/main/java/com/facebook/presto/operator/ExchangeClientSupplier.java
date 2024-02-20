@@ -13,9 +13,10 @@
  */
 package com.facebook.presto.operator;
 
+import com.facebook.presto.common.RuntimeStats;
 import com.facebook.presto.memory.context.LocalMemoryContext;
 
 public interface ExchangeClientSupplier
 {
-    ExchangeClient get(LocalMemoryContext systemMemoryContext);
+    ExchangeClient get(LocalMemoryContext systemMemoryContext, RuntimeStats runtimeStats);
 }
