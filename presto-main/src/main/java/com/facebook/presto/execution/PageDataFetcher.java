@@ -16,7 +16,7 @@ package com.facebook.presto.execution;
 import com.facebook.airlift.http.client.HttpClient;
 import com.facebook.airlift.log.Logger;
 import com.facebook.presto.operator.HttpRpcShuffleClient;
-import com.facebook.presto.operator.PageBufferClient;
+import com.facebook.presto.operator.PageBufferClient.PagesResponse;
 import com.facebook.presto.operator.RpcShuffleClient;
 import com.facebook.presto.spi.HostAddress;
 import com.facebook.presto.spi.PrestoException;
@@ -33,6 +33,7 @@ import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import static com.facebook.presto.spi.HostAddress.fromUri;
 import static com.facebook.presto.spi.StandardErrorCode.REMOTE_TASK_MISMATCH;
@@ -137,9 +138,7 @@ public class PageDataFetcher
             }
             try {
                 startRequest();
-                ListenableFuture<PageBufferClient.PagesResponse> resultData = rpcShuffleClient.getResults(startingSeqId, PAGE_FETCHER_PAGE_SIZE, true);
-                checkArgument(resultData != null, "Failed to get results from RPC shuffle client");
-                PageBufferClient.PagesResponse result = resultData.get(60, TimeUnit.SECONDS);
+                PagesResponse result = getPage();
                 if (taskInstanceId == null) {
                     taskInstanceId = result.getTaskInstanceId();
                 }
@@ -188,6 +187,24 @@ public class PageDataFetcher
                 throw new RuntimeException("Failed to get page resultData", ex);
             }
         }
+    }
+
+    private PagesResponse getPage()
+            throws InterruptedException, ExecutionException
+    {
+        //FIXME use some library
+        for (int retry = 1; retry <= 3; retry++) {
+            try {
+                ListenableFuture<PagesResponse> resultData = rpcShuffleClient.getResults(startingSeqId, PAGE_FETCHER_PAGE_SIZE, true);
+                checkArgument(resultData != null, "Failed to get results from RPC shuffle client");
+                PagesResponse result = resultData.get(20, TimeUnit.SECONDS);
+                return result;
+            }
+            catch (TimeoutException e) {
+                log.error(e, "Attempt % for location % ran into timeout error", retry, location);
+            }
+        }
+        throw new RuntimeException(String.format("Timed out while trying to get result for seq = %s from %s", location, startingSeqId));
     }
 
     public long getBytesRead()

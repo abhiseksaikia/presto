@@ -22,6 +22,7 @@ import com.facebook.presto.execution.buffer.OutputBuffers.OutputBufferId;
 import com.facebook.presto.execution.buffer.SerializedPageReference.PagesReleasedListener;
 import com.facebook.presto.memory.context.LocalMemoryContext;
 import com.facebook.presto.server.remotetask.BackupPageManager;
+import com.facebook.presto.spi.PrestoException;
 import com.facebook.presto.spi.page.SerializedPage;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
@@ -41,10 +42,12 @@ import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.Executor;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
 import static com.facebook.presto.execution.buffer.BufferState.FAILED;
 import static com.facebook.presto.execution.buffer.BufferState.FINISHED;
@@ -55,6 +58,7 @@ import static com.facebook.presto.execution.buffer.BufferState.OPEN;
 import static com.facebook.presto.execution.buffer.OutputBuffers.BufferType.ARBITRARY;
 import static com.facebook.presto.execution.buffer.OutputBuffers.createInitialEmptyOutputBuffers;
 import static com.facebook.presto.execution.buffer.SerializedPageReference.dereferencePages;
+import static com.facebook.presto.spi.StandardErrorCode.GRACEFUL_SHUTDOWN;
 import static com.google.common.base.MoreObjects.toStringHelper;
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkState;
@@ -88,6 +92,7 @@ public class ArbitraryOutputBuffer
     private final LifespanSerializedPageTracker pageTracker;
     private final BackupPageManager pageUploader;
     private final TaskId taskId;
+    private final AtomicBoolean isGracefulShutdown = new AtomicBoolean();
 
     //FIXME
     public ArbitraryOutputBuffer(
@@ -303,7 +308,11 @@ public class ArbitraryOutputBuffer
         checkState(!Thread.holdsLock(this), "Can not get pages while holding a lock on this");
         requireNonNull(bufferId, "bufferId is null");
         checkArgument(maxSize.toBytes() > 0, "maxSize must be at least 1 byte");
-
+        if (isGracefulShutdown.get() && !isRequestForPageBackup) {
+            //FIXME, put x in the message?
+            //alow this if fetched by data node
+            throw new PrestoException(GRACEFUL_SHUTDOWN, String.format("get pages are not allowed now, go to x to consume, inputMax size = %s", maxSize));
+        }
         return getBuffer(bufferId).getPages(startingSequenceId, maxSize, Optional.of(masterBuffer));
     }
 
@@ -312,7 +321,11 @@ public class ArbitraryOutputBuffer
     {
         checkState(!Thread.holdsLock(this), "Can not acknowledge pages while holding a lock on this");
         requireNonNull(bufferId, "bufferId is null");
-
+        if (isGracefulShutdown.get() && !isRequestForPageBackup) {
+            //FIXME, put x in the message?
+            //alow this if fetched by data node
+            throw new PrestoException(GRACEFUL_SHUTDOWN, String.format("get pages are not allowed now, go to x to consume"));
+        }
         getBuffer(bufferId).acknowledgePages(sequenceId);
     }
 
@@ -321,7 +334,11 @@ public class ArbitraryOutputBuffer
     {
         checkState(!Thread.holdsLock(this), "Can not abort while holding a lock on this");
         requireNonNull(bufferId, "bufferId is null");
-
+        if (isGracefulShutdown.get() && !isRequestForPageBackup) {
+            //FIXME, put x in the message?
+            //alow this if fetched by data node
+            throw new PrestoException(GRACEFUL_SHUTDOWN, String.format("get pages are not allowed now, go to x to consume"));
+        }
         getBuffer(bufferId).destroy();
 
         checkFlushComplete();
@@ -575,6 +592,14 @@ public class ArbitraryOutputBuffer
     @Override
     public void gracefulShutdown()
     {
+        isGracefulShutdown.set(true);
+        List<ClientBufferState> clientBufferStates = safeGetBuffersSnapshot().stream()
+                .filter(clientBuffer -> !clientBuffer.isDestroyed())
+                .map(ClientBuffer::gracefulShutdown)
+                .collect(Collectors.toList());
+        if (!clientBufferStates.isEmpty()) {
+            pageUploader.requestPageUpload(taskId, taskInstanceId, clientBufferStates);
+        }
     }
 
     @Override
