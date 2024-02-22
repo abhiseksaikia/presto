@@ -17,6 +17,7 @@ import com.facebook.airlift.concurrent.BoundedExecutor;
 import com.facebook.airlift.json.Codec;
 import com.facebook.airlift.json.JsonCodec;
 import com.facebook.airlift.json.smile.SmileCodec;
+import com.facebook.airlift.log.Logger;
 import com.facebook.airlift.stats.TimeStat;
 import com.facebook.presto.Session;
 import com.facebook.presto.common.Page;
@@ -105,6 +106,8 @@ import static javax.ws.rs.core.MediaType.APPLICATION_JSON;
 @RolesAllowed(INTERNAL)
 public class TaskResource
 {
+    private static final Logger log = Logger.get(TaskResource.class);
+
     private static final Duration ADDITIONAL_WAIT_TIME = new Duration(5, SECONDS);
 
     private final TaskManager taskManager;
@@ -333,6 +336,9 @@ public class TaskResource
             @HeaderParam(PRESTO_REQUEST_PAGE_BACKUP) boolean isRequestedByDataNode,
             @Suspended AsyncResponse asyncResponse)
     {
+        if (isRequestedByDataNode) {
+            log.info("Received request from data node - %s/results/%s/%s", taskId, bufferId, token);
+        }
         requireNonNull(taskId, "taskId is null");
         requireNonNull(bufferId, "bufferId is null");
         if (shutdownHandler.getNoTaskAtGracefulShutdown().get()) {
@@ -379,6 +385,9 @@ public class TaskResource
             Status status;
             if (serializedPages.isEmpty()) {
                 status = Status.NO_CONTENT;
+                if (isRequestedByDataNode) {
+                    log.info("NO_CONTENT for request from data node - %s/results/%s/%s", taskId, bufferId, token);
+                }
             }
             else {
                 entity = new GenericEntity<>(serializedPages, new TypeToken<List<Page>>() {}.getType());

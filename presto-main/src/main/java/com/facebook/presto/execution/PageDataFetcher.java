@@ -101,13 +101,12 @@ public class PageDataFetcher
     {
         private List<SerializedPage> nextPages;
         private boolean finished;
-        private long nextToken;
-        private long startingSeqId;
+        private long token;
         private String taskInstanceId;
 
-        public PageIterator(long startingSeqId)
+        public PageIterator(long token)
         {
-            this.startingSeqId = startingSeqId;
+            this.token = token;
             veryFirstRequestStart = ticker.read();
             fetchNextPageBatch();
         }
@@ -146,23 +145,28 @@ public class PageDataFetcher
                     log.info("result is completed for location %s", location);
                     finished = true;
                     nextPages = null;
+                    return;
                 }
                 if (!isNullOrEmpty(taskInstanceId) && !result.getTaskInstanceId().equals(taskInstanceId)) {
                     // TODO: update error message
                     throw new PrestoException(REMOTE_TASK_MISMATCH, format("%s (%s)", REMOTE_TASK_MISMATCH_ERROR, fromUri(location)));
                 }
-                if (result.getToken() == startingSeqId) {
+                if (result.getToken() == token) {
                     nextPages = result.getPages();
-                    nextToken = result.getNextToken();
+                    long nextToken = result.getNextToken();
                     if (nextPages.size() > 0) {
+                        log.info("ack result data for startingSeqId =%s location =%s", token, location);
                         // Acknowledge the receipt of the pages after reading one batch
                         rpcShuffleClient.acknowledgeResultsAsync(result.getToken(), true);
                     }
+                    else {
+                        log.info("nextPages are empty for startingSeqId =%s location =%s", token, location);
+                    }
                     // Update the starting sequence ID for the next batch
-                    startingSeqId = nextToken;
+                    token = nextToken;
                 }
                 else {
-                    log.info("result has different token than what is asked for, result token = %s startingSeqId =%s location =%s", result.getToken(), startingSeqId, location);
+                    log.info("result has different token than what is asked for, result token = %s startingSeqId =%s location =%s", result.getToken(), token, location);
                     nextPages = ImmutableList.of();
                 }
 
@@ -175,36 +179,36 @@ public class PageDataFetcher
                 success();
             }
             catch (InterruptedException e) {
-                log.error(e, "InterruptedException: Failed to get page resultData from %s , seq id =%s", location, startingSeqId);
+                log.error(e, "InterruptedException: Failed to get page resultData from %s , seq id =%s", location, token);
                 throw new RuntimeException("InterruptedException: Failed to get page resultData", e);
             }
             catch (ExecutionException e) {
-                log.error(e, "InterruptedException: Failed to get page resultData from %s , seq id =%s", location, startingSeqId);
+                log.error(e, "InterruptedException: Failed to get page resultData from %s , seq id =%s", location, token);
                 throw new RuntimeException("ExecutionException:Failed to get page resultData", e);
             }
             catch (Exception ex) {
-                log.error(ex, "Failed to get page resultData from %s , seq id =%s, bytes read=%s, timeSinceLastRequest=%s, timeSinceVeryFirstRequest=%s", location, startingSeqId, bytesRead, timeSinceLastRequest(), timeSinceVeryFirstRequest());
+                log.error(ex, "Failed to get page resultData from %s , seq id =%s, bytes read=%s, timeSinceLastRequest=%s, timeSinceVeryFirstRequest=%s", location, token, bytesRead, timeSinceLastRequest(), timeSinceVeryFirstRequest());
                 throw new RuntimeException("Failed to get page resultData", ex);
             }
         }
-    }
 
-    private PagesResponse getPage()
-            throws InterruptedException, ExecutionException
-    {
-        //FIXME use some library
-        for (int retry = 1; retry <= 3; retry++) {
-            try {
-                ListenableFuture<PagesResponse> resultData = rpcShuffleClient.getResults(startingSeqId, PAGE_FETCHER_PAGE_SIZE, true);
-                checkArgument(resultData != null, "Failed to get results from RPC shuffle client");
-                PagesResponse result = resultData.get(20, TimeUnit.SECONDS);
-                return result;
+        private PagesResponse getPage()
+                throws InterruptedException, ExecutionException
+        {
+            //FIXME use some library
+            for (int retry = 1; retry <= 3; retry++) {
+                try {
+                    ListenableFuture<PagesResponse> resultData = rpcShuffleClient.getResults(token, PAGE_FETCHER_PAGE_SIZE, true);
+                    checkArgument(resultData != null, "Failed to get results from RPC shuffle client");
+                    PagesResponse result = resultData.get(20, TimeUnit.SECONDS);
+                    return result;
+                }
+                catch (TimeoutException e) {
+                    log.error(e, "Attempt % for location % ran into timeout error", retry, location);
+                }
             }
-            catch (TimeoutException e) {
-                log.error(e, "Attempt % for location % ran into timeout error", retry, location);
-            }
+            throw new RuntimeException(String.format("Timed out while trying to get result for seq = %s from %s", location, token));
         }
-        throw new RuntimeException(String.format("Timed out while trying to get result for seq = %s from %s", location, startingSeqId));
     }
 
     public long getBytesRead()

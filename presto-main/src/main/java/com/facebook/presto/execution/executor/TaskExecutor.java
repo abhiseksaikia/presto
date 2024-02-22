@@ -369,6 +369,8 @@ public class TaskExecutor
         try {
             log.info("Waiting for shutdown of all tasks");
             latch.await();
+            // allowing task status to get propagated to coordinator
+            SECONDS.sleep(10);
         }
         catch (Throwable ex) {
             log.error(ex, "GracefulShutdown failed");

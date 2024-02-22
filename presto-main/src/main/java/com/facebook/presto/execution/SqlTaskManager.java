@@ -477,7 +477,6 @@ public class SqlTaskManager
         requireNonNull(bufferId, "bufferId is null");
         checkArgument(startingSequenceId >= 0, "startingSequenceId is negative");
         requireNonNull(maxSize, "maxSize is null");
-
         return tasks.getUnchecked(taskId).getTaskResults(bufferId, startingSequenceId, maxSize, isRequestForPageBackup);
     }
 

@@ -47,6 +47,8 @@ import com.facebook.presto.spi.PrestoException;
 import com.facebook.presto.spi.page.SerializedPage;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
+import com.google.common.cache.RemovalListener;
+import com.google.common.cache.RemovalNotification;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.io.Files;
 import com.google.common.util.concurrent.ListenableFuture;
@@ -116,7 +118,8 @@ public class BackupPageManager
     private final InternalNodeManager nodeManager;
     private final EventListenerManager eventListenerManager;
     private static final long MAX_SIZE = 24L * 1024 * 1024 * 1024; // 24 GB
-    private static final long ESTIMATED_SIZE_PER_ENTRY = 150 * 1024 * 1024; // 150 MB
+    // reducing for initial testing
+    private static final long ESTIMATED_SIZE_PER_ENTRY = 1 * 1024 * 1024; // 1 MB
     private final Cache<PageKey, PageData> pageCache;
     //private final ConcurrentMap<PageKey, PageData> pageCache;
     private final Optional<ScheduledExecutorService> pageDownloadScheduler;
@@ -136,6 +139,15 @@ public class BackupPageManager
                     .concurrencyLevel(200)
                     .maximumSize(MAX_SIZE / ESTIMATED_SIZE_PER_ENTRY)
                     .expireAfterWrite(30, TimeUnit.MINUTES)
+                    .removalListener(new RemovalListener<PageKey, PageData>()
+                    {
+                        @Override
+                        public void onRemoval(RemovalNotification<PageKey, PageData> notification)
+                        {
+                            PageKey key = notification.getKey();
+                            log.info("Cache evicted for %s/results/%s/", key.getTaskID(), key.getBufferId());
+                        }
+                    })
                     .build();
             //FIXME use rocksdb?
             //this.pageCache = new ConcurrentHashMap<>();
@@ -526,6 +538,7 @@ public class BackupPageManager
                         .state(QueryRecoveryState.DATA_PAGE_TRANSFER_INIT_RECEIVED)
                         .extraInfo(ImmutableMap.of("local", getLocalhost()))
                         .build());
+
         pageDownloadScheduler.get().execute(() -> {
             long start = System.nanoTime();
             LinkedList<SerializedPage> serializedPages = new LinkedList<>();
@@ -551,16 +564,18 @@ public class BackupPageManager
                     if (!nextPages.isEmpty()) {
                         serializedPages.addAll(nextPages);
                     }
-                    eventListenerManager.trackPreemptionLifeCycle(
-                            taskId,
-                            QueryRecoveryDebugInfo.builder()
-                                    .outputBufferID(bufferId)
-                                    .state(QueryRecoveryState.DATA_PAGE_TRANSFER_IN_PROGRESS)
-                                    .extraInfo(ImmutableMap.of(
-                                            "size", String.valueOf(getByteSize(serializedPages)),
-                                            "local", getLocalhost(),
-                                            "duration", String.valueOf(Duration.nanosSince(start).roundTo(TimeUnit.SECONDS))))
-                                    .build());
+                    /**
+                     eventListenerManager.trackPreemptionLifeCycle(
+                     taskId,
+                     QueryRecoveryDebugInfo.builder()
+                     .outputBufferID(bufferId)
+                     .state(QueryRecoveryState.DATA_PAGE_TRANSFER_IN_PROGRESS)
+                     .extraInfo(ImmutableMap.of(
+                     "size", String.valueOf(getByteSize(serializedPages)),
+                     "local", getLocalhost(),
+                     "duration", String.valueOf(Duration.nanosSince(start).roundTo(TimeUnit.SECONDS))))
+                     .build());
+                     */
                 }
                 log.info("Page fetching is successful from location =%s", bufferLocation);
                 //FIXME need to have callback
