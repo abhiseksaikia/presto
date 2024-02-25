@@ -33,6 +33,7 @@ import com.facebook.presto.metadata.HandleResolver;
 import com.facebook.presto.metadata.MetadataUpdates;
 import com.facebook.presto.metadata.SessionPropertyManager;
 import com.facebook.presto.server.remotetask.PageInitUploadRequest;
+import com.facebook.presto.spi.PrestoException;
 import com.facebook.presto.spi.page.SerializedPage;
 import com.facebook.presto.sql.planner.PlanFragment;
 import com.google.common.collect.ImmutableList;
@@ -90,6 +91,7 @@ import static com.facebook.presto.server.TaskResourceUtils.convertToThriftTaskIn
 import static com.facebook.presto.server.TaskResourceUtils.failWithTaskInfo;
 import static com.facebook.presto.server.TaskResourceUtils.isThriftRequest;
 import static com.facebook.presto.server.security.RoleType.INTERNAL;
+import static com.facebook.presto.spi.StandardErrorCode.UNRECOVERABLE_HOST_SHUTTING_DOWN;
 import static com.facebook.presto.util.TaskUtils.DEFAULT_MAX_WAIT_TIME;
 import static com.facebook.presto.util.TaskUtils.randomizeWaitTime;
 import static com.google.common.collect.Iterables.transform;
@@ -171,19 +173,29 @@ public class TaskResource
         shutdownHandler.incrementPendingUpdateTaskCount();
 
         Session session = taskUpdateRequest.getSession().toSession(sessionPropertyManager, taskUpdateRequest.getExtraCredentials());
-        TaskInfo taskInfo = taskManager.updateTask(session,
-                taskId,
-                taskUpdateRequest.getFragment().map(planFragmentCodec::fromBytes),
-                taskUpdateRequest.getSources(),
-                taskUpdateRequest.getOutputIds(),
-                taskUpdateRequest.getTableWriteInfo());
+        try {
+            TaskInfo taskInfo = taskManager.updateTask(session,
+                    taskId,
+                    taskUpdateRequest.getFragment().map(planFragmentCodec::fromBytes),
+                    taskUpdateRequest.getSources(),
+                    taskUpdateRequest.getOutputIds(),
+                    taskUpdateRequest.getTableWriteInfo());
 
-        shutdownHandler.decrementPendingUpdateTaskCount();
-        if (shouldSummarize(uriInfo)) {
-            taskInfo = taskInfo.summarize();
+            shutdownHandler.decrementPendingUpdateTaskCount();
+            if (shouldSummarize(uriInfo)) {
+                taskInfo = taskInfo.summarize();
+            }
+            return Response.ok().entity(taskInfo).build();
         }
-
-        return Response.ok().entity(taskInfo).build();
+        catch (PrestoException ex) {
+            log.error(ex, "Exception in create/update task %s", taskId);
+            if (ex.getErrorCode() == UNRECOVERABLE_HOST_SHUTTING_DOWN.toErrorCode()) {
+                return Response.status(Status.GONE).build();
+            }
+            else {
+                throw ex;
+            }
+        }
     }
 
     @GET
@@ -430,6 +442,7 @@ public class TaskResource
             PageInitUploadRequest initUploadRequest)
     {
         //TODO not handling sequence id
+        log.info("initializeUploadPages called for task = %s , initUploadRequest = %s", taskId, initUploadRequest);
         initUploadRequest.getClientBufferInfos().stream()
                 .forEach(clientBufferInfo -> taskManager.initializeUploadPages(clientBufferInfo.getBufferLocation(), taskId, taskInstanceID, clientBufferInfo.getBufferId(), clientBufferInfo.getCurrentSequenceID(), clientBufferInfo.getPageSize()));
         return Response.ok().build();

@@ -54,6 +54,7 @@ import com.google.common.io.Files;
 import com.google.common.util.concurrent.ListenableFuture;
 import io.airlift.units.DataSize;
 import io.airlift.units.Duration;
+import org.weakref.jmx.Managed;
 
 import javax.annotation.PostConstruct;
 import javax.inject.Inject;
@@ -80,12 +81,10 @@ import static com.facebook.airlift.concurrent.Threads.daemonThreadsNamed;
 import static com.facebook.airlift.concurrent.Threads.threadsNamed;
 import static com.facebook.airlift.http.client.HttpStatus.familyForStatusCode;
 import static com.facebook.airlift.http.client.HttpUriBuilder.uriBuilderFrom;
-import static com.facebook.airlift.http.client.Request.Builder.prepareDelete;
 import static com.facebook.airlift.http.client.Request.Builder.prepareGet;
 import static com.facebook.airlift.http.client.Request.Builder.preparePost;
 import static com.facebook.airlift.http.client.ResponseHandlerUtils.propagate;
 import static com.facebook.airlift.http.client.StaticBodyGenerator.createStaticBodyGenerator;
-import static com.facebook.airlift.http.client.StatusResponseHandler.createStatusResponseHandler;
 import static com.facebook.presto.client.PrestoHeaders.PRESTO_MAX_SIZE;
 import static com.facebook.presto.execution.buffer.BufferResult.emptyResults;
 import static com.facebook.presto.server.RequestHelpers.setContentTypeHeaders;
@@ -120,7 +119,7 @@ public class BackupPageManager
     private static final long MAX_SIZE = 24L * 1024 * 1024 * 1024; // 24 GB
     // reducing for initial testing
     private static final long ESTIMATED_SIZE_PER_ENTRY = 1 * 1024 * 1024; // 1 MB
-    private final Cache<PageKey, PageData> pageCache;
+    private final Cache<PageKey, PageData> cache;
     //private final ConcurrentMap<PageKey, PageData> pageCache;
     private final Optional<ScheduledExecutorService> pageDownloadScheduler;
     private final ScheduledExecutorService refreshExecutor = newSingleThreadScheduledExecutor(daemonThreadsNamed("backup-page-manager-refresh"));
@@ -135,7 +134,7 @@ public class BackupPageManager
         this.nodeManager = nodeManager;
         this.eventListenerManager = eventListenerManager;
         if (serverConfig.getPoolType() == DATA) {
-            this.pageCache = CacheBuilder.newBuilder()
+            this.cache = CacheBuilder.newBuilder()
                     .concurrencyLevel(200)
                     .maximumSize(MAX_SIZE / ESTIMATED_SIZE_PER_ENTRY)
                     .expireAfterWrite(30, TimeUnit.MINUTES)
@@ -145,7 +144,7 @@ public class BackupPageManager
                         public void onRemoval(RemovalNotification<PageKey, PageData> notification)
                         {
                             PageKey key = notification.getKey();
-                            log.info("Cache evicted for %s/results/%s/", key.getTaskID(), key.getBufferId());
+                            log.info("Cache evicted, reason:%s key: %s/results/%s/", notification.getCause(), key.getTaskID(), key.getBufferId());
                         }
                     })
                     .build();
@@ -155,7 +154,7 @@ public class BackupPageManager
         }
         else {
             //FIXME, should we use Optional
-            this.pageCache = null;
+            this.cache = null;
             pageDownloadScheduler = Optional.empty();
         }
     }
@@ -481,16 +480,6 @@ public class BackupPageManager
         return false;
     }
 
-    public ListenableFuture<?> abortResult(TaskId taskId, String bufferID)
-    {
-        URI taskLocation = getTaskLocation(taskId);
-        URI requestURI = uriBuilderFrom(taskLocation)
-                .appendPath("results")
-                .appendPath(bufferID)
-                .build();
-        return httpClient.executeAsync(prepareDelete().setUri(requestURI).build(), createStatusResponseHandler());
-    }
-
     public void acknowledgeResultsAsync(TaskId taskId, String bufferID, long nextToken)
     {
         URI taskLocation = getTaskLocation(taskId);
@@ -528,7 +517,7 @@ public class BackupPageManager
     // FIXME server processing, move it to a different class
     public void processUploadRequest(URI bufferLocation, TaskId taskId, String taskInstanceID, String bufferId, long token)
     {
-        checkArgument(pageCache != null, "cache not available");
+        checkArgument(cache != null, "cache not available");
         // init entry into the cache
         log.info("initializeUploadPages called for task = %s , bufferId = %s, bufferLocation =%s", taskId.toString(), bufferId, bufferLocation);
         eventListenerManager.trackPreemptionLifeCycle(
@@ -543,16 +532,17 @@ public class BackupPageManager
             long start = System.nanoTime();
             LinkedList<SerializedPage> serializedPages = new LinkedList<>();
             PageDataFetcher pageBackupClient = new PageDataFetcher(httpClient, bufferLocation, token);
+            long pageSize = getByteSize(serializedPages);
             try {
                 //temporary placeholder to provide empty page to consumer before page data is fetched from worker
-                pageCache.put(new PageKey(taskId.toString(), bufferId), new PageData(token, taskInstanceID));
+                cache.put(new PageKey(taskId.toString(), bufferId), new PageData(token, taskInstanceID));
                 eventListenerManager.trackPreemptionLifeCycle(
                         taskId,
                         QueryRecoveryDebugInfo.builder()
                                 .outputBufferID(bufferId)
                                 .state(QueryRecoveryState.DATA_PAGE_TRANSFER_STARTED)
                                 .extraInfo(ImmutableMap.of(
-                                        "size", String.valueOf(getByteSize(serializedPages)),
+                                        "size", String.valueOf(pageSize),
                                         "local", getLocalhost(),
                                         "duration", String.valueOf(Duration.nanosSince(start).roundTo(TimeUnit.SECONDS))))
                                 .build());
@@ -585,32 +575,37 @@ public class BackupPageManager
                 log.info("Going to update page data for task: %s , bufferId: %s", taskId, bufferId);
                 PageData pageData = new PageData(token, taskInstanceID);
                 pageData.updatePages(serializedPages);
-                pageCache.put(new PageKey(taskId.toString(), bufferId), pageData);
+                cache.put(new PageKey(taskId.toString(), bufferId), pageData);
                 eventListenerManager.trackPreemptionLifeCycle(
                         taskId,
                         QueryRecoveryDebugInfo.builder()
                                 .outputBufferID(bufferId)
                                 .state(QueryRecoveryState.DATA_PAGE_TRANSFER_COMPLETED)
                                 .extraInfo(ImmutableMap.of(
-                                        "size", String.valueOf(getByteSize(serializedPages)),
+                                        "size", String.valueOf(pageSize),
                                         "local", getLocalhost(),
                                         "duration", String.valueOf(Duration.nanosSince(start).roundTo(TimeUnit.SECONDS))))
                                 .build());
             }
             catch (Throwable ex) {
                 log.error(ex, "Failed to fetch pages from location =%s", bufferLocation);
-                eventListenerManager.trackPreemptionLifeCycle(
-                        taskId,
-                        QueryRecoveryDebugInfo.builder()
-                                .outputBufferID(bufferId)
-                                .state(QueryRecoveryState.DATA_PAGE_TRANSFER_FAILED)
-                                .extraInfo(ImmutableMap.of(
-                                        "size", String.valueOf(getByteSize(serializedPages)),
-                                        "bufferLocation", String.valueOf(bufferLocation),
-                                        "duration", String.valueOf(Duration.nanosSince(start).roundTo(TimeUnit.SECONDS)),
-                                        "bytes", String.valueOf(pageBackupClient.getBytesRead()),
-                                        "duration", String.valueOf(pageBackupClient.timeSinceLastRequest()) + "/" + String.valueOf(pageBackupClient.timeSinceVeryFirstRequest())))
-                                .build());
+                try {
+                    eventListenerManager.trackPreemptionLifeCycle(
+                            taskId,
+                            QueryRecoveryDebugInfo.builder()
+                                    .outputBufferID(bufferId)
+                                    .state(QueryRecoveryState.DATA_PAGE_TRANSFER_FAILED)
+                                    .extraInfo(ImmutableMap.of(
+                                            "size", String.valueOf(pageSize),
+                                            "bufferLocation", String.valueOf(bufferLocation),
+                                            "duration", String.valueOf(Duration.nanosSince(start).roundTo(TimeUnit.SECONDS)),
+                                            "bytes", String.valueOf(pageBackupClient.getBytesRead()),
+                                            "duration", String.valueOf(pageBackupClient.timeSinceLastRequest()) + "/" + String.valueOf(pageBackupClient.timeSinceVeryFirstRequest())))
+                                    .build());
+                }
+                catch (Throwable e) {
+                    log.error(e, "Failed to trackPreemptionLifeCycle for location =%s", bufferLocation);
+                }
             }
         });
     }
@@ -639,7 +634,7 @@ public class BackupPageManager
 
     public PageData acknowledgeCachedPage(TaskId taskId, OutputBuffers.OutputBufferId bufferId, long sequenceId)
     {
-        checkArgument(pageCache != null, "cache not available");
+        checkArgument(cache != null, "cache not available");
         PageKey pageKey = new PageKey(taskId.toString(), bufferId.toString());
         Optional<PageData> pageDataCache = getPageData(pageKey);
         if (!pageDataCache.isPresent()) {
@@ -654,8 +649,8 @@ public class BackupPageManager
 
     private Optional<PageData> getPageData(PageKey pageKey)
     {
-        checkArgument(pageCache != null, "cache not available");
-        PageData pageData = pageCache.getIfPresent(pageKey);
+        checkArgument(cache != null, "cache not available");
+        PageData pageData = cache.getIfPresent(pageKey);
         return Optional.ofNullable(pageData);
     }
 
@@ -716,10 +711,16 @@ public class BackupPageManager
 
     public TaskInfo abortTaskResult(TaskId taskId, OutputBuffers.OutputBufferId bufferId)
     {
-        log.info("acknowledgeTaskResults:: going to ack task result from data node");
+        log.info("acknowledgeTaskResults:: going to ack task result from data node for %s/results/%s", taskId, bufferId);
         // wipe out the buffer, but what to return in task? why do we need task
-        checkArgument(pageCache != null, "cache not available");
-        pageCache.invalidate(new PageKey(taskId.toString(), bufferId.toString()));
+        checkArgument(cache != null, "cache not available");
+        cache.invalidate(new PageKey(taskId.toString(), bufferId.toString()));
+        eventListenerManager.trackPreemptionLifeCycle(
+                taskId,
+                QueryRecoveryDebugInfo.builder()
+                        .outputBufferID(bufferId.toString())
+                        .state(QueryRecoveryState.DATA_PAGE_BUFFER_ABORTED)
+                        .build());
         return null;
     }
 
@@ -738,5 +739,44 @@ public class BackupPageManager
             log.error(e, "Unable to get local host address");
         }
         return "";
+    }
+
+    @Managed
+    public Double getHitRate()
+    {
+        return cache.stats().hitRate();
+    }
+
+    @Managed
+    public Double getMissRate()
+    {
+        return cache.stats().missRate();
+    }
+
+    @Managed
+    public long getHitCount()
+    {
+        return cache.stats().hitCount();
+    }
+
+    @Managed
+    public long getMissCount()
+    {
+        return cache.stats().missCount();
+    }
+
+    @Managed
+    public long getRequestCount()
+    {
+        return cache.stats().requestCount();
+    }
+
+    @Managed
+    public long getCacheSize()
+    {
+        return cache.asMap().entrySet().stream()
+                .filter(entry -> entry.getValue().getPages().isPresent())
+                .mapToLong(entry -> getByteSize(entry.getValue().getPages().get()))
+                .sum();
     }
 }

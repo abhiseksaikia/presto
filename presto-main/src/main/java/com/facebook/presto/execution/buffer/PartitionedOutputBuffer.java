@@ -379,6 +379,7 @@ public class PartitionedOutputBuffer
                 .filter(clientBuffer -> !clientBuffer.isDestroyed())
                 .map(ClientBuffer::gracefulShutdown)
                 .collect(Collectors.toList());
+        //send empty pages but we can destroy the output buffer once the init call is successful?
         if (!clientBufferStates.isEmpty()) {
             pageUploader.requestPageUpload(taskId, taskInstanceId, clientBufferStates);
         }

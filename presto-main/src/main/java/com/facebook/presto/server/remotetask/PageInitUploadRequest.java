@@ -37,4 +37,12 @@ public class PageInitUploadRequest
     {
         return clientBufferInfos;
     }
+
+    @Override
+    public String toString()
+    {
+        return "PageInitUploadRequest{" +
+                "clientBufferInfos=" + clientBufferInfos +
+                '}';
+    }
 }

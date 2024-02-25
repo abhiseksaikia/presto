@@ -57,4 +57,13 @@ public class ClientBufferInfo
     {
         return bufferLocation;
     }
+
+    @Override
+    public String toString()
+    {
+        return "ClientBufferInfo{" +
+                "bufferId='" + bufferId + '\'' +
+                ", pageSize=" + pageSize +
+                '}';
+    }
 }

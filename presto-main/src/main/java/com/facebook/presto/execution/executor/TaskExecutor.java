@@ -82,6 +82,7 @@ import java.util.function.Predicate;
 import static com.facebook.airlift.concurrent.Threads.daemonThreadsNamed;
 import static com.facebook.airlift.concurrent.Threads.threadsNamed;
 import static com.facebook.presto.execution.executor.MultilevelSplitQueue.computeLevel;
+import static com.facebook.presto.spi.StandardErrorCode.UNRECOVERABLE_HOST_SHUTTING_DOWN;
 import static com.facebook.presto.util.MoreMath.min;
 import static com.google.common.base.MoreObjects.toStringHelper;
 import static com.google.common.base.Preconditions.checkArgument;
@@ -625,6 +626,11 @@ public class TaskExecutor
                 outputBuffer,
                 enableGracefulShutdown,
                 enableRetryForFailedSplits);
+        if (isGracefulShutdownStarted.get()) {
+            //its possible that TaskResource:: if (shutdownHandler.isGracefulShutdownRequested()) check does not provide thread safety of stuff done in TaskExecutor
+            //FIXME use a different error code
+            throw new PrestoException(UNRECOVERABLE_HOST_SHUTTING_DOWN, "error");
+        }
         tasks.add(taskHandle);
 
         return taskHandle;

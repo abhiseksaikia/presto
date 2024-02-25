@@ -155,7 +155,7 @@ public class PageDataFetcher
                     nextPages = result.getPages();
                     long nextToken = result.getNextToken();
                     if (nextPages.size() > 0) {
-                        log.info("ack result data for startingSeqId =%s location =%s", token, location);
+                        log.info("ack result data for token =%s location =%s", token, location);
                         // Acknowledge the receipt of the pages after reading one batch
                         rpcShuffleClient.acknowledgeResultsAsync(result.getToken(), true);
                     }
