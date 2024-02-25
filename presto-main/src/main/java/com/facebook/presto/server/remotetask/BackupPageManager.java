@@ -17,7 +17,6 @@ import com.facebook.airlift.discovery.client.DiscoveryLookupClient;
 import com.facebook.airlift.discovery.client.ServiceDescriptor;
 import com.facebook.airlift.discovery.client.ServiceDescriptors;
 import com.facebook.airlift.http.client.HttpClient;
-import com.facebook.airlift.http.client.HttpStatus;
 import com.facebook.airlift.http.client.HttpUriBuilder;
 import com.facebook.airlift.http.client.Request;
 import com.facebook.airlift.http.client.Response;
@@ -67,9 +66,11 @@ import java.net.URISyntaxException;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ExecutionException;
@@ -79,7 +80,6 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static com.facebook.airlift.concurrent.Threads.daemonThreadsNamed;
 import static com.facebook.airlift.concurrent.Threads.threadsNamed;
-import static com.facebook.airlift.http.client.HttpStatus.familyForStatusCode;
 import static com.facebook.airlift.http.client.HttpUriBuilder.uriBuilderFrom;
 import static com.facebook.airlift.http.client.Request.Builder.prepareGet;
 import static com.facebook.airlift.http.client.Request.Builder.preparePost;
@@ -229,21 +229,20 @@ public class BackupPageManager
         }
     }
 
-    public ListenableFuture<Response> requestPageUpload(TaskId taskId, String taskInstanceID, List<ClientBufferState> clientBufferStates)
+    public List<ListenableFuture<Response>> requestPageUpload(TaskId taskId, String taskInstanceID, List<ClientBufferState> clientBufferStates)
     {
+        Map<URI, List<ClientBufferInfo>> clientBufferInfosByLocation = getLocations(taskId, clientBufferStates);
         log.info("Client::initPageUpload task : %s , taskInstanceId:%s, clientBufferStates: %s", taskId, taskInstanceID, clientBufferStates);
         //construct the space trequired to store the numberOfPages
-        URI taskLocation = getTaskLocation(taskId);
+
+        return clientBufferInfosByLocation.entrySet().stream().map(uriListEntry -> getResponseByBufferLocation(taskId, taskInstanceID, uriListEntry.getKey(), uriListEntry.getValue())).collect(toImmutableList());
+    }
+
+    private ListenableFuture<Response> getResponseByBufferLocation(TaskId taskId, String taskInstanceID, URI location, List<ClientBufferInfo> clientBufferInfos)
+    {
         URI internalUri = nodeManager.getCurrentNode().getInternalUri();
-        List<ClientBufferInfo> clientBufferInfos = clientBufferStates.stream()
-                .map(state -> new ClientBufferInfo(
-                        state.getBufferId(),
-                        state.getPageSize(),
-                        state.getCurrentSequenceID(),
-                        uriBuilderFrom(internalUri).appendPath("/v1/task").appendPath(taskId.toString()).appendPath("results").appendPath(state.getBufferId()).build()))
-                .collect(toImmutableList());
         //FIXME URL is changed now, provide bufferLocation
-        URI requestURI = uriBuilderFrom(taskLocation)
+        URI requestURI = uriBuilderFrom(location)
                 .appendPath(taskInstanceID)
                 .build();
         log.info("Client::initPageUpload requestURI : %s , clientBufferInfos:%s", requestURI, clientBufferInfos);
@@ -287,6 +286,16 @@ public class BackupPageManager
             }
         };
         return httpClient.executeAsync(request, responseHandler);
+    }
+
+    private Map<URI, List<ClientBufferInfo>> getLocations(TaskId taskId, List<ClientBufferState> clientBufferStates)
+    {
+        Map<URI, List<ClientBufferInfo>> locations = new HashMap<>();
+        for (ClientBufferState state : clientBufferStates) {
+            URI location = getBufferLocation(taskId, Integer.parseInt(state.getBufferId()));
+            locations.computeIfAbsent(location, uri -> new ArrayList<>()).add(new ClientBufferInfo(state.getBufferId(), state.getPageSize(), state.getCurrentSequenceID(), location));
+        }
+        return locations;
     }
 
     private String abbreviate(String input, int length)
@@ -419,7 +428,8 @@ public class BackupPageManager
         List<URI> uriList = sortedDataNodeList.get();
         checkArgument(uriList != null);
         checkArgument(uriList.size() == 10);
-        URI dataNode = pickDataNode(taskId, uriList);
+        int bufferIDVal = Integer.parseInt(bufferID);
+        URI dataNode = pickDataNode(bufferIDVal, uriList);
         HttpUriBuilder builder = uriBuilderFrom(dataNode);
         return builder.appendPath("/v1/task")
                 .appendPath(taskId.toString())
@@ -428,12 +438,12 @@ public class BackupPageManager
                 .build();
     }
 
-    public URI getTaskLocation(TaskId taskId)
+    public URI getBufferLocation(TaskId taskId, int bufferID)
     {
         List<URI> uris = sortedDataNodeList.get();
         checkArgument(uris != null, "sortedDataNodeList is null");
         checkArgument(uris.size() == 10);
-        URI dataNode = pickDataNode(taskId, uris);
+        URI dataNode = pickDataNode(bufferID, uris);
         HttpUriBuilder builder = uriBuilderFrom(dataNode);
         return builder.appendPath("/v1/task").appendPath(taskId.toString()).build();
         /*
@@ -448,9 +458,17 @@ public class BackupPageManager
         */
     }
 
-    public static URI pickDataNode(TaskId taskID, List<URI> dataNodes)
+    /**
+     * public static URI pickDataNode(TaskId taskID, List<URI> dataNodes)
+     * {
+     * int index = Math.abs(taskID.hashCode()) % dataNodes.size();
+     * return dataNodes.get(index);
+     * }
+     */
+
+    public static URI pickDataNode(int bufferID, List<URI> dataNodes)
     {
-        int index = Math.abs(taskID.hashCode()) % dataNodes.size();
+        int index = bufferID % dataNodes.size();
         return dataNodes.get(index);
     }
 
@@ -478,34 +496,6 @@ public class BackupPageManager
             e.printStackTrace();
         }
         return false;
-    }
-
-    public void acknowledgeResultsAsync(TaskId taskId, String bufferID, long nextToken)
-    {
-        URI taskLocation = getTaskLocation(taskId);
-        URI requestURI = uriBuilderFrom(taskLocation)
-                .appendPath("results")
-                .appendPath(bufferID)
-                .appendPath(String.valueOf(nextToken))
-                .build();
-        httpClient.executeAsync(prepareGet().setUri(requestURI).build(), new ResponseHandler<Void, RuntimeException>()
-        {
-            @Override
-            public Void handleException(Request request, Exception exception)
-            {
-                log.debug(exception, "Acknowledge request failed: %s", requestURI);
-                return null;
-            }
-
-            @Override
-            public Void handle(Request request, Response response)
-            {
-                if (familyForStatusCode(response.getStatusCode()) != HttpStatus.Family.SUCCESSFUL) {
-                    log.debug("Unexpected acknowledge response code: %s", response.getStatusCode());
-                }
-                return null;
-            }
-        });
     }
 
     //FIXME hack, no need to expose the client
