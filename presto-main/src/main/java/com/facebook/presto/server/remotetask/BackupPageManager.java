@@ -240,7 +240,6 @@ public class BackupPageManager
 
     private ListenableFuture<Response> getResponseByBufferLocation(TaskId taskId, String taskInstanceID, URI location, List<ClientBufferInfo> clientBufferInfos)
     {
-        URI internalUri = nodeManager.getCurrentNode().getInternalUri();
         //FIXME URL is changed now, provide bufferLocation
         URI requestURI = uriBuilderFrom(location)
                 .appendPath(taskInstanceID)
@@ -290,10 +289,15 @@ public class BackupPageManager
 
     private Map<URI, List<ClientBufferInfo>> getLocations(TaskId taskId, List<ClientBufferState> clientBufferStates)
     {
+        URI internalUri = nodeManager.getCurrentNode().getInternalUri();
         Map<URI, List<ClientBufferInfo>> locations = new HashMap<>();
         for (ClientBufferState state : clientBufferStates) {
             URI location = getBufferLocation(taskId, Integer.parseInt(state.getBufferId()));
-            locations.computeIfAbsent(location, uri -> new ArrayList<>()).add(new ClientBufferInfo(state.getBufferId(), state.getPageSize(), state.getCurrentSequenceID(), location));
+            locations.computeIfAbsent(location, uri -> new ArrayList<>()).add(new ClientBufferInfo(
+                    state.getBufferId(),
+                    state.getPageSize(),
+                    state.getCurrentSequenceID(),
+                    uriBuilderFrom(internalUri).appendPath("/v1/task").appendPath(taskId.toString()).appendPath("results").appendPath(state.getBufferId()).build()));
         }
         return locations;
     }
@@ -588,9 +592,9 @@ public class BackupPageManager
                                     .extraInfo(ImmutableMap.of(
                                             "size", String.valueOf(pageSize),
                                             "bufferLocation", String.valueOf(bufferLocation),
-                                            "duration", String.valueOf(Duration.nanosSince(start).roundTo(TimeUnit.SECONDS)),
+                                            "duration1", String.valueOf(Duration.nanosSince(start).roundTo(TimeUnit.SECONDS)),
                                             "bytes", String.valueOf(pageBackupClient.getBytesRead()),
-                                            "duration", String.valueOf(pageBackupClient.timeSinceLastRequest()) + "/" + String.valueOf(pageBackupClient.timeSinceVeryFirstRequest())))
+                                            "duration2", String.valueOf(pageBackupClient.timeSinceLastRequest()) + "/" + String.valueOf(pageBackupClient.timeSinceVeryFirstRequest())))
                                     .build());
                 }
                 catch (Throwable e) {
