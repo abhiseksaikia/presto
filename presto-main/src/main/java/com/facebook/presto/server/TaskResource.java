@@ -404,6 +404,9 @@ public class TaskResource
             else {
                 entity = new GenericEntity<>(serializedPages, new TypeToken<List<Page>>() {}.getType());
                 status = Status.OK;
+                if (isRequestedByDataNode) {
+                    log.info("%s bytes of pages returned for request from data node - %s/results/%s/%s", getByteSize(serializedPages), taskId, bufferId, token);
+                }
             }
 
             return Response.status(status)
@@ -430,6 +433,14 @@ public class TaskResource
 
         responseFuture.addListener(() -> readFromOutputBufferTime.add(Duration.nanosSince(start)), directExecutor());
         asyncResponse.register((CompletionCallback) throwable -> resultsRequestTime.add(Duration.nanosSince(start)));
+    }
+
+    private long getByteSize(List<SerializedPage> serializedPages)
+    {
+        if (serializedPages == null || serializedPages.isEmpty()) {
+            return 0L;
+        }
+        return serializedPages.stream().mapToLong(SerializedPage::getSizeInBytes).sum();
     }
 
     @POST

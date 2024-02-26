@@ -578,7 +578,8 @@ public class BackupPageManager
                                 .extraInfo(ImmutableMap.of(
                                         "size", String.valueOf(pageSize),
                                         "local", getLocalhost(),
-                                        "duration", String.valueOf(Duration.nanosSince(start).roundTo(TimeUnit.SECONDS))))
+                                        "duration", String.valueOf(Duration.nanosSince(start).roundTo(TimeUnit.SECONDS)),
+                                        "bytes", String.valueOf(pageBackupClient.getBytesRead())))
                                 .build());
             }
             catch (Throwable ex) {

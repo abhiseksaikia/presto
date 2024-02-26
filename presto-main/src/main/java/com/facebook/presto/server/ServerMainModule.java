@@ -404,6 +404,7 @@ public class ServerMainModule
         jsonCodecBinder(binder).bindListJsonCodec(TaskMemoryReservationSummary.class);
         binder.bind(SqlTaskManager.class).in(Scopes.SINGLETON);
         binder.bind(BackupPageManager.class).in(Scopes.SINGLETON);
+        newExporter(binder).export(BackupPageManager.class).withGeneratedName();
         binder.bind(FaultInjector.class).in(Scopes.SINGLETON);
         binder.bind(TaskManager.class).to(Key.get(SqlTaskManager.class));
         binder.bind(SpoolingOutputBufferFactory.class).in(Scopes.SINGLETON);

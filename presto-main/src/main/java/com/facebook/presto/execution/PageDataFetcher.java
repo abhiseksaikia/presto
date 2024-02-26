@@ -50,7 +50,7 @@ public class PageDataFetcher
 {
     private static final Logger log = Logger.get(SqlTaskManager.class);
     //FIXME Do we need dynamic size here?
-    public static final DataSize PAGE_FETCHER_PAGE_SIZE = new DataSize(1, DataSize.Unit.MEGABYTE);
+    public static final DataSize PAGE_FETCHER_PAGE_SIZE = new DataSize(500, DataSize.Unit.MEGABYTE);
 
     private final RpcShuffleClient rpcShuffleClient;
     private final long startingSeqId;
