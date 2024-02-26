@@ -150,7 +150,7 @@ public class BackupPageManager
                     .build();
             //FIXME use rocksdb?
             //this.pageCache = new ConcurrentHashMap<>();
-            pageDownloadScheduler = Optional.of(newScheduledThreadPool(30, threadsNamed("task-page-download-%s")));
+            pageDownloadScheduler = Optional.of(newScheduledThreadPool(50, threadsNamed("task-page-download-%s")));
         }
         else {
             //FIXME, should we use Optional
