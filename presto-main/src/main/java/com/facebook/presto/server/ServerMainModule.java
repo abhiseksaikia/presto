@@ -255,6 +255,7 @@ import static com.facebook.drift.client.ExceptionClassification.HostStatus.NORMA
 import static com.facebook.drift.client.guice.DriftClientBinder.driftClientBinder;
 import static com.facebook.drift.codec.guice.ThriftCodecBinder.thriftCodecBinder;
 import static com.facebook.drift.server.guice.DriftServerBinder.driftServerBinder;
+import static com.facebook.presto.execution.PageDataFetcher.HTTP_MAX_CONTENT_LENGTH;
 import static com.facebook.presto.execution.scheduler.NodeSchedulerConfig.NetworkTopologyType.FLAT;
 import static com.facebook.presto.execution.scheduler.NodeSchedulerConfig.NetworkTopologyType.LEGACY;
 import static com.facebook.presto.server.ServerConfig.POOL_TYPE;
@@ -558,7 +559,7 @@ public class ServerMainModule
                     config.setRequestTimeout(new Duration(30, SECONDS));
                     config.setMaxConnectionsPerServer(500);
                     config.setMaxRequestsQueuedPerDestination(10000);
-                    config.setMaxContentLength(new DataSize(32, MEGABYTE));
+                    config.setMaxContentLength(HTTP_MAX_CONTENT_LENGTH);
                 });
         binder.install(new DriftNettyClientModule());
         driftClientBinder(binder).bindDriftClient(ThriftTaskClient.class, ForExchange.class)

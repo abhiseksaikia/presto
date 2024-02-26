@@ -51,6 +51,8 @@ public class PageDataFetcher
     private static final Logger log = Logger.get(SqlTaskManager.class);
     //FIXME Do we need dynamic size here?
     public static final DataSize PAGE_FETCHER_PAGE_SIZE = new DataSize(500, DataSize.Unit.MEGABYTE);
+    //Setting a high value for test to avoid any buffer size accounting issue introducing noise in test, use config and set a proper value
+    public static final DataSize HTTP_MAX_CONTENT_LENGTH = new DataSize(600, DataSize.Unit.MEGABYTE);
 
     private final RpcShuffleClient rpcShuffleClient;
     private final long startingSeqId;
