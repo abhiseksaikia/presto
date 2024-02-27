@@ -14,6 +14,7 @@
 package com.facebook.presto.execution.buffer;
 
 import com.facebook.airlift.concurrent.ExtendedSettableFuture;
+import com.facebook.airlift.log.Logger;
 import com.facebook.presto.execution.Lifespan;
 import com.facebook.presto.execution.StateMachine;
 import com.facebook.presto.execution.StateMachine.StateChangeListener;
@@ -211,7 +212,7 @@ public class LazyOutputBuffer
                         return immediateFuture(emptyResults(taskInstanceId, 0, true));
                     }
 
-                    PendingRead pendingRead = new PendingRead(bufferId, token, maxSize, isRequestForPageBackup);
+                    PendingRead pendingRead = new PendingRead(taskId, bufferId, token, maxSize, isRequestForPageBackup);
                     pendingReads.add(pendingRead);
                     return pendingRead.getFutureResult();
                 }
@@ -377,19 +378,22 @@ public class LazyOutputBuffer
 
     private static class PendingRead
     {
+        private static final Logger log = Logger.get(PendingRead.class);
         private final OutputBufferId bufferId;
         private final long startingSequenceId;
         private final DataSize maxSize;
         private final boolean force;
+        private final TaskId taskId;
 
         private final ExtendedSettableFuture<BufferResult> futureResult = ExtendedSettableFuture.create();
 
-        public PendingRead(OutputBufferId bufferId, long startingSequenceId, DataSize maxSize, boolean force)
+        public PendingRead(TaskId taskId, OutputBufferId bufferId, long startingSequenceId, DataSize maxSize, boolean force)
         {
             this.bufferId = requireNonNull(bufferId, "bufferId is null");
             this.startingSequenceId = startingSequenceId;
             this.maxSize = requireNonNull(maxSize, "maxSize is null");
             this.force = force;
+            this.taskId = taskId;
         }
 
         public ExtendedSettableFuture<BufferResult> getFutureResult()
@@ -404,6 +408,7 @@ public class LazyOutputBuffer
             }
 
             try {
+                log.info("OB:%s, maxSize=%s get result for %s/results/%s/%s", delegate.getInfo().getType(), maxSize, taskId, bufferId, startingSequenceId);
                 ListenableFuture<BufferResult> result = delegate.get(bufferId, startingSequenceId, maxSize, force);
                 futureResult.setAsync(result);
             }

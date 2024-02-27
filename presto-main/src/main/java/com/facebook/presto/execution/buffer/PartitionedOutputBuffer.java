@@ -66,6 +66,9 @@ public class PartitionedOutputBuffer
     private final BackupPageManager pageUploader;
     private final TaskId taskId;
     private final String taskInstanceId;
+    //increase the size to avoid multiple round trip to transfer page data
+    //Tune this as per testing
+    private static final long MEMORY_MANAGER_SIZE_DURING_PREEMPTION = 500 * 1024 * 1024; // 200 MB
 
     public PartitionedOutputBuffer(
             BackupPageManager pageUploader,
@@ -383,6 +386,7 @@ public class PartitionedOutputBuffer
         if (!clientBufferStates.isEmpty()) {
             pageUploader.requestPageUpload(taskId, taskInstanceId, clientBufferStates);
         }
+        memoryManager.updateMaxSize(MEMORY_MANAGER_SIZE_DURING_PREEMPTION);
     }
 
     @Override

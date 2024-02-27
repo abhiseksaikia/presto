@@ -127,7 +127,7 @@ public final class HttpRpcShuffleClient
                     public Void handle(Request request, Response response)
                     {
                         if (familyForStatusCode(response.getStatusCode()) != HttpStatus.Family.SUCCESSFUL) {
-                            log.debug("Unexpected acknowledge response code: %s", response.getStatusCode());
+                            log.debug("Unexpected acknowledge response code: %s for %s", response.getStatusCode(), uri);
                         }
                         return null;
                     }

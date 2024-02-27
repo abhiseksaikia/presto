@@ -176,7 +176,7 @@ public class PageDataFetcher
                     if (!isChecksumValid(page)) {
                         throw new PrestoException(SERIALIZED_PAGE_CHECKSUM_ERROR, format("Received corrupted serialized page from host %s", HostAddress.fromUri(location)));
                     }
-                    bytesRead += page.getSizeInBytes();
+                    bytesRead += page.getRetainedSizeInBytes();
                 }
                 success();
             }

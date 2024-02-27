@@ -607,7 +607,7 @@ public class BackupPageManager
 
     private long getByteSize(LinkedList<SerializedPage> serializedPages)
     {
-        return serializedPages.stream().mapToLong(SerializedPage::getSizeInBytes).sum();
+        return serializedPages.stream().mapToLong(SerializedPage::getRetainedSizeInBytes).sum();
     }
 
     public ListenableFuture<BufferResult> getTaskResultsFromCache(TaskId taskId, OutputBuffers.OutputBufferId bufferId, long sequenceId, DataSize maxSize)

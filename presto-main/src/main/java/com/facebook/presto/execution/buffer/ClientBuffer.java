@@ -49,7 +49,7 @@ import static java.util.Objects.requireNonNull;
 @ThreadSafe
 class ClientBuffer
 {
-    private static final Logger log = Logger.get(PartitionedOutputBuffer.class);
+    private static final Logger log = Logger.get(ClientBuffer.class);
 
     private final String taskInstanceId;
     private final OutputBufferId bufferId;
@@ -160,7 +160,9 @@ class ClientBuffer
             if (noMorePages) {
                 return;
             }
-
+            if (isGracefulShutdown.get()) {
+                log.info("enqueuePages %s bytes for %s/results/%s", getByteSize(pages), taskId, bufferId);
+            }
             addPages(pages);
 
             pendingRead = this.pendingRead;
@@ -171,6 +173,14 @@ class ClientBuffer
         if (pendingRead != null) {
             processRead(pendingRead);
         }
+    }
+
+    private long getByteSize(Collection<SerializedPageReference> serializedPages)
+    {
+        if (serializedPages == null || serializedPages.isEmpty()) {
+            return 0L;
+        }
+        return serializedPages.stream().mapToLong(SerializedPageReference::getRetainedSizeInBytes).sum();
     }
 
     private synchronized void addPages(Collection<SerializedPageReference> pages)
@@ -386,6 +396,9 @@ class ClientBuffer
             bytes += page.getRetainedSizeInBytes();
             // break (and don't add) if this page would exceed the limit
             if (!result.isEmpty() && bytes > maxBytes) {
+                if (isGracefulShutdown.get()) {
+                    log.info("%s bytes > maxBytes: %s, so exit reading more pages for %s/results/%s", bytes, maxBytes, taskId, bufferId);
+                }
                 break;
             }
             result.add(page.getSerializedPage());

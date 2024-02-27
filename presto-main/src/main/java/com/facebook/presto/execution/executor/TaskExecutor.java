@@ -53,6 +53,8 @@ import javax.annotation.concurrent.GuardedBy;
 import javax.annotation.concurrent.ThreadSafe;
 import javax.inject.Inject;
 
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -298,9 +300,6 @@ public class TaskExecutor
             taskShutdownExecutor.execute(
                     () -> {
                         TaskId taskId = taskHandle.getTaskId();
-                        log.info("Before trackPreemptionLifeCycle test");
-                        eventListenerManager.trackPreemptionLifeCycle(taskId, QueryRecoveryDebugInfo.builder().state(QueryRecoveryState.INIT_GRACEFUL_PREEMPTION).build());
-                        log.info("After trackPreemptionLifeCycle test");
                         if (!taskHandle.getOutputBuffer().isPresent()) {
                             log.info("No output buffer for task %s", taskId);
                             taskHandle.forceFailure("No output buffer for task");
@@ -309,6 +308,14 @@ public class TaskExecutor
 
                         OutputBuffer outputBuffer = taskHandle.getOutputBuffer().get();
                         try {
+                            eventListenerManager.trackPreemptionLifeCycle(
+                                    taskId,
+                                    QueryRecoveryDebugInfo.builder()
+                                            .state(QueryRecoveryState.INIT_GRACEFUL_PREEMPTION)
+                                            .extraInfo(ImmutableMap.of(
+                                                    "type", outputBuffer.getInfo().getType(),
+                                                    "local", getLocalhost()))
+                                            .build());
                             long logFrequencyMillis = 30_000;
                             long lastLogTime = System.currentTimeMillis();  // to track when we last logged
                             long startTime = System.nanoTime();
@@ -377,6 +384,17 @@ public class TaskExecutor
             log.error(ex, "GracefulShutdown failed");
             // TODO Handle interruption
         }
+    }
+
+    private String getLocalhost()
+    {
+        try {
+            return InetAddress.getLocalHost().getHostAddress();
+        }
+        catch (UnknownHostException e) {
+            log.error(e, "Unable to get local host address");
+        }
+        return "";
     }
 
     private void stop(long startOfGracefulShutdown, List<TaskHandle> currentTasksSnapshot)

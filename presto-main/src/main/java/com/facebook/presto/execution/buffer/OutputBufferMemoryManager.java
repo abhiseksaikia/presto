@@ -42,7 +42,7 @@ public class OutputBufferMemoryManager
 {
     private static final ListenableFuture<?> NOT_BLOCKED = immediateFuture(null);
 
-    private final long maxBufferedBytes;
+    private final AtomicLong maxBufferedBytes;
     private final AtomicLong bufferedBytes = new AtomicLong();
     private final AtomicLong peakMemoryUsage = new AtomicLong();
 
@@ -63,9 +63,14 @@ public class OutputBufferMemoryManager
     {
         requireNonNull(systemMemoryContextSupplier, "systemMemoryContextSupplier is null");
         checkArgument(maxBufferedBytes > 0, "maxBufferedBytes must be > 0");
-        this.maxBufferedBytes = maxBufferedBytes;
+        this.maxBufferedBytes = new AtomicLong(maxBufferedBytes);
         this.systemMemoryContextSupplier = Suppliers.memoize(systemMemoryContextSupplier::get);
         this.notificationExecutor = requireNonNull(notificationExecutor, "notificationExecutor is null");
+    }
+
+    public void updateMaxSize(long maxBufferedBytes)
+    {
+        this.maxBufferedBytes.set(maxBufferedBytes);
     }
 
     public void updateMemoryUsage(long bytesAdded)
@@ -98,7 +103,7 @@ public class OutputBufferMemoryManager
             }
             else {
                 this.blockedOnMemory = NOT_BLOCKED;
-                if (currentBufferedBytes <= maxBufferedBytes || !blockOnFull.get()) {
+                if (currentBufferedBytes <= maxBufferedBytes.get() || !blockOnFull.get()) {
                     // Complete future in a new thread to avoid making a callback on the caller thread.
                     // This make is easier for callers to use this class since they can update the memory
                     // usage while holding locks.
@@ -148,7 +153,7 @@ public class OutputBufferMemoryManager
 
     public double getUtilization()
     {
-        return bufferedBytes.get() / (double) maxBufferedBytes;
+        return bufferedBytes.get() / (double) maxBufferedBytes.get();
     }
 
     public boolean isOverutilized()
@@ -158,7 +163,7 @@ public class OutputBufferMemoryManager
 
     private boolean isBufferFull()
     {
-        return bufferedBytes.get() > maxBufferedBytes && blockOnFull.get();
+        return bufferedBytes.get() > maxBufferedBytes.get() && blockOnFull.get();
     }
 
     @VisibleForTesting

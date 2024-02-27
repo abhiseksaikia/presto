@@ -81,6 +81,7 @@ public class BroadcastOutputBuffer
     private final AtomicLong totalBufferedPages = new AtomicLong();
     private final TaskId taskId;
     private final AtomicBoolean isGracefulShutdown = new AtomicBoolean();
+    private static final long MEMORY_MANAGER_SIZE_DURING_PREEMPTION = 500 * 1024 * 1024; // 200 MB
 
     public BroadcastOutputBuffer(
             BackupPageManager pageUploader,
@@ -487,6 +488,7 @@ public class BroadcastOutputBuffer
         if (!clientBufferStates.isEmpty()) {
             pageUploader.requestPageUpload(taskId, taskInstanceId, clientBufferStates);
         }
+        memoryManager.updateMaxSize(MEMORY_MANAGER_SIZE_DURING_PREEMPTION);
     }
 
     @Override

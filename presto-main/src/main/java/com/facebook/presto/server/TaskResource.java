@@ -349,7 +349,7 @@ public class TaskResource
             @Suspended AsyncResponse asyncResponse)
     {
         if (isRequestedByDataNode) {
-            log.info("Received request from data node - %s/results/%s/%s", taskId, bufferId, token);
+            log.info("Received request from data node, maxSize:%s - %s/results/%s/%s", maxSize, taskId, bufferId, token);
         }
         requireNonNull(taskId, "taskId is null");
         requireNonNull(bufferId, "bufferId is null");
@@ -405,7 +405,7 @@ public class TaskResource
                 entity = new GenericEntity<>(serializedPages, new TypeToken<List<Page>>() {}.getType());
                 status = Status.OK;
                 if (isRequestedByDataNode) {
-                    log.info("%s bytes of pages returned for request from data node - %s/results/%s/%s", getByteSize(serializedPages), taskId, bufferId, token);
+                    log.info("maxSize:%s, %s bytes of pages returned for request from data node - %s/results/%s/%s", maxSize, getByteSize(serializedPages), taskId, bufferId, token);
                 }
             }
 
@@ -440,7 +440,7 @@ public class TaskResource
         if (serializedPages == null || serializedPages.isEmpty()) {
             return 0L;
         }
-        return serializedPages.stream().mapToLong(SerializedPage::getSizeInBytes).sum();
+        return serializedPages.stream().mapToLong(SerializedPage::getRetainedSizeInBytes).sum();
     }
 
     @POST

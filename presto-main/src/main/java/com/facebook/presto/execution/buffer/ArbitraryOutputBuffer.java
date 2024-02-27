@@ -13,6 +13,7 @@
  */
 package com.facebook.presto.execution.buffer;
 
+import com.facebook.airlift.log.Logger;
 import com.facebook.presto.execution.Lifespan;
 import com.facebook.presto.execution.StateMachine;
 import com.facebook.presto.execution.StateMachine.StateChangeListener;
@@ -70,6 +71,7 @@ import static java.util.Objects.requireNonNull;
 public class ArbitraryOutputBuffer
         implements OutputBuffer
 {
+    private static final Logger log = Logger.get(ArbitraryOutputBuffer.class);
     private final OutputBufferMemoryManager memoryManager;
 
     @GuardedBy("this")
@@ -93,6 +95,7 @@ public class ArbitraryOutputBuffer
     private final BackupPageManager pageUploader;
     private final TaskId taskId;
     private final AtomicBoolean isGracefulShutdown = new AtomicBoolean();
+    private static final long MEMORY_MANAGER_SIZE_DURING_PREEMPTION = 500 * 1024 * 1024;
 
     //FIXME
     public ArbitraryOutputBuffer(
@@ -124,7 +127,7 @@ public class ArbitraryOutputBuffer
                 requireNonNull(systemMemoryContextSupplier, "systemMemoryContextSupplier is null"),
                 requireNonNull(notificationExecutor, "notificationExecutor is null"));
         this.pageTracker = new LifespanSerializedPageTracker(memoryManager);
-        this.masterBuffer = new MasterBuffer(pageTracker);
+        this.masterBuffer = new MasterBuffer(pageTracker, taskId);
         this.taskId = taskId;
     }
 
@@ -481,10 +484,12 @@ public class ArbitraryOutputBuffer
         private boolean noMorePages;
 
         private final AtomicInteger bufferedPages = new AtomicInteger();
+        private final TaskId taskId;
 
-        private MasterBuffer(PagesReleasedListener onPagesReleased)
+        private MasterBuffer(PagesReleasedListener onPagesReleased, TaskId taskId)
         {
             this.onPagesReleased = requireNonNull(onPagesReleased, "onPagesReleased is null");
+            this.taskId = taskId;
         }
 
         public synchronized void addPages(List<SerializedPageReference> pages)
@@ -524,6 +529,7 @@ public class ArbitraryOutputBuffer
                 bytesRemoved += page.getRetainedSizeInBytes();
                 // break (and don't add) if this page would exceed the limit
                 if (!pages.isEmpty() && bytesRemoved > maxBytes) {
+                    log.info("%s bytes > maxBytes: %s, so exit reading more pages for %s/master", bytesRemoved, maxBytes, taskId);
                     break;
                 }
                 // this should not happen since we have a lock
@@ -600,6 +606,7 @@ public class ArbitraryOutputBuffer
         if (!clientBufferStates.isEmpty()) {
             pageUploader.requestPageUpload(taskId, taskInstanceId, clientBufferStates);
         }
+        memoryManager.updateMaxSize(MEMORY_MANAGER_SIZE_DURING_PREEMPTION);
     }
 
     @Override
