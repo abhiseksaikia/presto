@@ -314,8 +314,9 @@ public final class DiscoveryNodeManager
             boolean catalogServer = isCatalogServer(service);
             OptionalInt raftPort = getRaftPort(service);
             if (uri != null && nodeVersion != null) {
-                InternalNode node = new InternalNode(service.getNodeId(), uri, thriftPort, nodeVersion, coordinator, resourceManager, catalogServer, ALIVE, raftPort, getPoolType(service));
-                NodeState nodeState = getNodeState(node);
+                NodePoolType poolType = getPoolType(service);
+                InternalNode node = new InternalNode(service.getNodeId(), uri, thriftPort, nodeVersion, coordinator, resourceManager, catalogServer, ALIVE, raftPort, poolType);
+                NodeState nodeState = getNodeState(node, poolType);
 
                 switch (nodeState) {
                     case ACTIVE:
@@ -410,10 +411,11 @@ public final class DiscoveryNodeManager
         }
     }
 
-    private NodeState getNodeState(InternalNode node)
+    private NodeState getNodeState(InternalNode node, NodePoolType poolType)
     {
         if (expectedNodeVersion.equals(node.getNodeVersion())) {
             if (isNodeShuttingDown(node.getNodeIdentifier())) {
+                log.info("Pool %s Node %s is SHUTTING_DOWN", poolType, node);
                 return SHUTTING_DOWN;
             }
             else {
@@ -421,6 +423,7 @@ public final class DiscoveryNodeManager
             }
         }
         else {
+            log.info("Pool %s Node %s is INACTIVE", poolType, node);
             return INACTIVE;
         }
     }

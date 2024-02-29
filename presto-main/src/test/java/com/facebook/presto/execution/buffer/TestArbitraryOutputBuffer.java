@@ -31,6 +31,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 
 import static com.facebook.airlift.concurrent.Threads.daemonThreadsNamed;
@@ -431,6 +432,7 @@ public class TestArbitraryOutputBuffer
 
     @Test
     public void testResumeFromPreviousPosition()
+            throws ExecutionException, InterruptedException
     {
         OutputBuffers outputBuffers = createInitialEmptyOutputBuffers(ARBITRARY);
         OutputBufferId[] ids = new OutputBufferId[5];
@@ -446,6 +448,8 @@ public class TestArbitraryOutputBuffer
         for (OutputBufferId id : ids) {
             firstReads.put(id, buffer.get(id, 0L, sizeOfPages(1)));
         }
+        ListenableFuture<BufferResult> bufferResultListenableFuture = buffer.get(new OutputBufferId(5), 0L, sizeOfPages(1));
+        System.out.println(bufferResultListenableFuture.get());
         // All must be blocked initially
         assertThat(firstReads.values()).allMatch(future -> !future.isDone());
 
@@ -456,9 +460,9 @@ public class TestArbitraryOutputBuffer
             addPage(buffer, createPage(33));
             assertThat(secondReads).allMatch(future -> !future.isDone(), "No secondary reads should complete until after all first reads");
             List<OutputBufferId> completedIds = firstReads.entrySet().stream()
-                                                        .filter(entry -> entry.getValue().isDone())
-                                                        .map(Map.Entry::getKey)
-                                                        .collect(toList());
+                    .filter(entry -> entry.getValue().isDone())
+                    .map(Map.Entry::getKey)
+                    .collect(toList());
             assertEquals(completedIds.size(), 1, "One completed buffer read per page addition");
             OutputBufferId completed = completedIds.get(0);
 

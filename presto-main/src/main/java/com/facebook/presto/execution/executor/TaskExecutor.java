@@ -249,6 +249,13 @@ public class TaskExecutor
             log.info("No active task, make any taskstatus call to return HostShutdown to make sure it triggers callback on the coordinator");
             noTaskAtGracefulShutdown.set(true);
         }
+        // allowing task status to get propagated to coordinator
+        try {
+            SECONDS.sleep(10);
+        }
+        catch (InterruptedException e) {
+            log.info("Error in sleep");
+        }
     }
 
     public AtomicBoolean getNoTaskAtGracefulShutdown()
@@ -324,11 +331,22 @@ public class TaskExecutor
                             log.info("Output buffer for task %s= %s", taskId, taskHandle.getOutputBuffer().get().getInfo());
                             while (!taskHandle.isTotalRunningSplitEmpty()) {
                                 checkState(!taskHandle.isTaskDone(), "Task is done while waiting for total running split empty");
+                                log.info("Buffer utilization for task %s = %s , isOverutilized=%s", taskId, outputBuffer.getUtilization(), outputBuffer.isOverutilized());
                                 if (blockedSplits.size() > 0) {
-                                    eventListenerManager.trackPreemptionLifeCycle(taskHandle.getTaskId(), QueryRecoveryDebugInfo.builder().state(QueryRecoveryState.WAITING_FOR_BLOCKED_SPLITS).build());
+                                    eventListenerManager.trackPreemptionLifeCycle(
+                                            taskHandle.getTaskId(),
+                                            QueryRecoveryDebugInfo.builder()
+                                                    .state(QueryRecoveryState.WAITING_FOR_BLOCKED_SPLITS)
+                                                    .extraInfo(ImmutableMap.of("overUtilized", String.valueOf(outputBuffer.isOverutilized())))
+                                                    .build());
                                 }
                                 else {
-                                    eventListenerManager.trackPreemptionLifeCycle(taskHandle.getTaskId(), QueryRecoveryDebugInfo.builder().state(QueryRecoveryState.WAITING_FOR_RUNNING_SPLITS).build());
+                                    eventListenerManager.trackPreemptionLifeCycle(
+                                            taskHandle.getTaskId(),
+                                            QueryRecoveryDebugInfo.builder()
+                                                    .state(QueryRecoveryState.WAITING_FOR_RUNNING_SPLITS)
+                                                    .extraInfo(ImmutableMap.of("overUtilized", String.valueOf(outputBuffer.isOverutilized())))
+                                                    .build());
                                 }
                                 try {
                                     long currentTime = System.currentTimeMillis();
@@ -377,8 +395,6 @@ public class TaskExecutor
         try {
             log.info("Waiting for shutdown of all tasks");
             latch.await();
-            // allowing task status to get propagated to coordinator
-            SECONDS.sleep(10);
         }
         catch (Throwable ex) {
             log.error(ex, "GracefulShutdown failed");

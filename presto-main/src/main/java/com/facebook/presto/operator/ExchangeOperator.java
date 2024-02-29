@@ -123,6 +123,7 @@ public class ExchangeOperator
         checkArgument(split.getConnectorId().equals(REMOTE_CONNECTOR_ID), "split is not a remote split");
 
         RemoteSplit remoteSplit = (RemoteSplit) split.getConnectorSplit();
+        //add is done before the remote host gone signal came in, so redirection may not happen?
         exchangeClient.addLocation(remoteSplit.getLocation().toURI(), remoteSplit.getRemoteSourceTaskId());
 
         return Optional::empty;

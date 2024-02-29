@@ -13,6 +13,7 @@
  */
 package com.facebook.presto.execution.buffer;
 
+import com.facebook.airlift.log.Logger;
 import com.facebook.presto.memory.context.LocalMemoryContext;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Suppliers;
@@ -40,6 +41,7 @@ import static java.util.Objects.requireNonNull;
 @ThreadSafe
 public class OutputBufferMemoryManager
 {
+    private static final Logger log = Logger.get(OutputBufferMemoryManager.class);
     private static final ListenableFuture<?> NOT_BLOCKED = immediateFuture(null);
 
     private final AtomicLong maxBufferedBytes;
@@ -58,6 +60,7 @@ public class OutputBufferMemoryManager
 
     private final Supplier<LocalMemoryContext> systemMemoryContextSupplier;
     private final Executor notificationExecutor;
+    private final AtomicBoolean isGracefulShutdown = new AtomicBoolean();
 
     public OutputBufferMemoryManager(long maxBufferedBytes, Supplier<LocalMemoryContext> systemMemoryContextSupplier, Executor notificationExecutor)
     {
@@ -71,6 +74,11 @@ public class OutputBufferMemoryManager
     public void updateMaxSize(long maxBufferedBytes)
     {
         this.maxBufferedBytes.set(maxBufferedBytes);
+    }
+
+    public void gracefulShutdown()
+    {
+        isGracefulShutdown.set(true);
     }
 
     public void updateMemoryUsage(long bytesAdded)
@@ -163,7 +171,13 @@ public class OutputBufferMemoryManager
 
     private boolean isBufferFull()
     {
-        return bufferedBytes.get() > maxBufferedBytes.get() && blockOnFull.get();
+        long bufferedBytes = this.bufferedBytes.get();
+        long maxBufferedBytes = this.maxBufferedBytes.get();
+        boolean isBufferExceedsLimit = bufferedBytes > maxBufferedBytes;
+        if (isBufferExceedsLimit && isGracefulShutdown.get()) {
+            log.info("Buffer is over utilized, bufferedBytes=%s and maxBufferedBytes=%s", bufferedBytes, maxBufferedBytes);
+        }
+        return isBufferExceedsLimit && blockOnFull.get();
     }
 
     @VisibleForTesting

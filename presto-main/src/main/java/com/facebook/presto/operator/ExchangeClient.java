@@ -224,6 +224,7 @@ public class ExchangeClient
         checkState(!noMoreLocations, "No more locations already set");
 
         Optional<URI> asyncPageTransportLocation = getAsyncPageTransportLocation(location, asyncPageTransportEnabled);
+        //we should redirect location for newly created page buffer client!
         PageBufferClient client = new PageBufferClient(
                 httpClient,
                 maxErrorDuration,

@@ -599,6 +599,7 @@ public class ArbitraryOutputBuffer
     public void gracefulShutdown()
     {
         isGracefulShutdown.set(true);
+        memoryManager.gracefulShutdown();
         List<ClientBufferState> clientBufferStates = safeGetBuffersSnapshot().stream()
                 .filter(clientBuffer -> !clientBuffer.isDestroyed())
                 .map(ClientBuffer::gracefulShutdown)

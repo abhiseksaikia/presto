@@ -68,7 +68,7 @@ public class PartitionedOutputBuffer
     private final String taskInstanceId;
     //increase the size to avoid multiple round trip to transfer page data
     //Tune this as per testing
-    private static final long MEMORY_MANAGER_SIZE_DURING_PREEMPTION = 500 * 1024 * 1024; // 200 MB
+    private static final long MEMORY_MANAGER_SIZE_DURING_PREEMPTION = 1024 * 1024 * 1024; // 1 GB
 
     public PartitionedOutputBuffer(
             BackupPageManager pageUploader,
@@ -378,6 +378,7 @@ public class PartitionedOutputBuffer
     public void gracefulShutdown()
     {
         isGracefulShutdown.set(true);
+        memoryManager.gracefulShutdown();
         List<ClientBufferState> clientBufferStates = partitions.stream()
                 .filter(clientBuffer -> !clientBuffer.isDestroyed())
                 .map(ClientBuffer::gracefulShutdown)
