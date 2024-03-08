@@ -212,7 +212,7 @@ public class DiscardingOutputBuffer
     }
 
     @Override
-    public void transferPagesToDataNode()
+    public void transferToDataNodeCompleted()
     {
     }
 }

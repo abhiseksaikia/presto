@@ -68,6 +68,7 @@ import static com.facebook.airlift.http.client.HttpUriBuilder.uriBuilderFrom;
 import static com.facebook.airlift.http.client.Request.Builder.prepareHead;
 import static com.facebook.presto.failureDetector.FailureDetector.State.ALIVE;
 import static com.facebook.presto.failureDetector.FailureDetector.State.GONE;
+import static com.facebook.presto.failureDetector.FailureDetector.State.GONE_DATA;
 import static com.facebook.presto.failureDetector.FailureDetector.State.GONE_INTERMEDIATE;
 import static com.facebook.presto.failureDetector.FailureDetector.State.GONE_LEAF;
 import static com.facebook.presto.failureDetector.FailureDetector.State.UNKNOWN;
@@ -205,11 +206,15 @@ public class HeartbeatFailureDetector
 
     private State rewriteGoneState(MonitoringTask task)
     {
-        if (getPoolType(task.getService()) == NodePoolType.INTERMEDIATE) {
+        NodePoolType poolType = getPoolType(task.getService());
+        if (poolType == NodePoolType.INTERMEDIATE) {
             return GONE_INTERMEDIATE;
         }
-        else if (getPoolType(task.getService()) == NodePoolType.LEAF) {
+        else if (poolType == NodePoolType.LEAF) {
             return GONE_LEAF;
+        }
+        else if (poolType == NodePoolType.DATA) {
+            return GONE_DATA;
         }
         return GONE;
     }

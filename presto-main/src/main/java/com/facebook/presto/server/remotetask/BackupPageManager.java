@@ -48,7 +48,9 @@ import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.RemovalListener;
 import com.google.common.cache.RemovalNotification;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.io.Files;
 import com.google.common.util.concurrent.ListenableFuture;
 import io.airlift.units.DataSize;
@@ -64,6 +66,9 @@ import java.net.InetAddress;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.UnknownHostException;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -73,6 +78,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -91,11 +97,14 @@ import static com.facebook.presto.server.RequestHelpers.setContentTypeHeaders;
 import static com.facebook.presto.server.ServerConfig.POOL_TYPE;
 import static com.facebook.presto.spi.NodePoolType.DATA;
 import static com.facebook.presto.spi.NodePoolType.DEFAULT;
+import static com.facebook.presto.spi.NodePoolType.INTERMEDIATE;
+import static com.facebook.presto.spi.NodePoolType.LEAF;
 import static com.facebook.presto.spi.StandardErrorCode.PAGE_CACHE_UNAVAILABLE;
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.collect.ImmutableList.toImmutableList;
 import static com.google.common.util.concurrent.Futures.immediateFuture;
 import static java.lang.Math.toIntExact;
+import static java.net.HttpURLConnection.HTTP_OK;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.concurrent.Executors.newScheduledThreadPool;
 import static java.util.concurrent.Executors.newSingleThreadScheduledExecutor;
@@ -105,8 +114,10 @@ import static java.util.concurrent.TimeUnit.SECONDS;
 public class BackupPageManager
 {
     private static final Logger log = Logger.get(BackupPageManager.class);
+    public static final String GRACEFUL_SHUTDOWN = "graceful_shutdown";
 
     private final HttpClient httpClient;
+    private final ServerConfig serverConfig;
     private final DiscoveryLookupClient lookupClient;
     private final LocationFactory locationFactory;
     //added for local testing
@@ -124,11 +135,13 @@ public class BackupPageManager
     private final Optional<ScheduledExecutorService> pageDownloadScheduler;
     private final ScheduledExecutorService refreshExecutor = newSingleThreadScheduledExecutor(daemonThreadsNamed("backup-page-manager-refresh"));
     private Duration refreshInterval = new Duration(30, SECONDS);
+    private AtomicReference<Set<URI>> activeLeafNodes = new AtomicReference<>();
 
     @Inject
     public BackupPageManager(@ForPageTransfer HttpClient httpClient, InternalNodeManager nodeManager, LocationFactory locationFactory, DiscoveryLookupClient lookupClient, EventListenerManager eventListenerManager, ServerConfig serverConfig)
     {
         this.httpClient = httpClient;
+        this.serverConfig = serverConfig;
         this.lookupClient = lookupClient;
         this.locationFactory = locationFactory;
         this.nodeManager = nodeManager;
@@ -168,41 +181,44 @@ public class BackupPageManager
     public void refresh()
     {
         try {
-            List<URI> dataNodeService = getDataNodeService();
-            sortedDataNodeList.set(dataNodeService);
-            log.info("Data node list updated = %s", dataNodeService);
+            ListenableFuture<ServiceDescriptors> services = lookupClient.getServices("presto");
+            List<URI> dataNodeServices = getNodeByType(services, DATA);
+            sortedDataNodeList.set(dataNodeServices);
+            log.info("Data node list updated = %s", dataNodeServices);
+            if (serverConfig.getPoolType() == INTERMEDIATE) {
+                List<URI> leafNodes = getNodeByType(services, LEAF);
+                ImmutableSet<URI> leafNodesSet = ImmutableSet.copyOf(leafNodes);
+                activeLeafNodes.set(leafNodesSet);
+                log.info("Leaf node set updated = %s", leafNodesSet);
+            }
         }
         catch (Throwable t) {
             log.error(t, "Error updating coordinators");
         }
     }
 
-    private List<URI> getDataNodeService()
+    public Set<URI> getActiveLeafNodes()
     {
-        try {
-            ListenableFuture<ServiceDescriptors> services = lookupClient.getServices("presto");
-            return services.get().getServiceDescriptors().stream()
-                    .filter(serviceDescriptor -> NodePoolType.valueOf(serviceDescriptor.getProperties().getOrDefault("pool_type", "DEFAULT")) == DATA)
-                    .map(dataNodeService -> {
-                        try {
-                            return new URI(dataNodeService.getProperties().get("http"));
-                        }
-                        catch (URISyntaxException e) {
-                            return null;
-                        }
-                    })
-                    .filter(Objects::nonNull)
-                    .sorted(Comparator.comparing(URI::toString))
-                    .collect(toImmutableList());
-        }
-        catch (ExecutionException e) {
-            log.error(e, "Failed to discover data node");
-            throw new RuntimeException("Failed to discover data node");
-        }
-        catch (InterruptedException e) {
-            log.warn(e, "Failed to discover data node");
-            throw new RuntimeException("Failed to discover data node", e);
-        }
+        return activeLeafNodes.get();
+    }
+
+    private static List<URI> getNodeByType(ListenableFuture<ServiceDescriptors> services, NodePoolType poolType)
+            throws InterruptedException, ExecutionException
+    {
+        List<URI> dataNodeServices = services.get().getServiceDescriptors().stream()
+                .filter(serviceDescriptor -> NodePoolType.valueOf(serviceDescriptor.getProperties().getOrDefault("pool_type", "DEFAULT")) == poolType)
+                .map(dataNodeService -> {
+                    try {
+                        return new URI(dataNodeService.getProperties().get("http"));
+                    }
+                    catch (URISyntaxException e) {
+                        return null;
+                    }
+                })
+                .filter(Objects::nonNull)
+                .sorted(Comparator.comparing(URI::toString))
+                .collect(toImmutableList());
+        return dataNodeServices;
     }
 
     public ListenableFuture<PageBufferClient.PagesResponse> getResults(URI location, DataSize maxResponseSize)
@@ -462,6 +478,14 @@ public class BackupPageManager
         */
     }
 
+    public List<URI> getBufferLocation(TaskId taskId)
+    {
+        List<URI> uris = sortedDataNodeList.get();
+        checkArgument(uris != null, "sortedDataNodeList is null");
+        checkArgument(uris.size() == 10);
+        return uris.stream().map(uri -> uriBuilderFrom(uri).appendPath("/v1/task").appendPath(taskId.toString()).build()).collect(toImmutableList());
+    }
+
     /**
      * public static URI pickDataNode(TaskId taskID, List<URI> dataNodes)
      * {
@@ -511,15 +535,22 @@ public class BackupPageManager
     // FIXME server processing, move it to a different class
     public void processUploadRequest(URI bufferLocation, TaskId taskId, String taskInstanceID, String bufferId, long token)
     {
-        checkArgument(cache != null, "cache not available");
         // init entry into the cache
         log.info("initializeUploadPages called for task = %s , bufferId = %s, bufferLocation =%s", taskId.toString(), bufferId, bufferLocation);
+        checkArgument(cache != null, "cache not available");
+        if (bufferId.equals(GRACEFUL_SHUTDOWN)) {
+            log.info("GRACEFUL_SHUTDOWN: initializeUploadPages called for task = %s , bufferId = %s, bufferLocation =%s", taskId.toString(), bufferId, bufferLocation);
+            cache.put(new PageKey(taskId.toString(), GRACEFUL_SHUTDOWN), new PageData(token, taskInstanceID));
+            return;
+        }
         eventListenerManager.trackPreemptionLifeCycle(
                 taskId,
                 QueryRecoveryDebugInfo.builder()
                         .outputBufferID(bufferId)
                         .state(QueryRecoveryState.DATA_PAGE_TRANSFER_INIT_RECEIVED)
-                        .extraInfo(ImmutableMap.of("local", getLocalhost()))
+                        .extraInfo(ImmutableMap.of(
+                                "local", getLocalhost(),
+                                "time", getCurrentPSTTimeString()))
                         .build());
 
         pageDownloadScheduler.get().execute(() -> {
@@ -538,6 +569,7 @@ public class BackupPageManager
                                 .extraInfo(ImmutableMap.of(
                                         "size", String.valueOf(pageSize),
                                         "local", getLocalhost(),
+                                        "time", getCurrentPSTTimeString(),
                                         "duration", String.valueOf(Duration.nanosSince(start).roundTo(TimeUnit.SECONDS))))
                                 .build());
                 log.info("Going to fetch pages from location =%s", bufferLocation);
@@ -578,6 +610,7 @@ public class BackupPageManager
                                 .extraInfo(ImmutableMap.of(
                                         "size", String.valueOf(pageSize),
                                         "local", getLocalhost(),
+                                        "time", getCurrentPSTTimeString(),
                                         "duration", String.valueOf(Duration.nanosSince(start).roundTo(TimeUnit.SECONDS)),
                                         "bytes", String.valueOf(pageBackupClient.getBytesRead())))
                                 .build());
@@ -615,8 +648,21 @@ public class BackupPageManager
         PageKey pageKey = new PageKey(taskId.toString(), bufferId.toString());
         Optional<PageData> pageDataCache = getPageData(pageKey);
         if (!pageDataCache.isPresent()) {
+            Optional<PageData> pageDataForGracefulShutdownTask = Optional.ofNullable(cache.getIfPresent(new PageKey(taskId.toString(), GRACEFUL_SHUTDOWN)));
+            if (pageDataForGracefulShutdownTask.isPresent()) {
+                PageData pageData = pageDataForGracefulShutdownTask.get();
+                eventListenerManager.trackPreemptionLifeCycle(
+                        taskId,
+                        QueryRecoveryDebugInfo.builder()
+                                .outputBufferID(bufferId.toString())
+                                .state(QueryRecoveryState.EMPTY_PAGE_FOR_GRACEFUL_SHUTDOWN)
+                                .build());
+                return immediateFuture(emptyResults(pageData.getTaskInstanceID(), sequenceId, true));
+            }
             throw new PrestoException(PAGE_CACHE_UNAVAILABLE, String.format("page cache not available for task:%s, buffer:%s", taskId, bufferId));
         }
+
+        log.info("Read result from cache, maxSize:%s - %s/results/%s/%s", maxSize, taskId, bufferId, sequenceId);
         PageData pageData = pageDataCache.get();
         //if pages are not present in the cache, download might not be started, return empty page and dont close the buffer
         if (!pageData.getPages().isPresent()) {
@@ -686,22 +732,24 @@ public class BackupPageManager
 
     public void acknowledgeCachedPages(long sequenceId, PageData pageData)
     {
-        checkArgument(sequenceId >= 0, "acknowledgeCachedPage::Invalid sequence id");
-        // if pages have already been acknowledged, just ignore this
-        long oldCurrentSequenceId = pageData.getCurrentSequenceID();
-        int pagesToRemove = toIntExact(sequenceId - oldCurrentSequenceId);
-        checkArgument(pageData.getPages() != null, "Page data not present");
-        LinkedList<SerializedPage> serializedPageReferences = pageData.getPages().get();
-        checkArgument(pagesToRemove <= serializedPageReferences.size(), "Invalid sequence id");
-        for (int i = 0; i < pagesToRemove; i++) {
-            log.info("acknowledgeCachedPages::Removed page %s", i);
-            serializedPageReferences.removeFirst();
+        synchronized (pageData) {
+            checkArgument(sequenceId >= 0, "acknowledgeCachedPage::Invalid sequence id");
+            // if pages have already been acknowledged, just ignore this
+            long oldCurrentSequenceId = pageData.getCurrentSequenceID();
+            int pagesToRemove = toIntExact(sequenceId - oldCurrentSequenceId);
+            checkArgument(pageData.getPages() != null, "Page data not present");
+            LinkedList<SerializedPage> serializedPageReferences = pageData.getPages().get();
+            checkArgument(pagesToRemove <= serializedPageReferences.size(), "Invalid sequence id = " + sequenceId + ", oldCurrentSequenceId:" + oldCurrentSequenceId + ", pagesToRemove=" + pagesToRemove);
+            for (int i = 0; i < pagesToRemove; i++) {
+                log.info("acknowledgeCachedPages::Removed page %s", i);
+                serializedPageReferences.removeFirst();
+            }
+            if (sequenceId < oldCurrentSequenceId) {
+                return;
+            }
+            log.info("acknowledgeCachedPages::set current sequence id = %s", oldCurrentSequenceId + pagesToRemove);
+            pageData.setCurrentSequenceID(oldCurrentSequenceId + pagesToRemove);
         }
-        if (sequenceId < oldCurrentSequenceId) {
-            return;
-        }
-        log.info("acknowledgeCachedPages::set current sequence id = %s", oldCurrentSequenceId + pagesToRemove);
-        pageData.setCurrentSequenceID(oldCurrentSequenceId + pagesToRemove);
     }
 
     public TaskInfo abortTaskResult(TaskId taskId, OutputBuffers.OutputBufferId bufferId)
@@ -715,6 +763,9 @@ public class BackupPageManager
                 QueryRecoveryDebugInfo.builder()
                         .outputBufferID(bufferId.toString())
                         .state(QueryRecoveryState.DATA_PAGE_BUFFER_ABORTED)
+                        .extraInfo(ImmutableMap.of(
+                                "local", getLocalhost(),
+                                "time", getCurrentPSTTimeString()))
                         .build());
         return null;
     }
@@ -773,5 +824,78 @@ public class BackupPageManager
                 .filter(entry -> entry.getValue().getPages().isPresent())
                 .mapToLong(entry -> getByteSize(entry.getValue().getPages().get()))
                 .sum();
+    }
+
+    public void markPageTransferCompleted(TaskId taskId, String taskInstanceId)
+    {
+        List<URI> taskPageLocations = getBufferLocation(taskId);
+        eventListenerManager.trackPreemptionLifeCycle(
+                taskId,
+                QueryRecoveryDebugInfo.builder()
+                        .state(QueryRecoveryState.MARK_PAGE_TRANSFER_INIT)
+                        .extraInfo(ImmutableMap.of(
+                                "local", getLocalhost(),
+                                "time", getCurrentPSTTimeString()))
+                        .build());
+        //FIXME hack to ack about graceful shutdown
+        ImmutableList<ListenableFuture<Response>> pageTransferCompletionRequest = taskPageLocations.stream().map(taskLocation -> getResponseByBufferLocation(
+                        taskId,
+                        taskInstanceId,
+                        taskLocation,
+                        ImmutableList.of(
+                                new ClientBufferInfo(GRACEFUL_SHUTDOWN, -1, -1, null))))
+                .collect(toImmutableList());
+        boolean isAllSuccess = true;
+        for (ListenableFuture<Response> future : pageTransferCompletionRequest) {
+            try {
+                // Get the response from the future
+                Response response = future.get();
+
+                // Do something with the response
+                log.info("Received response: " + response);
+                if (response.getStatusCode() != HTTP_OK) {
+                    throw new ExecutionException(new RuntimeException("Not a sucessful response"));
+                }
+            }
+            catch (InterruptedException e) {
+                isAllSuccess = false;
+                log.error(e, "Failed to markPageTransferCompleted for task %s", taskId);
+            }
+            catch (ExecutionException e) {
+                isAllSuccess = false;
+                log.error(e, "ExecutionException for markPageTransferCompleted for task %s", taskId);
+            }
+        }
+        if (isAllSuccess) {
+            eventListenerManager.trackPreemptionLifeCycle(
+                    taskId,
+                    QueryRecoveryDebugInfo.builder()
+                            .state(QueryRecoveryState.MARK_PAGE_TRANSFER_COMPLETED)
+                            .extraInfo(ImmutableMap.of(
+                                    "local", getLocalhost(),
+                                    "time", getCurrentPSTTimeString(),
+                                    "success", String.valueOf(isAllSuccess)))
+                            .build());
+        }
+        else {
+            eventListenerManager.trackPreemptionLifeCycle(
+                    taskId,
+                    QueryRecoveryDebugInfo.builder()
+                            .state(QueryRecoveryState.MARK_PAGE_TRANSFER_FAILED)
+                            .extraInfo(ImmutableMap.of(
+                                    "local", getLocalhost(),
+                                    "time", getCurrentPSTTimeString(),
+                                    "success", String.valueOf(isAllSuccess)))
+                            .build());
+        }
+    }
+
+    private static String getCurrentPSTTimeString()
+    {
+        ZonedDateTime pstNow = ZonedDateTime.now(ZoneId.of("America/Los_Angeles"));
+// Create a DateTimeFormatter object for the desired output format
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss");
+// Format the ZonedDateTime object using the formatter
+        return pstNow.format(formatter);
     }
 }

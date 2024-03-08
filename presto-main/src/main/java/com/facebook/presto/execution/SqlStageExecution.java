@@ -65,6 +65,7 @@ import java.util.function.Consumer;
 
 import static com.facebook.presto.SystemSessionProperties.getMaxFailedTaskPercentage;
 import static com.facebook.presto.failureDetector.FailureDetector.State.GONE;
+import static com.facebook.presto.failureDetector.FailureDetector.State.GONE_DATA;
 import static com.facebook.presto.failureDetector.FailureDetector.State.GONE_INTERMEDIATE;
 import static com.facebook.presto.failureDetector.FailureDetector.State.GONE_LEAF;
 import static com.facebook.presto.operator.ExchangeOperator.REMOTE_CONNECTOR_ID;
@@ -73,6 +74,7 @@ import static com.facebook.presto.spi.StandardErrorCode.GENERIC_RECOVERY_ERROR;
 import static com.facebook.presto.spi.StandardErrorCode.PAGE_TRANSPORT_ERROR;
 import static com.facebook.presto.spi.StandardErrorCode.PAGE_TRANSPORT_TIMEOUT;
 import static com.facebook.presto.spi.StandardErrorCode.REMOTE_HOST_GONE;
+import static com.facebook.presto.spi.StandardErrorCode.REMOTE_HOST_GONE_DATA;
 import static com.facebook.presto.spi.StandardErrorCode.REMOTE_HOST_GONE_INTERMEDIATE;
 import static com.facebook.presto.spi.StandardErrorCode.REMOTE_TASK_ERROR;
 import static com.facebook.presto.spi.StandardErrorCode.REMOTE_TASK_MISMATCH;
@@ -822,7 +824,7 @@ public final class SqlStageExecution
     private ExecutionFailureInfo rewriteTransportFailure(ExecutionFailureInfo executionFailureInfo)
     {
         FailureDetector.State state = failureDetector.getState(executionFailureInfo.getRemoteHost());
-        boolean isRemoteHostGone = (state == GONE || state == GONE_LEAF || state == GONE_INTERMEDIATE);
+        boolean isRemoteHostGone = (state == GONE || state == GONE_LEAF || state == GONE_INTERMEDIATE || state == GONE_DATA);
         if (executionFailureInfo.getRemoteHost() == null || !isRemoteHostGone) {
             return executionFailureInfo;
         }
@@ -834,9 +836,21 @@ public final class SqlStageExecution
                 executionFailureInfo.getSuppressed(),
                 executionFailureInfo.getStack(),
                 executionFailureInfo.getErrorLocation(),
-                state == GONE_INTERMEDIATE ? REMOTE_HOST_GONE_INTERMEDIATE.toErrorCode() : REMOTE_HOST_GONE.toErrorCode(),
+                getFailureStateErrorCode(state),
                 executionFailureInfo.getRemoteHost(),
                 executionFailureInfo.getErrorCause());
+    }
+
+    private static ErrorCode getFailureStateErrorCode(FailureDetector.State state)
+    {
+        switch (state){
+            case GONE_DATA:
+                return REMOTE_HOST_GONE_DATA.toErrorCode();
+            case GONE_INTERMEDIATE:
+                return REMOTE_HOST_GONE_INTERMEDIATE.toErrorCode();
+            default:
+                return REMOTE_HOST_GONE.toErrorCode();
+        }
     }
 
     @Override

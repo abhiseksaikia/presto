@@ -471,7 +471,13 @@ public class SqlTaskManager
     public ListenableFuture<BufferResult> getTaskResults(TaskId taskId, OutputBufferId bufferId, long startingSequenceId, DataSize maxSize, boolean isRequestForPageBackup)
     {
         if (serverConfig.getPoolType() == DATA) {
-            return pageManager.getTaskResultsFromCache(taskId, bufferId, startingSequenceId, maxSize);
+            try {
+                return pageManager.getTaskResultsFromCache(taskId, bufferId, startingSequenceId, maxSize);
+            }
+            catch (Throwable throwable) {
+                log.error(throwable, "Error in Read result from cache, maxSize:%s - %s/results/%s/%s", maxSize, taskId, bufferId, startingSequenceId);
+                throw throwable;
+            }
         }
         requireNonNull(taskId, "taskId is null");
         requireNonNull(bufferId, "bufferId is null");

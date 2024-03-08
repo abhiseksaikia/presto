@@ -80,6 +80,11 @@ public class Backoff
                 .toArray();
     }
 
+    public int getMinTries()
+    {
+        return minTries;
+    }
+
     public synchronized long getFailureCount()
     {
         return failureCount;
@@ -138,6 +143,11 @@ public class Backoff
 
         long failureDuration = now - firstFailureTime;
         return failureDuration >= maxFailureIntervalNanos;
+    }
+
+    public long getMaxFailureIntervalNanos()
+    {
+        return maxFailureIntervalNanos;
     }
 
     public synchronized long getBackoffDelayNanos()

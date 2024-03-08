@@ -52,6 +52,7 @@ import java.util.OptionalLong;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -105,6 +106,7 @@ public final class PageBufferClient
     private RpcShuffleClient resultClient;
     private final boolean acknowledgePages;
     private URI location;
+    private URI oldLocation;
     private Optional<URI> asyncPageTransportLocation;
     private final ClientCallback clientCallback;
     private final ScheduledExecutorService scheduler;
@@ -142,7 +144,7 @@ public final class PageBufferClient
     private final BackupPageManager pageManager;
     private final TaskId remoteSourceTaskId;
     private final HttpClient httpClient;
-    private boolean isLocationRedirected;
+    private AtomicBoolean isLocationRedirected = new AtomicBoolean(false);
 
     public PageBufferClient(
             HttpClient httpClient,
@@ -370,13 +372,18 @@ public final class PageBufferClient
                 checkNotHoldsLock(this);
 
                 t = resultClient.rewriteException(t);
+                if (!(t instanceof PrestoException) && t.getMessage().contains("Server refused connection") && isSoftFailure() && !isLocationRedirected.get()) {
+                    //FIXME do it only for leaf
+                    redirectLocation(true);
+                }
                 if (!(t instanceof PrestoException) && backoff.failure()) {
-                    String message = format("%s (%s - %s failures, failure duration %s, total failed request time %s)",
+                    String message = format("%s (%s - %s failures, failure duration %s, total failed request time %s) , server refused = %s",
                             WORKER_NODE_ERROR,
                             uri,
                             backoff.getFailureCount(),
                             backoff.getFailureDuration().convertTo(SECONDS),
-                            backoff.getFailureRequestTimeTotal().convertTo(SECONDS));
+                            backoff.getFailureRequestTimeTotal().convertTo(SECONDS),
+                            t.getMessage().contains("Server refused connection"));
                     t = new PageTransportTimeoutException(fromUri(uri), message, t);
                 }
                 //Additional check for safety in case smc notification does not work
@@ -385,28 +392,53 @@ public final class PageBufferClient
                     setServerGracefulShutdown();
                 }
                 if (isRemoteHostShuttingdown.get() /*|| pageManager.isRemoteHostShutdown(getBaseUrl(location))*/) {
-                    redirectLocation();
+                    redirectLocation(false);
                 }
                 handleFailure(t, resultFuture);
             }
         }, pageBufferClientCallbackExecutor);
     }
 
-    private synchronized void redirectLocation()
+    private boolean isSoftFailure()
+    {
+        if (backoff.getFailureCount() < backoff.getMinTries() - 5) {
+            return false;
+        }
+
+        return backoff.getFailureDuration().roundTo(NANOSECONDS) >= (backoff.getMaxFailureIntervalNanos() - new Duration(1, TimeUnit.MINUTES).roundTo(NANOSECONDS));
+    }
+
+    private synchronized void redirectLocation(boolean isDetectServerConnection)
     {
         //FIXME check if thread safety us required
-        if (!isLocationRedirected) {
-            isLocationRedirected = true;
+        if (!isLocationRedirected.get()) {
+            isLocationRedirected.set(true);
             log.info("Remote host %s is shutting down, redirecting to data node for pages ", location);
             //try backup
             //public ListenableFuture<PageBufferClient.PagesResponse> getResults(long token, DataSize maxResponseSize, TaskId taskId,String taskInstanceID, String bufferID){
             //FIXME
+            URI previousLocation = location;
             String bufferID = getBufferIDFromLocation(location);
             location = pageManager.getBackupBufferLocation(remoteSourceTaskId, bufferID);
             //FIXME refactor page buffer client
             asyncPageTransportLocation = pageManager.getBackupAsyncPageTransportLocation(location, asyncPageTransportLocation.isPresent());
             //FIXME check if thread safety is required for resultClient
             resultClient = getRpcShuffleClient(location, asyncPageTransportLocation);
+            oldLocation = previousLocation;
+            pageManager.getEventListenerManager().trackPreemptionLifeCycle(
+                    remoteSourceTaskId,
+                    QueryRecoveryDebugInfo.builder()
+                            .outputBufferID(getBufferIDFromLocation(location))
+                            .extraInfo(new ImmutableMap.Builder<String, String>()
+                                    .put("remote", location.toString())
+                                    .put("state", getStatus().toString())
+                                    .put("oldLoc", getBaseUrl(oldLocation))
+                                    .put("failureCount", String.valueOf(backoff.getFailureCount()))
+                                    .put("isServerCon", String.valueOf(isDetectServerConnection))
+                                    .put("failureDuration", String.valueOf(backoff.getFailureDuration().convertTo(SECONDS)))
+                                    .build())
+                            .state(QueryRecoveryState.PAGE_POLL_ABORT_REDIRECTED_NODE_PAGE)
+                            .build());
             this.backoff.success();
         }
     }
@@ -516,6 +548,21 @@ public final class PageBufferClient
 
     private synchronized void sendDelete()
     {
+        if (isLocationRedirected.get()) {
+            pageManager.getEventListenerManager().trackPreemptionLifeCycle(
+                    remoteSourceTaskId,
+                    QueryRecoveryDebugInfo.builder()
+                            .outputBufferID(getBufferIDFromLocation(location))
+                            .extraInfo(new ImmutableMap.Builder<String, String>()
+                                    .put("remote", location.toString())
+                                    .put("state", getStatus().toString())
+                                    .put("oldLoc", getBaseUrl(oldLocation))
+                                    .put("failureCount", String.valueOf(backoff.getFailureCount()))
+                                    .put("failureDuration", String.valueOf(backoff.getFailureDuration().convertTo(SECONDS)))
+                                    .build())
+                            .state(QueryRecoveryState.PAGE_POLL_ABORT_REDIRECTED_NODE_PAGE)
+                            .build());
+        }
         ListenableFuture<?> resultFuture = resultClient.abortResults(false);
         future = resultFuture;
         Futures.addCallback(resultFuture, new FutureCallback<Object>()
@@ -596,6 +643,7 @@ public final class PageBufferClient
                                         .put("isRemoteHostDetectedAsShutdown", String.valueOf(isRemoteHostShuttingdown))
                                         .put("errorCode", String.valueOf(prestoException.getErrorCode()))
                                         .put("state", getStatus().toString())
+                                        .put("oldLoc", getBaseUrl(oldLocation))
                                         .put("failureCount", String.valueOf(backoff.getFailureCount()))
                                         .put("failureDuration", String.valueOf(backoff.getFailureDuration().convertTo(SECONDS)))
                                         .build())
@@ -753,6 +801,6 @@ public final class PageBufferClient
 
     public boolean isLocationRedirected()
     {
-        return isLocationRedirected;
+        return isLocationRedirected.get();
     }
 }

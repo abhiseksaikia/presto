@@ -611,7 +611,8 @@ public class ArbitraryOutputBuffer
     }
 
     @Override
-    public void transferPagesToDataNode()
+    public void transferToDataNodeCompleted()
     {
+        pageUploader.markPageTransferCompleted(taskId, taskInstanceId);
     }
 }

@@ -791,7 +791,7 @@ public class SpoolingOutputBuffer
     }
 
     @Override
-    public void transferPagesToDataNode()
+    public void transferToDataNodeCompleted()
     {
     }
 }

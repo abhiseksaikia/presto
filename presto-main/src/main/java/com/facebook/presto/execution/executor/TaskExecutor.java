@@ -301,8 +301,9 @@ public class TaskExecutor
         //wait for running splits to be over
         long waitTimeMillis = 5; // Wait for 5 milliseconds between checks to avoid cpu spike
         //before killing the tasks,  make sure output buffer data is consumed.
-        CountDownLatch latch = new CountDownLatch(currentTasksSnapshot.size());
-        log.warn("GracefulShutdown:: Going to shutdown %s tasks", currentTasksSnapshot.size());
+        int totalTasks = currentTasksSnapshot.size();
+        CountDownLatch latch = new CountDownLatch(totalTasks);
+        log.warn("GracefulShutdown:: Going to shutdown %s tasks", totalTasks);
         for (TaskHandle taskHandle : currentTasksSnapshot) {
             taskShutdownExecutor.execute(
                     () -> {
@@ -321,7 +322,8 @@ public class TaskExecutor
                                             .state(QueryRecoveryState.INIT_GRACEFUL_PREEMPTION)
                                             .extraInfo(ImmutableMap.of(
                                                     "type", outputBuffer.getInfo().getType(),
-                                                    "local", getLocalhost()))
+                                                    "local", getLocalhost(),
+                                                    "totalTasks", String.valueOf(totalTasks)))
                                             .build());
                             long logFrequencyMillis = 30_000;
                             long lastLogTime = System.currentTimeMillis();  // to track when we last logged
@@ -382,6 +384,7 @@ public class TaskExecutor
                             log.warn("GracefulShutdown:: calling handleShutDown for task- %s, buffer info : %s", taskId, getLoggingInfo(outputBuffer.getInfo()));
                             eventListenerManager.trackPreemptionLifeCycle(taskHandle.getTaskId(), QueryRecoveryDebugInfo.builder().state(QueryRecoveryState.INITIATE_HANDLE_SHUTDOWN).build());
                             taskHandle.handleShutDown();
+                            outputBuffer.transferToDataNodeCompleted();
                         }
                         catch (Throwable ex) {
                             log.error(ex, "Exception while doing graceful preemption for task %s", taskId);

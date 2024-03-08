@@ -30,6 +30,7 @@ public interface FailureDetector
         ALIVE,
         GONE,
         GONE_LEAF,
+        GONE_DATA,
         GONE_INTERMEDIATE,
         UNRESPONSIVE,
     }

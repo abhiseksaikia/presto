@@ -162,6 +162,5 @@ public interface OutputBuffer
     void gracefulShutdown();
 
     //FIXME remove this
-    @Deprecated
-    void transferPagesToDataNode();
+    void transferToDataNodeCompleted();
 }

@@ -391,8 +391,7 @@ public class PartitionedOutputBuffer
     }
 
     @Override
-    public void transferPagesToDataNode()
+    public void transferToDataNodeCompleted()
     {
-        throw new UnsupportedOperationException("Avoid using push based transfer");
     }
 }

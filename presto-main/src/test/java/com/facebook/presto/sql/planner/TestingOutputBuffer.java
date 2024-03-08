@@ -174,7 +174,7 @@ public class TestingOutputBuffer
     }
 
     @Override
-    public void transferPagesToDataNode()
+    public void transferToDataNodeCompleted()
     {
     }
 }

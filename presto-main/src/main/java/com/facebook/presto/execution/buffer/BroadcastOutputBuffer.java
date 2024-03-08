@@ -493,7 +493,7 @@ public class BroadcastOutputBuffer
     }
 
     @Override
-    public void transferPagesToDataNode()
+    public void transferToDataNodeCompleted()
     {
     }
 }

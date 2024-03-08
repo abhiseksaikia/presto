@@ -437,8 +437,8 @@ public class LazyOutputBuffer
     }
 
     @Override
-    public void transferPagesToDataNode()
+    public void transferToDataNodeCompleted()
     {
-        delegate.transferPagesToDataNode();
+        delegate.transferToDataNodeCompleted();
     }
 }
