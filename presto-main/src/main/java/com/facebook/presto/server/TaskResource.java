@@ -377,6 +377,7 @@ public class TaskResource
                                     .header(PRESTO_PAGE_TOKEN, token)
                                     .header(PRESTO_PAGE_NEXT_TOKEN, token)
                                     .header(PRESTO_BUFFER_COMPLETE, true)
+                                    .header(PRESTO_GRACEFUL_SHUTDOWN, shutdownHandler.isGracefulShutdownRequested())
                                     .build());
             return;
         }
