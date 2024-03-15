@@ -147,8 +147,8 @@ public final class PageBufferClient
     private final HttpClient httpClient;
     private AtomicBoolean isLocationRedirected = new AtomicBoolean(false);
 
-    private final AtomicReference<Duration> successDuration = new AtomicReference<Duration>();
-    private AtomicReference<Duration> failureDuration = new AtomicReference<Duration>();
+    private final AtomicReference<Duration> successDuration = new AtomicReference<>();
+    private AtomicReference<Duration> failureDuration = new AtomicReference<>();
 
     public PageBufferClient(
             HttpClient httpClient,
@@ -814,13 +814,13 @@ public final class PageBufferClient
         return isLocationRedirected.get();
     }
 
-    public Duration getSuccessDuration()
+    public Optional<Duration> getSuccessDuration()
     {
-        return successDuration.get();
+        return Optional.ofNullable(successDuration.get());
     }
 
-    public Duration getFailureDuration()
+    public Optional<Duration> getFailureDuration()
     {
-        return failureDuration.get();
+        return Optional.ofNullable(failureDuration.get());
     }
 }

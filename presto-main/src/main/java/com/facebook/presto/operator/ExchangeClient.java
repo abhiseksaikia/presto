@@ -467,20 +467,14 @@ public class ExchangeClient
                 if (responseSize > 0) {
                     runtimeStats.addMetricValueIgnoreZero(PAGE_DATA_FROM_REDIRECTED_NODE, RuntimeUnit.BYTE, responseSize);
                 }
-                runtimeStats.addMetricValue(SUCCESS_PAGE_DATA_FROM_REDIRECTED_NODE_TIME_NANOS,
-                        NANO,
-                        client.getSuccessDuration().roundTo(TimeUnit.NANOSECONDS));
-                runtimeStats.addMetricValue(FAILURE_PAGE_DATA_FROM_REDIRECTED_NODE_TIME_NANOS,
-                        NANO,
-                        client.getSuccessDuration().roundTo(TimeUnit.NANOSECONDS));
+                client.getSuccessDuration().ifPresent(duration -> runtimeStats.addMetricValue(SUCCESS_PAGE_DATA_FROM_REDIRECTED_NODE_TIME_NANOS, NANO, duration.roundTo(TimeUnit.NANOSECONDS)));
+                client.getFailureDuration().ifPresent(duration -> runtimeStats.addMetricValue(FAILURE_PAGE_DATA_FROM_REDIRECTED_NODE_TIME_NANOS, NANO, duration.roundTo(TimeUnit.NANOSECONDS)));
             }
             else {
                 if (responseSize > 0) {
                     runtimeStats.addMetricValueIgnoreZero(EXCHANGE_PAGE_DATA, RuntimeUnit.BYTE, responseSize);
                 }
-                runtimeStats.addMetricValue(SUCCESS_EXCHANGE_PAGE_DATA_TIME_NANOS,
-                        NANO,
-                        client.getSuccessDuration().roundTo(TimeUnit.NANOSECONDS));
+                client.getSuccessDuration().ifPresent(duration -> runtimeStats.addMetricValue(SUCCESS_EXCHANGE_PAGE_DATA_TIME_NANOS, NANO, duration.roundTo(TimeUnit.NANOSECONDS)));
             }
         }
 

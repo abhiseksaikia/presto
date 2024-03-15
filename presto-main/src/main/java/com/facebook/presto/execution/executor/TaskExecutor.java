@@ -460,9 +460,14 @@ public class TaskExecutor
         builder.append(info.getState());
         builder.append("[");
         for (BufferInfo bufferInfo : info.getBuffers()) {
+            if (bufferInfo.isFinished()) {
+                continue;
+            }
             builder.append(bufferInfo.getBufferId());
-            builder.append("/finished=");
-            builder.append(bufferInfo.isFinished());
+            builder.append(":");
+            builder.append(bufferInfo.getPagesSent());
+            builder.append(":");
+            builder.append(bufferInfo.getBufferedPages());
             builder.append(",");
         }
         builder.append("]");

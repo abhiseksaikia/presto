@@ -37,6 +37,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -147,8 +148,9 @@ public class GracefulShutdownHandler
                         isGracefulShutdownCompleted = true;
                     }
                     gracefulShutdownCounter.update(1);
-                    gracefulShutdownTime.add(Duration.nanosSince(timeBeforeTaskExecutorShutdown));
-                    log.warn("Wait time for task TaskExecutor Shutdown -> %s", System.nanoTime() - timeBeforeTaskExecutorShutdown);
+                    Duration shutdownDuration = Duration.nanosSince(timeBeforeTaskExecutorShutdown);
+                    gracefulShutdownTime.add(shutdownDuration);
+                    log.warn("Wait time for task TaskExecutor Shutdown -> %s", shutdownDuration.convertTo(TimeUnit.MINUTES));
                     waitForTasksToComplete();
                     //waitForCoordinatorContinuousTaskFetcher();
                     // wait for another grace period for all task states to be observed by the coordinator
