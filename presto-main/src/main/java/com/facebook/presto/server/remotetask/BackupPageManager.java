@@ -115,6 +115,7 @@ public class BackupPageManager
 {
     private static final Logger log = Logger.get(BackupPageManager.class);
     public static final String GRACEFUL_SHUTDOWN = "graceful_shutdown";
+    public static final DataSize DEFAULT_FETCH_SIZE = new DataSize(10, DataSize.Unit.MEGABYTE);
 
     private final HttpClient httpClient;
     private final ServerConfig serverConfig;
@@ -726,7 +727,7 @@ public class BackupPageManager
         //verify(sequenceId == pageData.getCurrentSequenceID(), "Invalid sequence id, current =%s, sequenceId=%s", pageData.getCurrentSequenceID(), sequenceId);
 
         // read the new pages
-        long maxBytes = maxSize.toBytes();
+        long maxBytes = Math.max(maxSize.toBytes(), DEFAULT_FETCH_SIZE.toBytes());
         List<SerializedPage> result = new ArrayList<>();
         long bytes = 0;
 
