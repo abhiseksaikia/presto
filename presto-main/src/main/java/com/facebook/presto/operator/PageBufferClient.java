@@ -323,7 +323,7 @@ public final class PageBufferClient
 
         long delayNanos = backoff.getBackoffDelayNanos();
         if (isLocationRedirected.get()) {
-            log.info("scheduling request after %s ns for location %s", delayNanos);
+            log.info("scheduling request after %s ns for location %s", delayNanos, location);
         }
         scheduler.schedule(() -> {
             try {
