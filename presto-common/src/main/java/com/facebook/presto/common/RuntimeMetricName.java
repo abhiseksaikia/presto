@@ -59,5 +59,11 @@ public class RuntimeMetricName
     public static final String HISTORY_OPTIMIZER_QUERY_REGISTRATION_GET_PLAN_NODE_HASHES = "historyOptimizerQueryRegistrationGetPlanNodeHashes";
     public static final String HISTORY_OPTIMIZER_QUERY_REGISTRATION_GET_STATISTICS = "historyOptimizerQueryRegistrationGetStatistics";
 
-    public static final String PAGE_DATA_FROM_REDIRECTED_NODE = "redirectedPageBytes";
+    public static final String PAGE_DATA_FROM_REDIRECTED_NODE = "exchangeRedirectedPageBytes";
+    public static final String EXCHANGE_PAGE_DATA = "exchangePageBytes";
+
+    public static final String SUCCESS_EXCHANGE_PAGE_DATA_TIME_NANOS = "successfulExchangePageFetchTimeNanos";
+
+    public static final String SUCCESS_PAGE_DATA_FROM_REDIRECTED_NODE_TIME_NANOS = "successfulExchangeRedirectedPageFetchTimeNanos";
+    public static final String FAILURE_PAGE_DATA_FROM_REDIRECTED_NODE_TIME_NANOS = "failedRedirectedPageFetchTimeNanos";
 }

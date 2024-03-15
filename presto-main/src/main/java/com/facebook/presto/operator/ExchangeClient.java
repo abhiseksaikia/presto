@@ -56,7 +56,12 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
+import static com.facebook.presto.common.RuntimeMetricName.EXCHANGE_PAGE_DATA;
+import static com.facebook.presto.common.RuntimeMetricName.FAILURE_PAGE_DATA_FROM_REDIRECTED_NODE_TIME_NANOS;
 import static com.facebook.presto.common.RuntimeMetricName.PAGE_DATA_FROM_REDIRECTED_NODE;
+import static com.facebook.presto.common.RuntimeMetricName.SUCCESS_EXCHANGE_PAGE_DATA_TIME_NANOS;
+import static com.facebook.presto.common.RuntimeMetricName.SUCCESS_PAGE_DATA_FROM_REDIRECTED_NODE_TIME_NANOS;
+import static com.facebook.presto.common.RuntimeUnit.NANO;
 import static com.facebook.presto.common.block.PageBuilderStatus.DEFAULT_MAX_PAGE_SIZE_IN_BYTES;
 import static com.facebook.presto.spi.StandardErrorCode.UNRECOVERABLE_HOST_SHUTTING_DOWN;
 import static com.google.common.base.Preconditions.checkArgument;
@@ -395,10 +400,10 @@ public class ExchangeClient
         clientCount -= pendingClients;
         //FIXME remove it
         //Added sleep for local debugging to slow down intermediate pollling to reproduce waiting for output buffer state
-        Optional<String> nodeType = Optional.ofNullable(System.getProperty("node_type"));
-        if (nodeType.isPresent() && nodeType.get().equals("worker_intermediate")) {
-            slowdownInitialExchange();
-        }
+        /**Optional<String> nodeType = Optional.ofNullable(System.getProperty("node_type"));
+         if (nodeType.isPresent() && nodeType.get().equals("worker_intermediate")) {
+         slowdownInitialExchange();
+         }*/
         for (int i = 0; i < clientCount; ) {
             PageBufferClient client = queuedClients.poll();
             if (client == null) {
@@ -457,8 +462,26 @@ public class ExchangeClient
             pagesRetainedSizeInBytes += page.getRetainedSizeInBytes();
             responseSize += page.getSizeInBytes();
         }
-        if (client.isLocationRedirected() && runtimeStats != null) {
-            runtimeStats.addMetricValueIgnoreZero(PAGE_DATA_FROM_REDIRECTED_NODE, RuntimeUnit.BYTE, responseSize);
+        if (runtimeStats != null) {
+            if (client.isLocationRedirected()) {
+                if (responseSize > 0) {
+                    runtimeStats.addMetricValueIgnoreZero(PAGE_DATA_FROM_REDIRECTED_NODE, RuntimeUnit.BYTE, responseSize);
+                }
+                runtimeStats.addMetricValue(SUCCESS_PAGE_DATA_FROM_REDIRECTED_NODE_TIME_NANOS,
+                        NANO,
+                        client.getSuccessDuration().roundTo(TimeUnit.NANOSECONDS));
+                runtimeStats.addMetricValue(FAILURE_PAGE_DATA_FROM_REDIRECTED_NODE_TIME_NANOS,
+                        NANO,
+                        client.getSuccessDuration().roundTo(TimeUnit.NANOSECONDS));
+            }
+            else {
+                if (responseSize > 0) {
+                    runtimeStats.addMetricValueIgnoreZero(EXCHANGE_PAGE_DATA, RuntimeUnit.BYTE, responseSize);
+                }
+                runtimeStats.addMetricValue(SUCCESS_EXCHANGE_PAGE_DATA_TIME_NANOS,
+                        NANO,
+                        client.getSuccessDuration().roundTo(TimeUnit.NANOSECONDS));
+            }
         }
 
         List<SettableFuture<?>> notify = ImmutableList.of();

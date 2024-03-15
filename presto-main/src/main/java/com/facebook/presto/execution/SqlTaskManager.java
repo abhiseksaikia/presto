@@ -471,12 +471,16 @@ public class SqlTaskManager
     public ListenableFuture<BufferResult> getTaskResults(TaskId taskId, OutputBufferId bufferId, long startingSequenceId, DataSize maxSize, boolean isRequestForPageBackup)
     {
         if (serverConfig.getPoolType() == DATA) {
+            long start = System.nanoTime();
             try {
                 return pageManager.getTaskResultsFromCache(taskId, bufferId, startingSequenceId, maxSize);
             }
             catch (Throwable throwable) {
                 log.error(throwable, "Error in Read result from cache, maxSize:%s - %s/results/%s/%s", maxSize, taskId, bufferId, startingSequenceId);
                 throw throwable;
+            }
+            finally {
+                log.info("Time taken to read result from cache, maxSize:%s - %s/results/%s/%s =%s", maxSize, taskId, bufferId, startingSequenceId, Duration.nanosSince(start).convertTo(TimeUnit.MILLISECONDS));
             }
         }
         requireNonNull(taskId, "taskId is null");

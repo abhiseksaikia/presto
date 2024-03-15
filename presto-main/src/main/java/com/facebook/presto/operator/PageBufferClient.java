@@ -56,6 +56,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -145,6 +146,9 @@ public final class PageBufferClient
     private final TaskId remoteSourceTaskId;
     private final HttpClient httpClient;
     private AtomicBoolean isLocationRedirected = new AtomicBoolean(false);
+
+    private final AtomicReference<Duration> successDuration = new AtomicReference<Duration>();
+    private AtomicReference<Duration> failureDuration = new AtomicReference<Duration>();
 
     public PageBufferClient(
             HttpClient httpClient,
@@ -318,6 +322,9 @@ public final class PageBufferClient
         backoff.startRequest();
 
         long delayNanos = backoff.getBackoffDelayNanos();
+        if (isLocationRedirected.get()) {
+            log.info("scheduling request after %s ns for location %s", delayNanos);
+        }
         scheduler.schedule(() -> {
             try {
                 initiateRequest(maxResponseSize);
@@ -352,6 +359,7 @@ public final class PageBufferClient
     private synchronized void sendGetResults(DataSize maxResponseSize)
     {
         URI uriBase = asyncPageTransportLocation.orElse(location);
+        long start = System.nanoTime();
         URI uri = HttpUriBuilder.uriBuilderFrom(uriBase).appendPath(String.valueOf(token)).build();
 
         ListenableFuture<PagesResponse> resultFuture = resultClient.getResults(token, maxResponseSize, false);
@@ -363,11 +371,13 @@ public final class PageBufferClient
             public void onSuccess(PagesResponse result)
             {
                 processPageResponse(result, uri, resultFuture);
+                successDuration.set(Duration.nanosSince(start));
             }
 
             @Override
             public void onFailure(Throwable t)
             {
+                failureDuration.set(Duration.nanosSince(start));
                 log.debug(t, "Request to %s failed %s", uri, t.getMessage());
                 checkNotHoldsLock(this);
 
@@ -437,7 +447,7 @@ public final class PageBufferClient
                                     .put("isServerCon", String.valueOf(isDetectServerConnection))
                                     .put("failureDuration", String.valueOf(backoff.getFailureDuration().convertTo(SECONDS)))
                                     .build())
-                            .state(QueryRecoveryState.PAGE_POLL_ABORT_REDIRECTED_NODE_PAGE)
+                            .state(QueryRecoveryState.PAGE_POLL_REDIRECT)
                             .build());
             this.backoff.success();
         }
@@ -802,5 +812,15 @@ public final class PageBufferClient
     public boolean isLocationRedirected()
     {
         return isLocationRedirected.get();
+    }
+
+    public Duration getSuccessDuration()
+    {
+        return successDuration.get();
+    }
+
+    public Duration getFailureDuration()
+    {
+        return failureDuration.get();
     }
 }

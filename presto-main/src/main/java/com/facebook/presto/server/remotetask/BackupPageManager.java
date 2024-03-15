@@ -157,7 +157,17 @@ public class BackupPageManager
                         public void onRemoval(RemovalNotification<PageKey, PageData> notification)
                         {
                             PageKey key = notification.getKey();
-                            log.info("Cache evicted, reason:%s key: %s/results/%s/", notification.getCause(), key.getTaskID(), key.getBufferId());
+                            log.warn("Cache evicted, reason:%s key: %s/results/%s/", notification.getCause(), key.getTaskID(), key.getBufferId());
+                            eventListenerManager.trackPreemptionLifeCycle(
+                                    TaskId.valueOf(key.getTaskID()),
+                                    QueryRecoveryDebugInfo.builder()
+                                            .outputBufferID(key.getBufferId())
+                                            .state(QueryRecoveryState.CACHE_EVICTED)
+                                            .extraInfo(ImmutableMap.of(
+                                                    "cause", String.valueOf(notification.getCause()),
+                                                    "size", String.valueOf(getCacheSize()),
+                                                    "time", getCurrentPSTTimeString()))
+                                            .build());
                         }
                     })
                     .build();
@@ -560,7 +570,6 @@ public class BackupPageManager
             long pageSize = getByteSize(serializedPages);
             try {
                 //temporary placeholder to provide empty page to consumer before page data is fetched from worker
-                cache.put(new PageKey(taskId.toString(), bufferId), new PageData(token, taskInstanceID));
                 eventListenerManager.trackPreemptionLifeCycle(
                         taskId,
                         QueryRecoveryDebugInfo.builder()
@@ -666,11 +675,12 @@ public class BackupPageManager
         PageData pageData = pageDataCache.get();
         //if pages are not present in the cache, download might not be started, return empty page and dont close the buffer
         if (!pageData.getPages().isPresent()) {
+            log.info("Read result from cache, maxSize:%s (pages_not_present_in_cache) - %s/results/%s/%s", maxSize, taskId, bufferId, sequenceId);
             return immediateFuture(emptyResults(pageData.getTaskInstanceID(), sequenceId, false));
         }
         // we have some pages to ack and wipe out pages
         pageData = acknowledgeCachedPage(taskId, bufferId, sequenceId);
-        return immediateFuture(processRead(sequenceId, maxSize, pageData));
+        return immediateFuture(processRead(sequenceId, maxSize, pageData, taskId, bufferId));
     }
 
     public PageData acknowledgeCachedPage(TaskId taskId, OutputBuffers.OutputBufferId bufferId, long sequenceId)
@@ -695,14 +705,15 @@ public class BackupPageManager
         return Optional.ofNullable(pageData);
     }
 
-    private BufferResult processRead(long sequenceId, DataSize maxSize, PageData pageData)
+    private BufferResult processRead(long sequenceId, DataSize maxSize, PageData pageData, TaskId taskId, OutputBuffers.OutputBufferId bufferId)
     {
         // if request is for pages before the current position, just return an empty result
         if (sequenceId < pageData.getCurrentSequenceID()) {
+            log.info("Read result from cache, maxSize:%s (request_is_for_pages_before_current_position) - %s/results/%s/%s", maxSize, taskId, bufferId, sequenceId);
             return emptyResults(pageData.getTaskInstanceID(), sequenceId, false);
         }
         if (pageData.getPages().get().isEmpty()) {
-            log.info("Reached end of page, returning buffer complete");
+            log.info("Read result from cache, maxSize:%s (reached_end_of_buffer) - %s/results/%s/%s", maxSize, taskId, bufferId, sequenceId);
             return emptyResults(pageData.getTaskInstanceID(), sequenceId, true);
         }
 
@@ -820,10 +831,7 @@ public class BackupPageManager
     @Managed
     public long getCacheSize()
     {
-        return cache.asMap().entrySet().stream()
-                .filter(entry -> entry.getValue().getPages().isPresent())
-                .mapToLong(entry -> getByteSize(entry.getValue().getPages().get()))
-                .sum();
+        return cache.size();
     }
 
     public void markPageTransferCompleted(TaskId taskId, String taskInstanceId)
