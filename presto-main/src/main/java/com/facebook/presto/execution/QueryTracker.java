@@ -264,8 +264,8 @@ public class QueryTracker<T extends TrackedQuery>
     }
 
     /**
-     *  When cluster reaches max tasks limit and also a single query
-     *  exceeds a threshold,  kill this query
+     * When cluster reaches max tasks limit and also a single query
+     * exceeds a threshold,  kill this query
      */
     @VisibleForTesting
     void enforceTaskLimits()
@@ -316,6 +316,16 @@ public class QueryTracker<T extends TrackedQuery>
             if (expirationQueue.size() - count <= maxQueryHistory) {
                 break;
             }
+            if (query instanceof QueryExecution) {
+                QueryInfo queryInfo = ((QueryExecution) query).getQueryInfo();
+                if (queryInfo == null) {
+                    log.error("query info is null while tracking");
+                }
+                if (queryInfo.getErrorCode() == EXCEEDED_TIME_LIMIT.toErrorCode()) {
+                    //not expiring the query
+                    continue;
+                }
+            }
             query.pruneInfo();
             count++;
         }
@@ -344,6 +354,17 @@ public class QueryTracker<T extends TrackedQuery>
             }
             if (endTime.get().isAfter(timeHorizon)) {
                 return;
+            }
+
+            if (query instanceof QueryExecution) {
+                QueryInfo queryInfo = ((QueryExecution) query).getQueryInfo();
+                if (queryInfo == null) {
+                    log.error("query info is null while tracking");
+                }
+                if (queryInfo.getErrorCode() == EXCEEDED_TIME_LIMIT.toErrorCode()) {
+                    //not expiring the query
+                    return;
+                }
             }
 
             // only expire them if they are older than minQueryExpireAge. We need to keep them
