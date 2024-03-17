@@ -352,9 +352,9 @@ public final class PageBufferClient
 
                 t = resultClient.rewriteException(t);
 
-                if (!(t instanceof PrestoException) && t.getMessage().contains("Server refused connection") && isSoftFailure() && !isLocationRedirected.get()) {
+                if (isServerRefusedConnection(t) && !isLocationRedirected.get()) {
                     //FIXME do it only for leaf
-                    if (isLeaf(targetLocation)) {
+                    if (isLeaf(targetLocation) && isSoftFailure()) {
                         redirectLocation(true);
                     }
                 }
@@ -374,6 +374,15 @@ public final class PageBufferClient
                 handleFailure(t, resultFuture);
             }
         }, pageBufferClientCallbackExecutor);
+    }
+
+    private static boolean isServerRefusedConnection(Throwable t)
+    {
+        if (t instanceof PrestoException) {
+            return false;
+        }
+        //FIXME Server error to process task result request /v1/task/async/20240317_065915_00080_xnkpg.2.0.356.0/results/352/0 : Task java.util.concurrent.ScheduledThreadPoolExecutor$ScheduledFutureTask@161cad87[Not completed, task = java.util.concurrent.Executors$RunnableAdapter@178d5d34[Wrapped task = com.google.common.util.concurrent.TimeoutFuture$Fire@3deb8096]] rejected from java.util.concurrent.ScheduledThreadPoolExecutor@66d5978[Terminated, pool size = 0, active threads = 0, queued tasks = 0, completed tasks = 286546]</pre></p><h3>Caused by:</h3><pre>java.util.concurrent.RejectedExecutionException: Task java.util.concurrent.ScheduledThreadPoolExecutor$ScheduledFutureTask@161cad87[Not completed, task = java.util.concurrent.Executors$RunnableAdapter@178d5d34[Wrapped task = com.google.common.util.concurrent.TimeoutFuture$Fire@3deb8096]] rejected from java.util.concurrent.ScheduledThreadPoolExecutor@66d5978[Terminated, pool size = 0, active threads = 0, queued tasks = 0, completed tasks = 286546]
+        return t.getMessage().contains("Server refused connection") || t.getMessage().contains("[Terminated");
     }
 
     private boolean isLeaf(URI location)

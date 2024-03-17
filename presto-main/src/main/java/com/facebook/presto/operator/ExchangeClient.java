@@ -212,46 +212,52 @@ public class ExchangeClient
 
     public synchronized void addLocation(URI location, TaskId remoteSourceTaskId)
     {
-        requireNonNull(location, "location is null");
+        try {
+            requireNonNull(location, "location is null");
 
-        // Ignore new locations after close
-        // NOTE: this MUST happen before checking no more locations is checked
-        if (closed.get()) {
-            return;
+            // Ignore new locations after close
+            // NOTE: this MUST happen before checking no more locations is checked
+            if (closed.get()) {
+                return;
+            }
+
+            // ignore duplicate locations
+            if (allClients.containsKey(location)) {
+                return;
+            }
+
+            // already removed
+            if (removedRemoteSourceTaskIds.contains(remoteSourceTaskId)) {
+                return;
+            }
+
+            checkState(!noMoreLocations, "No more locations already set");
+
+            Optional<URI> asyncPageTransportLocation = getAsyncPageTransportLocation(location, asyncPageTransportEnabled);
+            //we should redirect location for newly created page buffer client!
+            PageBufferClient client = new PageBufferClient(
+                    httpClient,
+                    maxErrorDuration,
+                    acknowledgePages,
+                    location,
+                    asyncPageTransportLocation,
+                    new ExchangeClientCallback(),
+                    scheduler,
+                    pageBufferClientCallbackExecutor,
+                    nodeStatusNotificationManager,
+                    pageManager,
+                    remoteSourceTaskId,
+                    ImmutableSet.copyOf(leafNodes));
+            allClients.put(location, client);
+            checkState(taskIdToLocationMap.put(remoteSourceTaskId, location) == null, "Duplicate remoteSourceTaskId: " + remoteSourceTaskId);
+            queuedClients.add(client);
+            client.registerRemoteHostShutdownListener(location);
+            scheduleRequestIfNecessary();
         }
-
-        // ignore duplicate locations
-        if (allClients.containsKey(location)) {
-            return;
+        catch (Throwable throwable) {
+            log.error(throwable, "Error in addLocation for location %s and task %s", location, remoteSourceTaskId);
+            throw throwable;
         }
-
-        // already removed
-        if (removedRemoteSourceTaskIds.contains(remoteSourceTaskId)) {
-            return;
-        }
-
-        checkState(!noMoreLocations, "No more locations already set");
-
-        Optional<URI> asyncPageTransportLocation = getAsyncPageTransportLocation(location, asyncPageTransportEnabled);
-        //we should redirect location for newly created page buffer client!
-        PageBufferClient client = new PageBufferClient(
-                httpClient,
-                maxErrorDuration,
-                acknowledgePages,
-                location,
-                asyncPageTransportLocation,
-                new ExchangeClientCallback(),
-                scheduler,
-                pageBufferClientCallbackExecutor,
-                nodeStatusNotificationManager,
-                pageManager,
-                remoteSourceTaskId,
-                ImmutableSet.copyOf(leafNodes));
-        allClients.put(location, client);
-        checkState(taskIdToLocationMap.put(remoteSourceTaskId, location) == null, "Duplicate remoteSourceTaskId: " + remoteSourceTaskId);
-        queuedClients.add(client);
-        client.registerRemoteHostShutdownListener(location);
-        scheduleRequestIfNecessary();
     }
 
     public synchronized void removeRemoteSource(TaskId sourceTaskId)
