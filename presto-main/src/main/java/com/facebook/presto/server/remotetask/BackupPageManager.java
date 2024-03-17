@@ -48,6 +48,7 @@ import com.google.common.cache.RemovalListener;
 import com.google.common.cache.RemovalNotification;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.io.Files;
 import com.google.common.util.concurrent.ListenableFuture;
 import io.airlift.units.DataSize;
@@ -145,30 +146,16 @@ public class BackupPageManager
         this.nodeManager = nodeManager;
         this.eventListenerManager = eventListenerManager;
         if (serverConfig.getPoolType() == DATA) {
-            this.cache = CacheBuilder.newBuilder()
-                    .concurrencyLevel(200)
-                    .maximumSize(MAX_SIZE / ESTIMATED_SIZE_PER_ENTRY)
-                    .expireAfterWrite(30, TimeUnit.MINUTES)
-                    .removalListener(new RemovalListener<PageKey, PageData>()
-                    {
-                        @Override
-                        public void onRemoval(RemovalNotification<PageKey, PageData> notification)
-                        {
-                            PageKey key = notification.getKey();
-                            log.warn("Cache evicted, reason:%s key: %s/results/%s/", notification.getCause(), key.getTaskID(), key.getBufferId());
-                            eventListenerManager.trackPreemptionLifeCycle(
-                                    TaskId.valueOf(key.getTaskID()),
-                                    QueryRecoveryDebugInfo.builder()
-                                            .outputBufferID(key.getBufferId())
-                                            .state(QueryRecoveryState.CACHE_EVICTED)
-                                            .extraInfo(ImmutableMap.of(
-                                                    "cause", String.valueOf(notification.getCause()),
-                                                    "size", String.valueOf(getCacheSize()),
-                                                    "time", getCurrentPSTTimeString()))
-                                            .build());
-                        }
-                    })
-                    .build();
+            this.cache = CacheBuilder.newBuilder().concurrencyLevel(200).maximumSize(MAX_SIZE / ESTIMATED_SIZE_PER_ENTRY).expireAfterWrite(30, TimeUnit.MINUTES).removalListener(new RemovalListener<PageKey, PageData>()
+            {
+                @Override
+                public void onRemoval(RemovalNotification<PageKey, PageData> notification)
+                {
+                    PageKey key = notification.getKey();
+                    log.warn("Cache evicted, reason:%s key: %s/results/%s/", notification.getCause(), key.getTaskID(), key.getBufferId());
+                    eventListenerManager.trackPreemptionLifeCycle(TaskId.valueOf(key.getTaskID()), QueryRecoveryDebugInfo.builder().outputBufferID(key.getBufferId()).state(QueryRecoveryState.CACHE_EVICTED).extraInfo(ImmutableMap.of("cause", String.valueOf(notification.getCause()), "size", String.valueOf(getCacheSize()), "time", getCurrentPSTTimeString())).build());
+                }
+            }).build();
             //FIXME use rocksdb?
             //this.pageCache = new ConcurrentHashMap<>();
             pageDownloadScheduler = Optional.of(newScheduledThreadPool(100, threadsNamed("task-page-download-%s")));
@@ -193,45 +180,63 @@ public class BackupPageManager
             List<URI> dataNodeServices = getNodeByType(services, DATA);
             sortedDataNodeList.set(dataNodeServices);
             log.info("Data node list updated = %s", dataNodeServices);
-            if (serverConfig.getPoolType() == INTERMEDIATE) {
-                List<URI> leafNodes = getNodeByType(services, LEAF);
-                activeLeafNodes.set(leafNodes.stream().map(uri -> {
-                    try {
-                        return Inet6Address.getByName(uri.getHost());
-                    }
-                    catch (UnknownHostException e) {
-                        throw new RuntimeException(e);
-                    }
-                }).collect(toImmutableSet()));
-                log.info("Leaf node set updated = %s", activeLeafNodes.get());
-            }
+            refreshLeafNodes(services);
         }
         catch (Throwable t) {
             log.error(t, "Error updating coordinators");
         }
     }
 
+    private void refreshLeafNodes()
+    {
+        try {
+            ListenableFuture<ServiceDescriptors> services = lookupClient.getServices("presto");
+            refreshLeafNodes(services);
+        }
+        catch (Throwable t) {
+            log.error(t, "Error updating coordinators");
+        }
+    }
+
+    private void refreshLeafNodes(ListenableFuture<ServiceDescriptors> services)
+            throws InterruptedException, ExecutionException
+    {
+        if (serverConfig.getPoolType() == INTERMEDIATE) {
+            List<URI> leafNodes = getNodeByType(services, LEAF);
+            activeLeafNodes.set(leafNodes.stream().map(uri -> {
+                try {
+                    return Inet6Address.getByName(uri.getHost());
+                }
+                catch (UnknownHostException e) {
+                    throw new RuntimeException(e);
+                }
+            }).collect(toImmutableSet()));
+            log.info("Leaf node set updated = %s", activeLeafNodes.get());
+        }
+        else {
+            activeLeafNodes.set(ImmutableSet.of());
+        }
+    }
+
     public Set<InetAddress> getActiveLeafNodes()
     {
+        if (activeLeafNodes.get() == null) {
+            refreshLeafNodes();
+        }
         return activeLeafNodes.get();
     }
 
     private static List<URI> getNodeByType(ListenableFuture<ServiceDescriptors> services, NodePoolType poolType)
             throws InterruptedException, ExecutionException
     {
-        List<URI> dataNodeServices = services.get().getServiceDescriptors().stream()
-                .filter(serviceDescriptor -> NodePoolType.valueOf(serviceDescriptor.getProperties().getOrDefault("pool_type", "DEFAULT")) == poolType)
-                .map(dataNodeService -> {
-                    try {
-                        return new URI(dataNodeService.getProperties().get("http"));
-                    }
-                    catch (URISyntaxException e) {
-                        return null;
-                    }
-                })
-                .filter(Objects::nonNull)
-                .sorted(Comparator.comparing(URI::toString))
-                .collect(toImmutableList());
+        List<URI> dataNodeServices = services.get().getServiceDescriptors().stream().filter(serviceDescriptor -> NodePoolType.valueOf(serviceDescriptor.getProperties().getOrDefault("pool_type", "DEFAULT")) == poolType).map(dataNodeService -> {
+            try {
+                return new URI(dataNodeService.getProperties().get("http"));
+            }
+            catch (URISyntaxException e) {
+                return null;
+            }
+        }).filter(Objects::nonNull).sorted(Comparator.comparing(URI::toString)).collect(toImmutableList());
         return dataNodeServices;
     }
 
@@ -261,30 +266,20 @@ public class BackupPageManager
     private ListenableFuture<Response> getResponseByBufferLocation(TaskId taskId, String taskInstanceID, URI location, List<ClientBufferInfo> clientBufferInfos)
     {
         //FIXME URL is changed now, provide bufferLocation
-        URI requestURI = uriBuilderFrom(location)
-                .appendPath(taskInstanceID)
-                .build();
+        URI requestURI = uriBuilderFrom(location).appendPath(taskInstanceID).build();
         log.info("Client::initPageUpload requestURI : %s , clientBufferInfos:%s", requestURI, clientBufferInfos);
 
         PageInitUploadRequest initUploadRequest = new PageInitUploadRequest(clientBufferInfos);
         byte[] taskUpdateRequestJson = pageInitUploadRequestJsonCodec.toBytes(initUploadRequest);
 
-        Request request = setContentTypeHeaders(false, preparePost())
-                .setBodyGenerator(createStaticBodyGenerator(taskUpdateRequestJson))
-                .setUri(requestURI).build();
+        Request request = setContentTypeHeaders(false, preparePost()).setBodyGenerator(createStaticBodyGenerator(taskUpdateRequestJson)).setUri(requestURI).build();
         // Define a ResponseHandler
         ResponseHandler<Response, RuntimeException> responseHandler = new ResponseHandler<Response, RuntimeException>()
         {
             @Override
             public Response handleException(Request request, Exception exception)
             {
-                clientBufferInfos.stream().forEach(clientBufferInfo -> eventListenerManager.trackPreemptionLifeCycle(
-                        taskId,
-                        QueryRecoveryDebugInfo.builder()
-                                .outputBufferID(clientBufferInfo.getBufferId())
-                                .state(QueryRecoveryState.PAGE_TRANSFER_INIT_FAILED)
-                                .extraInfo(ImmutableMap.of("msg", abbreviate(exception.getMessage(), 100)))
-                                .build()));
+                clientBufferInfos.stream().forEach(clientBufferInfo -> eventListenerManager.trackPreemptionLifeCycle(taskId, QueryRecoveryDebugInfo.builder().outputBufferID(clientBufferInfo.getBufferId()).state(QueryRecoveryState.PAGE_TRANSFER_INIT_FAILED).extraInfo(ImmutableMap.of("msg", abbreviate(exception.getMessage(), 100))).build()));
 
                 log.error(exception, "Client::initPageUpload failed for requestURI : %s , clientBufferInfo:%s, error = %s", requestURI, clientBufferInfos, exception.getMessage());
                 throw propagate(request, exception);
@@ -313,11 +308,7 @@ public class BackupPageManager
         Map<URI, List<ClientBufferInfo>> locations = new HashMap<>();
         for (ClientBufferState state : clientBufferStates) {
             URI location = getBufferLocation(taskId, Integer.parseInt(state.getBufferId()));
-            locations.computeIfAbsent(location, uri -> new ArrayList<>()).add(new ClientBufferInfo(
-                    state.getBufferId(),
-                    state.getPageSize(),
-                    state.getCurrentSequenceID(),
-                    uriBuilderFrom(internalUri).appendPath("/v1/task").appendPath(taskId.toString()).appendPath("results").appendPath(state.getBufferId()).build()));
+            locations.computeIfAbsent(location, uri -> new ArrayList<>()).add(new ClientBufferInfo(state.getBufferId(), state.getPageSize(), state.getCurrentSequenceID(), uriBuilderFrom(internalUri).appendPath("/v1/task").appendPath(taskId.toString()).appendPath("results").appendPath(state.getBufferId()).build()));
         }
         return locations;
     }
@@ -455,11 +446,7 @@ public class BackupPageManager
         int bufferIDVal = Integer.parseInt(bufferID);
         URI dataNode = pickDataNode(bufferIDVal, uriList);
         HttpUriBuilder builder = uriBuilderFrom(dataNode);
-        return builder.appendPath("/v1/task")
-                .appendPath(taskId.toString())
-                .appendPath("results")
-                .appendPath(bufferID)
-                .build();
+        return builder.appendPath("/v1/task").appendPath(taskId.toString()).appendPath("results").appendPath(bufferID).build();
     }
 
     public URI getBufferLocation(TaskId taskId, int bufferID)
@@ -547,15 +534,7 @@ public class BackupPageManager
             cache.put(new PageKey(taskId.toString(), GRACEFUL_SHUTDOWN), new PageData(token, taskInstanceID));
             return;
         }
-        eventListenerManager.trackPreemptionLifeCycle(
-                taskId,
-                QueryRecoveryDebugInfo.builder()
-                        .outputBufferID(bufferId)
-                        .state(QueryRecoveryState.DATA_PAGE_TRANSFER_INIT_RECEIVED)
-                        .extraInfo(ImmutableMap.of(
-                                "local", getLocalhost(),
-                                "time", getCurrentPSTTimeString()))
-                        .build());
+        eventListenerManager.trackPreemptionLifeCycle(taskId, QueryRecoveryDebugInfo.builder().outputBufferID(bufferId).state(QueryRecoveryState.DATA_PAGE_TRANSFER_INIT_RECEIVED).extraInfo(ImmutableMap.of("local", getLocalhost(), "time", getCurrentPSTTimeString())).build());
 
         pageDownloadScheduler.get().execute(() -> {
             long start = System.nanoTime();
@@ -564,17 +543,7 @@ public class BackupPageManager
             long pageSize = getByteSize(serializedPages);
             try {
                 //temporary placeholder to provide empty page to consumer before page data is fetched from worker
-                eventListenerManager.trackPreemptionLifeCycle(
-                        taskId,
-                        QueryRecoveryDebugInfo.builder()
-                                .outputBufferID(bufferId)
-                                .state(QueryRecoveryState.DATA_PAGE_TRANSFER_STARTED)
-                                .extraInfo(ImmutableMap.of(
-                                        "size", String.valueOf(pageSize),
-                                        "local", getLocalhost(),
-                                        "time", getCurrentPSTTimeString(),
-                                        "duration", String.valueOf(Duration.nanosSince(start).roundTo(TimeUnit.SECONDS))))
-                                .build());
+                eventListenerManager.trackPreemptionLifeCycle(taskId, QueryRecoveryDebugInfo.builder().outputBufferID(bufferId).state(QueryRecoveryState.DATA_PAGE_TRANSFER_STARTED).extraInfo(ImmutableMap.of("size", String.valueOf(pageSize), "local", getLocalhost(), "time", getCurrentPSTTimeString(), "duration", String.valueOf(Duration.nanosSince(start).roundTo(TimeUnit.SECONDS)))).build());
                 log.info("Going to fetch pages from location =%s", bufferLocation);
                 Iterator<List<SerializedPage>> pages = pageBackupClient.getPages();
 
@@ -605,34 +574,12 @@ public class BackupPageManager
                 PageData pageData = new PageData(token, taskInstanceID);
                 pageData.updatePages(serializedPages);
                 cache.put(new PageKey(taskId.toString(), bufferId), pageData);
-                eventListenerManager.trackPreemptionLifeCycle(
-                        taskId,
-                        QueryRecoveryDebugInfo.builder()
-                                .outputBufferID(bufferId)
-                                .state(QueryRecoveryState.DATA_PAGE_TRANSFER_COMPLETED)
-                                .extraInfo(ImmutableMap.of(
-                                        "size", String.valueOf(pageSize),
-                                        "local", getLocalhost(),
-                                        "time", getCurrentPSTTimeString(),
-                                        "duration", String.valueOf(Duration.nanosSince(start).roundTo(TimeUnit.SECONDS)),
-                                        "bytes", String.valueOf(pageBackupClient.getBytesRead())))
-                                .build());
+                eventListenerManager.trackPreemptionLifeCycle(taskId, QueryRecoveryDebugInfo.builder().outputBufferID(bufferId).state(QueryRecoveryState.DATA_PAGE_TRANSFER_COMPLETED).extraInfo(ImmutableMap.of("size", String.valueOf(pageSize), "local", getLocalhost(), "time", getCurrentPSTTimeString(), "duration", String.valueOf(Duration.nanosSince(start).roundTo(TimeUnit.SECONDS)), "bytes", String.valueOf(pageBackupClient.getBytesRead()))).build());
             }
             catch (Throwable ex) {
                 log.error(ex, "Failed to fetch pages from location =%s", bufferLocation);
                 try {
-                    eventListenerManager.trackPreemptionLifeCycle(
-                            taskId,
-                            QueryRecoveryDebugInfo.builder()
-                                    .outputBufferID(bufferId)
-                                    .state(QueryRecoveryState.DATA_PAGE_TRANSFER_FAILED)
-                                    .extraInfo(ImmutableMap.of(
-                                            "size", String.valueOf(pageSize),
-                                            "bufferLocation", String.valueOf(bufferLocation),
-                                            "duration1", String.valueOf(Duration.nanosSince(start).roundTo(TimeUnit.SECONDS)),
-                                            "bytes", String.valueOf(pageBackupClient.getBytesRead()),
-                                            "duration2", String.valueOf(pageBackupClient.timeSinceLastRequest()) + "/" + String.valueOf(pageBackupClient.timeSinceVeryFirstRequest())))
-                                    .build());
+                    eventListenerManager.trackPreemptionLifeCycle(taskId, QueryRecoveryDebugInfo.builder().outputBufferID(bufferId).state(QueryRecoveryState.DATA_PAGE_TRANSFER_FAILED).extraInfo(ImmutableMap.of("size", String.valueOf(pageSize), "bufferLocation", String.valueOf(bufferLocation), "duration1", String.valueOf(Duration.nanosSince(start).roundTo(TimeUnit.SECONDS)), "bytes", String.valueOf(pageBackupClient.getBytesRead()), "duration2", String.valueOf(pageBackupClient.timeSinceLastRequest()) + "/" + String.valueOf(pageBackupClient.timeSinceVeryFirstRequest()))).build());
                 }
                 catch (Throwable e) {
                     log.error(e, "Failed to trackPreemptionLifeCycle for location =%s", bufferLocation);
@@ -654,12 +601,7 @@ public class BackupPageManager
             Optional<PageData> pageDataForGracefulShutdownTask = Optional.ofNullable(cache.getIfPresent(new PageKey(taskId.toString(), GRACEFUL_SHUTDOWN)));
             if (pageDataForGracefulShutdownTask.isPresent()) {
                 PageData pageData = pageDataForGracefulShutdownTask.get();
-                eventListenerManager.trackPreemptionLifeCycle(
-                        taskId,
-                        QueryRecoveryDebugInfo.builder()
-                                .outputBufferID(bufferId.toString())
-                                .state(QueryRecoveryState.EMPTY_PAGE_FOR_GRACEFUL_SHUTDOWN)
-                                .build());
+                eventListenerManager.trackPreemptionLifeCycle(taskId, QueryRecoveryDebugInfo.builder().outputBufferID(bufferId.toString()).state(QueryRecoveryState.EMPTY_PAGE_FOR_GRACEFUL_SHUTDOWN).build());
                 return immediateFuture(emptyResults(pageData.getTaskInstanceID(), sequenceId, true));
             }
             throw new PrestoException(PAGE_CACHE_UNAVAILABLE, String.format("page cache not available for task:%s, buffer:%s", taskId, bufferId));
@@ -763,15 +705,7 @@ public class BackupPageManager
         // wipe out the buffer, but what to return in task? why do we need task
         checkArgument(cache != null, "cache not available");
         cache.invalidate(new PageKey(taskId.toString(), bufferId.toString()));
-        eventListenerManager.trackPreemptionLifeCycle(
-                taskId,
-                QueryRecoveryDebugInfo.builder()
-                        .outputBufferID(bufferId.toString())
-                        .state(QueryRecoveryState.DATA_PAGE_BUFFER_ABORTED)
-                        .extraInfo(ImmutableMap.of(
-                                "local", getLocalhost(),
-                                "time", getCurrentPSTTimeString()))
-                        .build());
+        eventListenerManager.trackPreemptionLifeCycle(taskId, QueryRecoveryDebugInfo.builder().outputBufferID(bufferId.toString()).state(QueryRecoveryState.DATA_PAGE_BUFFER_ABORTED).extraInfo(ImmutableMap.of("local", getLocalhost(), "time", getCurrentPSTTimeString())).build());
         return null;
     }
 
@@ -831,22 +765,9 @@ public class BackupPageManager
     public void markPageTransferCompleted(TaskId taskId, String taskInstanceId)
     {
         List<URI> taskPageLocations = getBufferLocation(taskId);
-        eventListenerManager.trackPreemptionLifeCycle(
-                taskId,
-                QueryRecoveryDebugInfo.builder()
-                        .state(QueryRecoveryState.MARK_PAGE_TRANSFER_DONE_BY_LEAF)
-                        .extraInfo(ImmutableMap.of(
-                                "local", getLocalhost(),
-                                "time", getCurrentPSTTimeString()))
-                        .build());
+        eventListenerManager.trackPreemptionLifeCycle(taskId, QueryRecoveryDebugInfo.builder().state(QueryRecoveryState.MARK_PAGE_TRANSFER_DONE_BY_LEAF).extraInfo(ImmutableMap.of("local", getLocalhost(), "time", getCurrentPSTTimeString())).build());
         //FIXME hack to ack about graceful shutdown
-        ImmutableList<ListenableFuture<Response>> pageTransferCompletionRequest = taskPageLocations.stream().map(taskLocation -> getResponseByBufferLocation(
-                        taskId,
-                        taskInstanceId,
-                        taskLocation,
-                        ImmutableList.of(
-                                new ClientBufferInfo(GRACEFUL_SHUTDOWN, -1, -1, null))))
-                .collect(toImmutableList());
+        ImmutableList<ListenableFuture<Response>> pageTransferCompletionRequest = taskPageLocations.stream().map(taskLocation -> getResponseByBufferLocation(taskId, taskInstanceId, taskLocation, ImmutableList.of(new ClientBufferInfo(GRACEFUL_SHUTDOWN, -1, -1, null)))).collect(toImmutableList());
         boolean isAllSuccess = true;
         for (ListenableFuture<Response> future : pageTransferCompletionRequest) {
             try {
@@ -869,26 +790,10 @@ public class BackupPageManager
             }
         }
         if (isAllSuccess) {
-            eventListenerManager.trackPreemptionLifeCycle(
-                    taskId,
-                    QueryRecoveryDebugInfo.builder()
-                            .state(QueryRecoveryState.MARK_PAGE_TRANSFER_COMPLETED)
-                            .extraInfo(ImmutableMap.of(
-                                    "local", getLocalhost(),
-                                    "time", getCurrentPSTTimeString(),
-                                    "success", String.valueOf(isAllSuccess)))
-                            .build());
+            eventListenerManager.trackPreemptionLifeCycle(taskId, QueryRecoveryDebugInfo.builder().state(QueryRecoveryState.MARK_PAGE_TRANSFER_COMPLETED).extraInfo(ImmutableMap.of("local", getLocalhost(), "time", getCurrentPSTTimeString(), "success", String.valueOf(isAllSuccess))).build());
         }
         else {
-            eventListenerManager.trackPreemptionLifeCycle(
-                    taskId,
-                    QueryRecoveryDebugInfo.builder()
-                            .state(QueryRecoveryState.MARK_PAGE_TRANSFER_FAILED)
-                            .extraInfo(ImmutableMap.of(
-                                    "local", getLocalhost(),
-                                    "time", getCurrentPSTTimeString(),
-                                    "success", String.valueOf(isAllSuccess)))
-                            .build());
+            eventListenerManager.trackPreemptionLifeCycle(taskId, QueryRecoveryDebugInfo.builder().state(QueryRecoveryState.MARK_PAGE_TRANSFER_FAILED).extraInfo(ImmutableMap.of("local", getLocalhost(), "time", getCurrentPSTTimeString(), "success", String.valueOf(isAllSuccess))).build());
         }
     }
 

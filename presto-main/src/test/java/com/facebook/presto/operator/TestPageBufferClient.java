@@ -34,6 +34,7 @@ import com.facebook.presto.spi.page.PagesSerde;
 import com.facebook.presto.spi.page.SerializedPage;
 import com.facebook.presto.testing.TestingEventListenerManager;
 import com.google.common.collect.ImmutableListMultimap;
+import com.google.common.collect.ImmutableSet;
 import io.airlift.units.DataSize;
 import io.airlift.units.DataSize.Unit;
 import io.airlift.units.Duration;
@@ -123,7 +124,8 @@ public class TestPageBufferClient
                 pageBufferClientCallbackExecutor,
                 new NodeStatusNotificationManager(),
                 new BackupPageManager(httpClient, new InMemoryNodeManager(), new TestSqlTaskManager.MockLocationFactory(), new InMemoryDiscoveryClient(new NodeInfo("test")), new TestingEventListenerManager(), new ServerConfig()),
-                new TaskId("test", 1, 0, 1, 0));
+                new TaskId("test", 1, 0, 1, 0),
+                ImmutableSet.of());
 
         assertStatus(client, location, "queued", 0, 0, 0, 0, "not scheduled");
 
@@ -214,7 +216,8 @@ public class TestPageBufferClient
                 pageBufferClientCallbackExecutor,
                 new NodeStatusNotificationManager(),
                 new BackupPageManager(httpClient, new InMemoryNodeManager(), new TestSqlTaskManager.MockLocationFactory(), new InMemoryDiscoveryClient(new NodeInfo("test")), new TestingEventListenerManager(), new ServerConfig()),
-                new TaskId("test", 1, 0, 1, 0));
+                new TaskId("test", 1, 0, 1, 0),
+                ImmutableSet.of());
 
         assertStatus(client, location, "queued", 0, 0, 0, 0, "not scheduled");
 
@@ -260,7 +263,8 @@ public class TestPageBufferClient
                 pageBufferClientCallbackExecutor,
                 new NodeStatusNotificationManager(),
                 new BackupPageManager(httpClient, new InMemoryNodeManager(), new TestSqlTaskManager.MockLocationFactory(), new InMemoryDiscoveryClient(new NodeInfo("test")), new TestingEventListenerManager(), new ServerConfig()),
-                new TaskId("test", 1, 0, 1, 0));
+                new TaskId("test", 1, 0, 1, 0),
+                ImmutableSet.of());
 
         assertStatus(client, location, "queued", 0, 0, 0, 0, "not scheduled");
 
@@ -334,7 +338,8 @@ public class TestPageBufferClient
                 pageBufferClientCallbackExecutor,
                 new NodeStatusNotificationManager(),
                 new BackupPageManager(httpClient, new InMemoryNodeManager(), new TestSqlTaskManager.MockLocationFactory(), new InMemoryDiscoveryClient(new NodeInfo("test")), new TestingEventListenerManager(), new ServerConfig()),
-                new TaskId("test", 1, 0, 1, 0));
+                new TaskId("test", 1, 0, 1, 0),
+                ImmutableSet.of());
 
         assertStatus(client, location, "queued", 0, 0, 0, 0, "not scheduled");
 
@@ -395,7 +400,8 @@ public class TestPageBufferClient
                 pageBufferClientCallbackExecutor,
                 new NodeStatusNotificationManager(),
                 new BackupPageManager(httpClient, new InMemoryNodeManager(), new TestSqlTaskManager.MockLocationFactory(), new InMemoryDiscoveryClient(new NodeInfo("test")), new TestingEventListenerManager(), new ServerConfig()),
-                new TaskId("test", 1, 0, 1, 0));
+                new TaskId("test", 1, 0, 1, 0),
+                ImmutableSet.of());
 
         assertStatus(client, location, "queued", 0, 0, 0, 0, "not scheduled");
 

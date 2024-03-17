@@ -30,6 +30,7 @@ import com.facebook.presto.spi.PrestoException;
 import com.facebook.presto.spi.page.PageCodecMarker;
 import com.facebook.presto.spi.page.SerializedPage;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
 import io.airlift.units.DataSize;
@@ -40,6 +41,7 @@ import javax.annotation.concurrent.GuardedBy;
 import javax.annotation.concurrent.ThreadSafe;
 
 import java.io.Closeable;
+import java.net.InetAddress;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Deque;
@@ -144,6 +146,7 @@ public class ExchangeClient
     private static long currentSleepTime = 5000; // Start with 2 sec
     private static final double decayFactor = 0.9;
     private final RuntimeStats runtimeStats;
+    private final Set<InetAddress> leafNodes;
 
     // ExchangeClientStatus.mergeWith assumes all clients have the same bufferCapacity.
     // Please change that method accordingly when this assumption becomes not true.
@@ -166,8 +169,8 @@ public class ExchangeClient
             BackupPageManager pageManager,
             RuntimeStats runtimeStats)
     {
-        this.nodeStatusNotificationManager = nodeStatusNotificationManager;
-        this.pageManager = pageManager;
+        this.nodeStatusNotificationManager = requireNonNull(nodeStatusNotificationManager, "nodeStatusNotificationManager is null");
+        this.pageManager = requireNonNull(pageManager, "pageManager is null");
         checkArgument(responseSizeExponentialMovingAverageDecayingAlpha >= 0.0 && responseSizeExponentialMovingAverageDecayingAlpha <= 1.0, "responseSizeExponentialMovingAverageDecayingAlpha must be between 0 and 1: %s", responseSizeExponentialMovingAverageDecayingAlpha);
         this.bufferCapacity = bufferCapacity.toBytes();
         this.maxResponseSize = maxResponseSize;
@@ -184,7 +187,8 @@ public class ExchangeClient
         this.responseSizeExponentialMovingAverage = new ExponentialMovingAverage(responseSizeExponentialMovingAverageDecayingAlpha, DEFAULT_MAX_PAGE_SIZE_IN_BYTES);
         this.isEnableGracefulShutdown = isEnableGracefulShutdown;
         this.isEnableRetryForFailedSplits = isEnableRetryForFailedSplits;
-        this.runtimeStats = runtimeStats;
+        this.runtimeStats = requireNonNull(runtimeStats, "runtimeStats is null");
+        this.leafNodes = requireNonNull(pageManager.getActiveLeafNodes(), "active leaf nodes is null");
     }
 
     public ExchangeClientStatus getStatus()
@@ -241,7 +245,8 @@ public class ExchangeClient
                 pageBufferClientCallbackExecutor,
                 nodeStatusNotificationManager,
                 pageManager,
-                remoteSourceTaskId);
+                remoteSourceTaskId,
+                ImmutableSet.copyOf(leafNodes));
         allClients.put(location, client);
         checkState(taskIdToLocationMap.put(remoteSourceTaskId, location) == null, "Duplicate remoteSourceTaskId: " + remoteSourceTaskId);
         queuedClients.add(client);
