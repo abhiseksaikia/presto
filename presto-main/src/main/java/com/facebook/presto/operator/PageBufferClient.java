@@ -205,7 +205,9 @@ public final class PageBufferClient
     {
         try {
             remoteAddress = Inet6Address.getByName(location.getHost());
-            this.nodeStatusNotificationManager.getNotificationProvider().registerRemoteHostShutdownEventListener(remoteAddress, this::onWorkerNodeShutdown);
+            if (pageManager.getActiveLeafNodes().contains(remoteAddress)) {
+                this.nodeStatusNotificationManager.getNotificationProvider().registerRemoteHostShutdownEventListener(remoteAddress, this::onWorkerNodeShutdown);
+            }
         }
         catch (UnknownHostException exception) {
             log.error(exception, "Unable to parse URI location's host address into IP, skipping registerGracefulShutdownEventListener.");
@@ -230,7 +232,7 @@ public final class PageBufferClient
 
     private void onWorkerNodeShutdown()
     {
-        //log.info("onWorkerNodeShutdown got called for location =%s, host = %s", location, remoteAddress);
+        log.debug("onWorkerNodeShutdown got called for location =%s, host = %s", location, remoteAddress);
         setServerGracefulShutdown();
     }
 

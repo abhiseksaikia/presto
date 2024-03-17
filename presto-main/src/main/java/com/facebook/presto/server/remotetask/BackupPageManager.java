@@ -23,7 +23,6 @@ import com.facebook.airlift.http.client.Response;
 import com.facebook.airlift.http.client.ResponseHandler;
 import com.facebook.airlift.json.JsonCodec;
 import com.facebook.airlift.log.Logger;
-import com.facebook.airlift.stats.TimeStat;
 import com.facebook.presto.eventlistener.EventListenerManager;
 import com.facebook.presto.execution.LocationFactory;
 import com.facebook.presto.execution.PageData;
@@ -39,8 +38,6 @@ import com.facebook.presto.execution.executor.QueryRecoveryDebugInfo;
 import com.facebook.presto.execution.executor.QueryRecoveryState;
 import com.facebook.presto.metadata.InternalNodeManager;
 import com.facebook.presto.operator.ForPageTransfer;
-import com.facebook.presto.operator.HttpRpcShuffleClient;
-import com.facebook.presto.operator.PageBufferClient;
 import com.facebook.presto.server.ServerConfig;
 import com.facebook.presto.spi.NodePoolType;
 import com.facebook.presto.spi.PrestoException;
@@ -51,7 +48,6 @@ import com.google.common.cache.RemovalListener;
 import com.google.common.cache.RemovalNotification;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.ImmutableSet;
 import com.google.common.io.Files;
 import com.google.common.util.concurrent.ListenableFuture;
 import io.airlift.units.DataSize;
@@ -63,6 +59,7 @@ import javax.inject.Inject;
 
 import java.io.File;
 import java.io.IOException;
+import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -88,11 +85,9 @@ import java.util.concurrent.atomic.AtomicReference;
 import static com.facebook.airlift.concurrent.Threads.daemonThreadsNamed;
 import static com.facebook.airlift.concurrent.Threads.threadsNamed;
 import static com.facebook.airlift.http.client.HttpUriBuilder.uriBuilderFrom;
-import static com.facebook.airlift.http.client.Request.Builder.prepareGet;
 import static com.facebook.airlift.http.client.Request.Builder.preparePost;
 import static com.facebook.airlift.http.client.ResponseHandlerUtils.propagate;
 import static com.facebook.airlift.http.client.StaticBodyGenerator.createStaticBodyGenerator;
-import static com.facebook.presto.client.PrestoHeaders.PRESTO_MAX_SIZE;
 import static com.facebook.presto.execution.buffer.BufferResult.emptyResults;
 import static com.facebook.presto.server.RequestHelpers.setContentTypeHeaders;
 import static com.facebook.presto.server.ServerConfig.POOL_TYPE;
@@ -103,6 +98,7 @@ import static com.facebook.presto.spi.NodePoolType.LEAF;
 import static com.facebook.presto.spi.StandardErrorCode.PAGE_CACHE_UNAVAILABLE;
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.collect.ImmutableList.toImmutableList;
+import static com.google.common.collect.ImmutableSet.toImmutableSet;
 import static com.google.common.util.concurrent.Futures.immediateFuture;
 import static java.lang.Math.toIntExact;
 import static java.net.HttpURLConnection.HTTP_OK;
@@ -137,7 +133,7 @@ public class BackupPageManager
     private final Optional<ScheduledExecutorService> pageDownloadScheduler;
     private final ScheduledExecutorService refreshExecutor = newSingleThreadScheduledExecutor(daemonThreadsNamed("backup-page-manager-refresh"));
     private Duration refreshInterval = new Duration(30, SECONDS);
-    private AtomicReference<Set<URI>> activeLeafNodes = new AtomicReference<>();
+    private AtomicReference<Set<InetAddress>> activeLeafNodes = new AtomicReference<>();
 
     @Inject
     public BackupPageManager(@ForPageTransfer HttpClient httpClient, InternalNodeManager nodeManager, LocationFactory locationFactory, DiscoveryLookupClient lookupClient, EventListenerManager eventListenerManager, ServerConfig serverConfig)
@@ -199,9 +195,15 @@ public class BackupPageManager
             log.info("Data node list updated = %s", dataNodeServices);
             if (serverConfig.getPoolType() == INTERMEDIATE) {
                 List<URI> leafNodes = getNodeByType(services, LEAF);
-                ImmutableSet<URI> leafNodesSet = ImmutableSet.copyOf(leafNodes);
-                activeLeafNodes.set(leafNodesSet);
-                log.info("Leaf node set updated = %s", leafNodesSet);
+                activeLeafNodes.set(leafNodes.stream().map(uri -> {
+                    try {
+                        return Inet6Address.getByName(uri.getHost());
+                    }
+                    catch (UnknownHostException e) {
+                        throw new RuntimeException(e);
+                    }
+                }).collect(toImmutableSet()));
+                log.info("Leaf node set updated = %s", activeLeafNodes.get());
             }
         }
         catch (Throwable t) {
@@ -209,7 +211,7 @@ public class BackupPageManager
         }
     }
 
-    public Set<URI> getActiveLeafNodes()
+    public Set<InetAddress> getActiveLeafNodes()
     {
         return activeLeafNodes.get();
     }
