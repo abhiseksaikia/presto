@@ -67,6 +67,7 @@ import static com.facebook.presto.spi.StandardErrorCode.PAGE_CACHE_UNAVAILABLE;
 import static com.facebook.presto.spi.StandardErrorCode.REMOTE_BUFFER_CLOSE_FAILED;
 import static com.facebook.presto.spi.StandardErrorCode.REMOTE_TASK_MISMATCH;
 import static com.facebook.presto.spi.StandardErrorCode.SERIALIZED_PAGE_CHECKSUM_ERROR;
+import static com.facebook.presto.spi.StandardErrorCode.UNRECOVERABLE_HOST_SHUTTING_DOWN;
 import static com.facebook.presto.spi.page.PagesSerdeUtil.isChecksumValid;
 import static com.facebook.presto.util.Failures.REMOTE_TASK_MISMATCH_ERROR;
 import static com.facebook.presto.util.Failures.WORKER_NODE_ERROR;
@@ -149,6 +150,8 @@ public final class PageBufferClient
 
     private final AtomicReference<Duration> successDuration = new AtomicReference<>();
     private AtomicReference<Duration> failureDuration = new AtomicReference<>();
+    private boolean isDeleteLogged;
+    private long startTime;
 
     public PageBufferClient(
             HttpClient httpClient,
@@ -227,7 +230,7 @@ public final class PageBufferClient
 
     private void onWorkerNodeShutdown()
     {
-        log.info("onWorkerNodeShutdown got called for location =%s, host = %s", location, remoteAddress);
+        //log.info("onWorkerNodeShutdown got called for location =%s, host = %s", location, remoteAddress);
         setServerGracefulShutdown();
     }
 
@@ -491,6 +494,7 @@ public final class PageBufferClient
                 if (result.getToken() == token) {
                     pages = result.getPages();
                     token = result.getNextToken();
+                    validateToken(result);
                     shouldAcknowledge = pages.size() > 0;
                 }
                 else {
@@ -556,22 +560,49 @@ public final class PageBufferClient
         clientCallback.requestComplete(PageBufferClient.this);
     }
 
+    private void validateToken(PagesResponse result)
+    {
+        if (!isLocationRedirected.get()) {
+            return;
+        }
+        if (result.getNextToken() == result.getToken()) {
+            if (startTime == 0) {
+                startTime = System.nanoTime();
+            }
+            else {
+                //if its like this for 20 min
+                if (Duration.nanosSince(startTime).roundTo(TimeUnit.MINUTES) > 20) {
+                    throw new PrestoException(UNRECOVERABLE_HOST_SHUTTING_DOWN, format("Same next token returned for 20 min for location = %s", location));
+                }
+            }
+        }
+        else if (result.getNextToken() > result.getToken()) {
+            startTime = System.nanoTime();
+        }
+        else {
+            throw new PrestoException(UNRECOVERABLE_HOST_SHUTTING_DOWN, format("Invalid for location = %s", location));
+        }
+    }
+
     private synchronized void sendDelete()
     {
         if (isLocationRedirected.get()) {
-            pageManager.getEventListenerManager().trackPreemptionLifeCycle(
-                    remoteSourceTaskId,
-                    QueryRecoveryDebugInfo.builder()
-                            .outputBufferID(getBufferIDFromLocation(location))
-                            .extraInfo(new ImmutableMap.Builder<String, String>()
-                                    .put("remote", location.toString())
-                                    .put("state", getStatus().toString())
-                                    .put("oldLoc", getBaseUrl(oldLocation))
-                                    .put("failureCount", String.valueOf(backoff.getFailureCount()))
-                                    .put("failureDuration", String.valueOf(backoff.getFailureDuration().convertTo(SECONDS)))
-                                    .build())
-                            .state(QueryRecoveryState.PAGE_POLL_ABORT_REDIRECTED_NODE_PAGE)
-                            .build());
+            if (!isDeleteLogged) {
+                pageManager.getEventListenerManager().trackPreemptionLifeCycle(
+                        remoteSourceTaskId,
+                        QueryRecoveryDebugInfo.builder()
+                                .outputBufferID(getBufferIDFromLocation(location))
+                                .extraInfo(new ImmutableMap.Builder<String, String>()
+                                        .put("remote", location.toString())
+                                        .put("state", getStatus().toString())
+                                        .put("oldLoc", getBaseUrl(oldLocation))
+                                        .put("failureCount", String.valueOf(backoff.getFailureCount()))
+                                        .put("failureDuration", String.valueOf(backoff.getFailureDuration().convertTo(SECONDS)))
+                                        .build())
+                                .state(QueryRecoveryState.PAGE_POLL_ABORT_REDIRECTED_NODE_PAGE)
+                                .build());
+                isDeleteLogged = true;
+            }
         }
         ListenableFuture<?> resultFuture = resultClient.abortResults(false);
         future = resultFuture;
@@ -597,7 +628,6 @@ public final class PageBufferClient
             public void onFailure(Throwable t)
             {
                 checkNotHoldsLock(this);
-
                 log.error(t, "Request to delete %s failed", location);
                 if (!(t instanceof PrestoException) && backoff.failure()) {
                     String message = format("Error closing remote buffer (%s - %s failures, failure duration %s, total failed request time %s)",

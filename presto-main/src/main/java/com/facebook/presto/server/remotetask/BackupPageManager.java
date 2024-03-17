@@ -23,6 +23,7 @@ import com.facebook.airlift.http.client.Response;
 import com.facebook.airlift.http.client.ResponseHandler;
 import com.facebook.airlift.json.JsonCodec;
 import com.facebook.airlift.log.Logger;
+import com.facebook.airlift.stats.TimeStat;
 import com.facebook.presto.eventlistener.EventListenerManager;
 import com.facebook.presto.execution.LocationFactory;
 import com.facebook.presto.execution.PageData;
@@ -230,16 +231,6 @@ public class BackupPageManager
                 .sorted(Comparator.comparing(URI::toString))
                 .collect(toImmutableList());
         return dataNodeServices;
-    }
-
-    public ListenableFuture<PageBufferClient.PagesResponse> getResults(URI location, DataSize maxResponseSize)
-    {
-        log.info("Get result from data node %s", location);
-        return httpClient.executeAsync(
-                prepareGet()
-                        .setHeader(PRESTO_MAX_SIZE, maxResponseSize.toString())
-                        .setUri(location).build(),
-                new HttpRpcShuffleClient.PageResponseHandler(true, true));
     }
 
     public Optional<URI> getBackupAsyncPageTransportLocation(URI location, boolean asyncPageTransportEnabled)
@@ -841,7 +832,7 @@ public class BackupPageManager
         eventListenerManager.trackPreemptionLifeCycle(
                 taskId,
                 QueryRecoveryDebugInfo.builder()
-                        .state(QueryRecoveryState.MARK_PAGE_TRANSFER_INIT)
+                        .state(QueryRecoveryState.MARK_PAGE_TRANSFER_DONE_BY_LEAF)
                         .extraInfo(ImmutableMap.of(
                                 "local", getLocalhost(),
                                 "time", getCurrentPSTTimeString()))

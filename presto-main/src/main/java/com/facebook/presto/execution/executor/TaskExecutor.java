@@ -331,29 +331,38 @@ public class TaskExecutor
                             log.info("Initiating graceful shutdown for output buffer for task %s", taskId);
                             outputBuffer.gracefulShutdown();
                             log.info("Output buffer for task %s= %s", taskId, taskHandle.getOutputBuffer().get().getInfo());
+                            boolean isLogBlockedSplit = false;
+                            boolean isLogRunningSplit = false;
                             while (!taskHandle.isTotalRunningSplitEmpty()) {
                                 checkState(!taskHandle.isTaskDone(), "Task is done while waiting for total running split empty");
                                 log.info("Buffer utilization for task %s = %s , isOverutilized=%s", taskId, outputBuffer.getUtilization(), outputBuffer.isOverutilized());
                                 if (blockedSplits.size() > 0) {
-                                    eventListenerManager.trackPreemptionLifeCycle(
-                                            taskHandle.getTaskId(),
-                                            QueryRecoveryDebugInfo.builder()
-                                                    .state(QueryRecoveryState.WAITING_FOR_BLOCKED_SPLITS)
-                                                    .extraInfo(ImmutableMap.of("overUtilized", String.valueOf(outputBuffer.isOverutilized())))
-                                                    .build());
+                                    if (!isLogBlockedSplit) {
+                                        eventListenerManager.trackPreemptionLifeCycle(
+                                                taskHandle.getTaskId(),
+                                                QueryRecoveryDebugInfo.builder()
+                                                        .state(QueryRecoveryState.WAITING_FOR_BLOCKED_SPLITS)
+                                                        .extraInfo(ImmutableMap.of("overUtilized", String.valueOf(outputBuffer.isOverutilized())))
+                                                        .build());
+                                        isLogBlockedSplit = true;
+                                    }
                                 }
                                 else {
-                                    eventListenerManager.trackPreemptionLifeCycle(
-                                            taskHandle.getTaskId(),
-                                            QueryRecoveryDebugInfo.builder()
-                                                    .state(QueryRecoveryState.WAITING_FOR_RUNNING_SPLITS)
-                                                    .extraInfo(ImmutableMap.of("overUtilized", String.valueOf(outputBuffer.isOverutilized())))
-                                                    .build());
+                                    if (!isLogRunningSplit) {
+                                        eventListenerManager.trackPreemptionLifeCycle(
+                                                taskHandle.getTaskId(),
+                                                QueryRecoveryDebugInfo.builder()
+                                                        .state(QueryRecoveryState.WAITING_FOR_RUNNING_SPLITS)
+                                                        .extraInfo(ImmutableMap.of("overUtilized", String.valueOf(outputBuffer.isOverutilized())))
+                                                        .build());
+                                        isLogRunningSplit = true;
+                                    }
                                 }
                                 try {
                                     long currentTime = System.currentTimeMillis();
                                     if (currentTime - lastLogTime >= logFrequencyMillis) {
                                         log.info("Num running splits for task %s = %s, Num blocked splits = %s", taskId, runningSplits.size(), blockedSplits.size());
+                                        lastLogTime = currentTime;
                                     }
                                     Thread.sleep(waitTimeMillis);
                                 }
@@ -431,17 +440,21 @@ public class TaskExecutor
 
     private void waitForOutputBufferFlush(TaskHandle taskHandle, TaskId taskId, OutputBuffer outputBuffer)
     {
+        boolean isLogged = false;
         while (!taskHandle.isOutputBufferEmpty()) {
             try {
-                outputBuffer.getInfo().getBuffers().forEach(
-                        bufferInfo -> eventListenerManager.trackPreemptionLifeCycle(
-                                taskHandle.getTaskId(),
-                                QueryRecoveryDebugInfo.builder()
-                                        .state(QueryRecoveryState.WAITING_FOR_OUTPUT_BUFFER)
-                                        .outputBufferID(String.valueOf(bufferInfo.getBufferId().getId()))
-                                        .outputBufferSize(bufferInfo.getPageBufferInfo().getBufferedBytes())
-                                        .extraInfo(new ImmutableMap.Builder<String, String>().put("type", outputBuffer.getInfo().getType()).build())
-                                        .build()));
+                if (!isLogged) {
+                    outputBuffer.getInfo().getBuffers().forEach(
+                            bufferInfo -> eventListenerManager.trackPreemptionLifeCycle(
+                                    taskHandle.getTaskId(),
+                                    QueryRecoveryDebugInfo.builder()
+                                            .state(QueryRecoveryState.WAITING_FOR_OUTPUT_BUFFER)
+                                            .outputBufferID(String.valueOf(bufferInfo.getBufferId().getId()))
+                                            .outputBufferSize(bufferInfo.getPageBufferInfo().getBufferedBytes())
+                                            .extraInfo(new ImmutableMap.Builder<String, String>().put("type", outputBuffer.getInfo().getType()).build())
+                                            .build()));
+                    isLogged = true;
+                }
 
                 log.warn("GracefulShutdown:: Waiting for output buffer to be empty for task- %s, outputbuffer info = %s", taskId, getLoggingInfo(outputBuffer.getInfo()));
                 Thread.sleep(5);
