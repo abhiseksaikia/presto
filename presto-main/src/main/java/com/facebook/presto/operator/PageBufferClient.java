@@ -385,10 +385,12 @@ public final class PageBufferClient
                 checkNotHoldsLock(this);
 
                 t = resultClient.rewriteException(t);
-                if (!(t instanceof PrestoException) && t.getMessage().contains("Server refused connection") && isSoftFailure() && !isLocationRedirected.get()) {
-                    //FIXME do it only for leaf
-                    redirectLocation(true);
-                }
+                /** DO it only for leaf
+                 if (!(t instanceof PrestoException) && t.getMessage().contains("Server refused connection") && isSoftFailure() && !isLocationRedirected.get()) {
+                 //FIXME do it only for leaf
+                 redirectLocation(true);
+                 }
+                 */
                 if (!(t instanceof PrestoException) && backoff.failure()) {
                     String message = format("%s (%s - %s failures, failure duration %s, total failed request time %s) , server refused = %s",
                             WORKER_NODE_ERROR,
