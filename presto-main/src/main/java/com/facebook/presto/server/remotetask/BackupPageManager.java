@@ -114,6 +114,7 @@ public class BackupPageManager
     private static final Logger log = Logger.get(BackupPageManager.class);
     public static final String GRACEFUL_SHUTDOWN = "graceful_shutdown";
     public static final DataSize DEFAULT_FETCH_SIZE = new DataSize(10, DataSize.Unit.MEGABYTE);
+    public final int dataNodeCount;
 
     private final HttpClient httpClient;
     private final ServerConfig serverConfig;
@@ -145,6 +146,7 @@ public class BackupPageManager
         this.locationFactory = locationFactory;
         this.nodeManager = nodeManager;
         this.eventListenerManager = eventListenerManager;
+        this.dataNodeCount = serverConfig.getDataNodeCount();
         if (serverConfig.getPoolType() == DATA) {
             this.cache = CacheBuilder.newBuilder().concurrencyLevel(200).maximumSize(MAX_SIZE / ESTIMATED_SIZE_PER_ENTRY).expireAfterWrite(30, TimeUnit.MINUTES).removalListener(new RemovalListener<PageKey, PageData>()
             {
@@ -158,7 +160,7 @@ public class BackupPageManager
             }).build();
             //FIXME use rocksdb?
             //this.pageCache = new ConcurrentHashMap<>();
-            pageDownloadScheduler = Optional.of(newScheduledThreadPool(100, threadsNamed("task-page-download-%s")));
+            pageDownloadScheduler = Optional.of(newScheduledThreadPool(serverConfig.getPageDownloadThreadSize(), threadsNamed("task-page-download-%s")));
         }
         else {
             //FIXME, should we use Optional
@@ -178,12 +180,13 @@ public class BackupPageManager
         try {
             ListenableFuture<ServiceDescriptors> services = lookupClient.getServices("presto");
             List<URI> dataNodeServices = getNodeByType(services, DATA);
+            checkArgument(dataNodeServices.size() == dataNodeCount, "Data node count needs to be " + dataNodeCount + " but found =" + dataNodeServices.size());
             sortedDataNodeList.set(dataNodeServices);
             log.info("Data node list updated = %s", dataNodeServices);
             refreshLeafNodes(services);
         }
         catch (Throwable t) {
-            log.error(t, "Error updating coordinators");
+            log.error(t, "Error updating data nodes");
         }
     }
 
@@ -442,7 +445,7 @@ public class BackupPageManager
     {
         List<URI> uriList = sortedDataNodeList.get();
         checkArgument(uriList != null);
-        checkArgument(uriList.size() == 10);
+        checkArgument(uriList.size() == dataNodeCount);
         int bufferIDVal = Integer.parseInt(bufferID);
         URI dataNode = pickDataNode(bufferIDVal, uriList);
         HttpUriBuilder builder = uriBuilderFrom(dataNode);
@@ -453,7 +456,7 @@ public class BackupPageManager
     {
         List<URI> uris = sortedDataNodeList.get();
         checkArgument(uris != null, "sortedDataNodeList is null");
-        checkArgument(uris.size() == 10);
+        checkArgument(uris.size() == dataNodeCount);
         URI dataNode = pickDataNode(bufferID, uris);
         HttpUriBuilder builder = uriBuilderFrom(dataNode);
         return builder.appendPath("/v1/task").appendPath(taskId.toString()).build();
@@ -473,7 +476,7 @@ public class BackupPageManager
     {
         List<URI> uris = sortedDataNodeList.get();
         checkArgument(uris != null, "sortedDataNodeList is null");
-        checkArgument(uris.size() == 10);
+        checkArgument(uris.size() == dataNodeCount);
         return uris.stream().map(uri -> uriBuilderFrom(uri).appendPath("/v1/task").appendPath(taskId.toString()).build()).collect(toImmutableList());
     }
 
@@ -584,6 +587,9 @@ public class BackupPageManager
                 catch (Throwable e) {
                     log.error(e, "Failed to trackPreemptionLifeCycle for location =%s", bufferLocation);
                 }
+                //mark this as failure and throw error in get call, specific error that breaks pagebuffer client read instead of it retrying for next 10 min?
+                //FIXME
+                //cache.put(new PageKey(taskId.toString(), bufferId), pageData);
             }
         });
     }

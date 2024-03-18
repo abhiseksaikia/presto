@@ -40,6 +40,8 @@ public class ServerConfig
     private NodePoolType poolType = DEFAULT;
     private Duration clusterStatsExpirationDuration = new Duration(0, MILLISECONDS);
     private boolean nestedDataSerializationEnabled = true;
+    private int dataNodeCount = 10;
+    private int pageDownloadThreadSize = 100;
 
     public boolean isResourceManager()
     {
@@ -212,6 +214,30 @@ public class ServerConfig
     public ServerConfig setNestedDataSerializationEnabled(boolean nestedDataSerializationEnabled)
     {
         this.nestedDataSerializationEnabled = nestedDataSerializationEnabled;
+        return this;
+    }
+
+    public int getDataNodeCount()
+    {
+        return dataNodeCount;
+    }
+
+    @Config("data-node-count")
+    public ServerConfig setDataNodeCount(int dataNodeCount)
+    {
+        this.dataNodeCount = dataNodeCount;
+        return this;
+    }
+
+    public int getPageDownloadThreadSize()
+    {
+        return pageDownloadThreadSize;
+    }
+
+    @Config("page-download-threads")
+    public ServerConfig setPageDownloadThreadSize(int pageDownloadThreadSize)
+    {
+        this.pageDownloadThreadSize = pageDownloadThreadSize;
         return this;
     }
 }

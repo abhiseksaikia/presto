@@ -542,8 +542,10 @@ public class SqlTask
     public TaskInfo abortTaskResults(OutputBufferId bufferId, boolean isRequestForPageBackup)
     {
         requireNonNull(bufferId, "bufferId is null");
+        /**
         String caller = isRequestForPageBackup ? "DATA" : "INTERMEDIATE_NODE";
         log.debug("Aborting %s/results/%s by %s", taskId, bufferId, caller);
+         **/
         outputBuffer.abort(bufferId, isRequestForPageBackup);
 
         return getTaskInfo();

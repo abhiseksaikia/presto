@@ -139,7 +139,6 @@ class ClientBuffer
 
             noMorePages = true;
             destroyed.set(true);
-            log.info("Destroy is called for %s/results/%s", taskId, bufferId);
             pendingRead = this.pendingRead;
             this.pendingRead = null;
         }

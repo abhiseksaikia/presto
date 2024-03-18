@@ -560,6 +560,7 @@ public class ExchangeClient
     {
         // ignore failure for removed clients
         if (removedClients.contains(client)) {
+            log.error(cause, "removed client contains exchange client failed for location =%s", client.getLocation());
             return;
         }
 

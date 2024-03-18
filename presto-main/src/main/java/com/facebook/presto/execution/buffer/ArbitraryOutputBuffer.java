@@ -308,6 +308,9 @@ public class ArbitraryOutputBuffer
     @Override
     public ListenableFuture<BufferResult> get(OutputBufferId bufferId, long startingSequenceId, DataSize maxSize, boolean isRequestForPageBackup)
     {
+        if (isRequestForPageBackup) {
+            log.info("maxBytes: %s, for buffer = %s", maxSize, bufferId);
+        }
         checkState(!Thread.holdsLock(this), "Can not get pages while holding a lock on this");
         requireNonNull(bufferId, "bufferId is null");
         checkArgument(maxSize.toBytes() > 0, "maxSize must be at least 1 byte");

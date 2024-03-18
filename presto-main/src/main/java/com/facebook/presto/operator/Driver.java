@@ -524,6 +524,7 @@ public class Driver
             PrestoException newException = new PrestoException(GENERIC_INTERNAL_ERROR, "Driver was interrupted", exception);
             newException.addSuppressed(t);
             driverContext.failed(newException);
+            log.error(t, "Failed to process %s", driverContext.getTaskId());
             throw newException;
         }
     }

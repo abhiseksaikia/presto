@@ -344,36 +344,47 @@ public final class PageBufferClient
             }
 
             @Override
-            public void onFailure(Throwable t)
+            public void onFailure(Throwable exception)
             {
                 failureDuration.set(Duration.nanosSince(start));
-                log.debug(t, "Request to %s failed %s", uri, t.getMessage());
+                log.debug(exception, "Request to %s failed %s", uri, exception.getMessage());
                 checkNotHoldsLock(this);
 
-                t = resultClient.rewriteException(t);
+                Throwable rewrittenException = resultClient.rewriteException(exception);
 
-                if (isServerRefusedConnection(t) && !isLocationRedirected.get()) {
-                    //FIXME do it only for leaf
-                    if (isLeaf(targetLocation) && isSoftFailure()) {
-                        redirectLocation(true);
-                    }
-                }
-
-                if (!(t instanceof PrestoException) && backoff.failure()) {
-                    String message = format("%s (%s - %s failures, failure duration %s, total failed request time %s) , server refused = %s", WORKER_NODE_ERROR, uri, backoff.getFailureCount(), backoff.getFailureDuration().convertTo(SECONDS), backoff.getFailureRequestTimeTotal().convertTo(SECONDS), t.getMessage().contains("Server refused connection"));
-                    t = new PageTransportTimeoutException(fromUri(uri), message, t);
+                if (!(rewrittenException instanceof PrestoException) && backoff.failure()) {
+                    String message = format("%s (%s - %s failures, failure duration %s, total failed request time %s) , server refused = %s", WORKER_NODE_ERROR, uri, backoff.getFailureCount(), backoff.getFailureDuration().convertTo(SECONDS), backoff.getFailureRequestTimeTotal().convertTo(SECONDS), rewrittenException.getMessage().contains("Server refused connection"));
+                    rewrittenException = new PageTransportTimeoutException(fromUri(uri), message, rewrittenException);
                 }
                 //Additional check for safety in case smc notification does not work
-                if (isGracefulshutdownError(t)) {
-                    log.info("Graceful shutdown error detected for %s", location);
-                    setServerGracefulShutdown();
-                }
-                if (isRemoteHostShuttingdown.get() /*|| pageManager.isRemoteHostShutdown(getBaseUrl(location))*/) {
-                    redirectLocation(false);
-                }
-                handleFailure(t, resultFuture);
+                redirectIfNeeded(rewrittenException, exception, targetLocation);
+
+                handleFailure(rewrittenException, resultFuture);
             }
         }, pageBufferClientCallbackExecutor);
+    }
+
+    private void redirectIfNeeded(Throwable rewrittenException, Throwable originalException, URI targetLocation)
+    {
+        if (isGracefulshutdownError(rewrittenException)) {
+            log.info("Graceful shutdown error detected for %s", location);
+            gracefulShutdownOfRemoteLocation();
+        }
+        else if (isServerRefusedConnection(originalException) && !isLocationRedirected.get()) {
+            //FIXME do it only for leaf
+            if (isLeaf(targetLocation) && isSoftFailure()) {
+                gracefulShutdownOfRemoteLocation();
+            }
+        }
+        else if (isRemoteHostShuttingdown.get()) {
+            redirectLocation();
+        }
+    }
+
+    private void gracefulShutdownOfRemoteLocation()
+    {
+        setServerGracefulShutdown();
+        redirectLocation();
     }
 
     private static boolean isServerRefusedConnection(Throwable t)
@@ -408,7 +419,7 @@ public final class PageBufferClient
         return backoff.getFailureDuration().roundTo(NANOSECONDS) >= (backoff.getMaxFailureIntervalNanos() - new Duration(1, TimeUnit.MINUTES).roundTo(NANOSECONDS));
     }
 
-    private synchronized void redirectLocation(boolean isDetectServerConnection)
+    private synchronized void redirectLocation()
     {
         //FIXME check if thread safety us required
         if (!isLocationRedirected.get()) {
@@ -425,7 +436,7 @@ public final class PageBufferClient
             //FIXME check if thread safety is required for resultClient
             resultClient = getRpcShuffleClient(location, asyncPageTransportLocation);
             oldLocation = previousLocation;
-            pageManager.getEventListenerManager().trackPreemptionLifeCycle(remoteSourceTaskId, QueryRecoveryDebugInfo.builder().outputBufferID(getBufferIDFromLocation(location)).extraInfo(new ImmutableMap.Builder<String, String>().put("remote", location.toString()).put("state", getStatus().toString()).put("oldLoc", getBaseUrl(oldLocation)).put("failureCount", String.valueOf(backoff.getFailureCount())).put("isServerCon", String.valueOf(isDetectServerConnection)).put("failureDuration", String.valueOf(backoff.getFailureDuration().convertTo(SECONDS))).build()).state(QueryRecoveryState.PAGE_POLL_REDIRECT).build());
+            pageManager.getEventListenerManager().trackPreemptionLifeCycle(remoteSourceTaskId, QueryRecoveryDebugInfo.builder().outputBufferID(getBufferIDFromLocation(location)).extraInfo(new ImmutableMap.Builder<String, String>().put("remote", location.toString()).put("state", getStatus().toString()).put("oldLoc", getBaseUrl(oldLocation)).put("failureCount", String.valueOf(backoff.getFailureCount())).put("failureDuration", String.valueOf(backoff.getFailureDuration().convertTo(SECONDS))).build()).state(QueryRecoveryState.PAGE_POLL_REDIRECT).build());
             this.backoff.success();
         }
     }
@@ -589,12 +600,15 @@ public final class PageBufferClient
             @Override
             public void onFailure(Throwable t)
             {
+                Throwable originalException = t;
                 checkNotHoldsLock(this);
                 log.error(t, "Request to delete %s failed", location);
                 if (!(t instanceof PrestoException) && backoff.failure()) {
                     String message = format("Error closing remote buffer (%s - %s failures, failure duration %s, total failed request time %s)", location, backoff.getFailureCount(), backoff.getFailureDuration().convertTo(SECONDS), backoff.getFailureRequestTimeTotal().convertTo(SECONDS));
                     t = new PrestoException(REMOTE_BUFFER_CLOSE_FAILED, message, t);
+                    pageManager.getEventListenerManager().trackPreemptionLifeCycle(remoteSourceTaskId, QueryRecoveryDebugInfo.builder().outputBufferID(getBufferIDFromLocation(location)).extraInfo(new ImmutableMap.Builder<String, String>().put("remote", location.toString()).put("state", getStatus().toString()).put("oldLoc", getBaseUrl(oldLocation)).put("failureCount", String.valueOf(backoff.getFailureCount())).put("failureDuration", String.valueOf(backoff.getFailureDuration().convertTo(SECONDS))).build()).state(QueryRecoveryState.PAGE_POLL_ABORT_REDIRECTED_NODE_PAGE_FAILED).build());
                 }
+                redirectIfNeeded(t, originalException, location);
                 //FIXME handle edge case where read was done from leaf worker but before we delete, the host went down.
                 handleFailure(t, resultFuture);
             }
