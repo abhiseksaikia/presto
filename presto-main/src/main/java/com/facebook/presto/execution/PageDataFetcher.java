@@ -36,7 +36,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 import static com.facebook.presto.spi.HostAddress.fromUri;
-import static com.facebook.presto.spi.StandardErrorCode.REMOTE_TASK_MISMATCH;
+import static com.facebook.presto.spi.StandardErrorCode.REMOTE_TASK_MISMATCH_DATA;
 import static com.facebook.presto.spi.StandardErrorCode.SERIALIZED_PAGE_CHECKSUM_ERROR;
 import static com.facebook.presto.spi.page.PagesSerdeUtil.isChecksumValid;
 import static com.facebook.presto.util.Failures.REMOTE_TASK_MISMATCH_ERROR;
@@ -151,7 +151,7 @@ public class PageDataFetcher
                 }
                 if (!isNullOrEmpty(taskInstanceId) && !result.getTaskInstanceId().equals(taskInstanceId)) {
                     // TODO: update error message
-                    throw new PrestoException(REMOTE_TASK_MISMATCH, format("%s (%s)", REMOTE_TASK_MISMATCH_ERROR, fromUri(location)));
+                    throw new PrestoException(REMOTE_TASK_MISMATCH_DATA, format("%s (%s)", REMOTE_TASK_MISMATCH_ERROR, fromUri(location)));
                 }
                 if (result.getToken() == token) {
                     nextPages = result.getPages();

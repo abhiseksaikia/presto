@@ -51,6 +51,7 @@ import static com.facebook.presto.execution.QueryLimit.getMinimum;
 import static com.facebook.presto.spi.StandardErrorCode.ABANDONED_QUERY;
 import static com.facebook.presto.spi.StandardErrorCode.EXCEEDED_TIME_LIMIT;
 import static com.facebook.presto.spi.StandardErrorCode.QUERY_HAS_TOO_MANY_STAGES;
+import static com.facebook.presto.spi.StandardErrorCode.REMOTE_TASK_MISMATCH;
 import static com.facebook.presto.spi.StandardErrorCode.SERVER_SHUTTING_DOWN;
 import static com.facebook.presto.sql.planner.PlanFragmenterUtils.TOO_MANY_STAGES_MESSAGE;
 import static com.google.common.base.Preconditions.checkState;
@@ -321,7 +322,7 @@ public class QueryTracker<T extends TrackedQuery>
                 if (queryInfo == null) {
                     log.error("query info is null while tracking");
                 }
-                if (queryInfo.getErrorCode() == EXCEEDED_TIME_LIMIT.toErrorCode()) {
+                if (queryInfo.getErrorCode() == EXCEEDED_TIME_LIMIT.toErrorCode() || queryInfo.getErrorCode() == REMOTE_TASK_MISMATCH.toErrorCode()) {
                     //not expiring the query
                     continue;
                 }
@@ -361,7 +362,7 @@ public class QueryTracker<T extends TrackedQuery>
                 if (queryInfo == null) {
                     log.error("query info is null while tracking");
                 }
-                if (queryInfo.getErrorCode() == EXCEEDED_TIME_LIMIT.toErrorCode()) {
+                if (queryInfo.getErrorCode() == EXCEEDED_TIME_LIMIT.toErrorCode() || queryInfo.getErrorCode() == REMOTE_TASK_MISMATCH.toErrorCode()) {
                     //not expiring the query
                     return;
                 }

@@ -138,7 +138,7 @@ public enum StandardErrorCode
     GRACEFUL_SHUTDOWN(0x0002_0015, INTERNAL_ERROR, false),
     PAGE_CACHE_UNAVAILABLE(0x0002_0016, INTERNAL_ERROR, false),
     REMOTE_HOST_GONE_DATA(0x0002_0018, INTERNAL_ERROR, true),
-
+    REMOTE_TASK_MISMATCH_DATA(0x0002_0019, INTERNAL_ERROR),
     /**/;
 
     // Error code range 0x0003 is reserved for Presto-on-Spark
