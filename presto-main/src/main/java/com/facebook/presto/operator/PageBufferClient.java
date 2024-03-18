@@ -653,31 +653,6 @@ public final class PageBufferClient
     }
 
     @Override
-    public boolean equals(Object o)
-    {
-        if (this == o) {
-            return true;
-        }
-        if (o == null || getClass() != o.getClass()) {
-            return false;
-        }
-
-        PageBufferClient that = (PageBufferClient) o;
-
-        if (!location.equals(that.location)) {
-            return false;
-        }
-
-        return true;
-    }
-
-    @Override
-    public int hashCode()
-    {
-        return location.hashCode();
-    }
-
-    @Override
     public String toString()
     {
         String state;
