@@ -787,4 +787,9 @@ public final class PageBufferClient
     {
         return Optional.ofNullable(failureDuration.get());
     }
+
+    public URI getLocation()
+    {
+        return location;
+    }
 }

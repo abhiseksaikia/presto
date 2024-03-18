@@ -614,7 +614,7 @@ public class ExchangeClient
         {
             requireNonNull(client, "client is null");
             requireNonNull(cause, "cause is null");
-            log.error(cause, "Exchange client failed");
+            log.error(cause, "Exchange client failed for location =%s", client.getLocation());
             ExchangeClient.this.clientFailed(client, cause);
         }
     }
