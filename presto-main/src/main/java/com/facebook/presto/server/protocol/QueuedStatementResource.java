@@ -398,7 +398,7 @@ public class QueuedStatementResource
         return isNullOrEmpty(xForwardedProto) ? uriInfo.getRequestUri().getScheme() : xForwardedProto;
     }
 
-    private static QueryResults createQueryResults(
+    public static QueryResults createQueryResults(
             QueryId queryId,
             URI nextUri,
             Optional<QueryError> queryError,

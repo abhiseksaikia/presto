@@ -13,6 +13,9 @@
  */
 package com.facebook.presto.spi;
 
+import com.facebook.drift.annotations.ThriftConstructor;
+import com.facebook.drift.annotations.ThriftField;
+import com.facebook.drift.annotations.ThriftStruct;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
@@ -21,12 +24,14 @@ import java.util.Objects;
 import static com.facebook.presto.spi.SchemaUtil.checkNotEmpty;
 import static java.util.Objects.requireNonNull;
 
+@ThriftStruct
 public final class CatalogSchemaTableName
 {
     private final String catalogName;
     private final SchemaTableName schemaTableName;
 
     @JsonCreator
+    @ThriftConstructor
     public CatalogSchemaTableName(
             @JsonProperty("catalog") String catalogName,
             @JsonProperty("schemaTable") SchemaTableName schemaTableName)
@@ -40,12 +45,14 @@ public final class CatalogSchemaTableName
         this(catalogName, new SchemaTableName(schemaName, tableName));
     }
 
+    @ThriftField(1)
     @JsonProperty("catalog")
     public String getCatalogName()
     {
         return catalogName;
     }
 
+    @ThriftField(2)
     @JsonProperty("schemaTable")
     public SchemaTableName getSchemaTableName()
     {

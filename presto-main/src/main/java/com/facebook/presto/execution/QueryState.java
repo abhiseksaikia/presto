@@ -40,6 +40,7 @@ public enum QueryState
      * Query is being dispatched to a coordinator.
      */
     DISPATCHING(false, 4),
+
     /**
      * Query is being planned.
      */

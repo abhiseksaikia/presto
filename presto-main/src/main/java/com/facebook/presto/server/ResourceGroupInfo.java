@@ -227,4 +227,13 @@ public class ResourceGroupInfo
     {
         return workersPerQueryLimit;
     }
+
+    @Override
+    public String toString()
+    {
+        return "ResourceGroupInfo{" +
+                "id=" + id +
+                ", subGroups=" + subGroups +
+                '}';
+    }
 }

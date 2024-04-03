@@ -19,13 +19,17 @@ import com.facebook.presto.spi.resourceGroups.ResourceGroupId;
 import com.facebook.presto.spi.resourceGroups.SelectionContext;
 import com.facebook.presto.spi.resourceGroups.SelectionCriteria;
 import com.facebook.presto.spi.session.ResourceEstimates;
+import com.facebook.presto.util.ResourceFileUtils;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import io.airlift.units.DataSize;
 import io.airlift.units.Duration;
 import org.testng.annotations.Test;
 
+import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 import java.util.List;
 import java.util.Optional;
 
@@ -35,6 +39,7 @@ import static io.airlift.units.DataSize.Unit.MEGABYTE;
 import static java.lang.String.format;
 import static java.util.concurrent.TimeUnit.HOURS;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.util.Files.newTemporaryFile;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertTrue;
 
@@ -166,6 +171,15 @@ public class TestFileResourceGroupConfigurationManager
         FileResourceGroupConfig config = new FileResourceGroupConfig();
         config.setConfigFile(getResourceFile(fileName).getPath());
         return new FileResourceGroupConfigurationManager((poolId, listener) -> {}, config);
+    }
+    public static File getResourceFile(String resourceName)
+            throws IOException
+    {
+        File resourceFile = newTemporaryFile();
+        resourceFile.deleteOnExit();
+        Files.copy(ResourceFileUtils.class.getClassLoader().getResourceAsStream(resourceName), resourceFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
+
+        return resourceFile;
     }
 
     private static void assertFails(String fileName, String expectedPattern) throws IOException

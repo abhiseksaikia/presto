@@ -13,6 +13,9 @@
  */
 package com.facebook.presto.sql.planner.planPrinter;
 
+import com.facebook.drift.annotations.ThriftConstructor;
+import com.facebook.drift.annotations.ThriftField;
+import com.facebook.drift.annotations.ThriftStruct;
 import com.facebook.presto.Session;
 import com.facebook.presto.common.predicate.Domain;
 import com.facebook.presto.common.predicate.Marker;
@@ -84,6 +87,7 @@ public class IOPlanPrinter
         return jsonCodec(IOPlan.class).toJson(ioPlanBuilder.build());
     }
 
+    @ThriftStruct
     public static class IOPlan
     {
         private final Set<TableColumnInfo> inputTableColumnInfos;
@@ -96,6 +100,13 @@ public class IOPlanPrinter
         {
             this.inputTableColumnInfos = ImmutableSet.copyOf(requireNonNull(inputTableColumnInfos, "inputTableColumnInfos is null"));
             this.outputTable = requireNonNull(outputTable, "outputTable is null");
+        }
+
+        @ThriftConstructor
+        public IOPlan()
+        {
+            this.inputTableColumnInfos = ImmutableSet.of();
+            this.outputTable = Optional.empty();
         }
 
         @JsonProperty
@@ -166,11 +177,13 @@ public class IOPlanPrinter
             }
         }
 
+        @ThriftStruct
         public static class TableColumnInfo
         {
             private final CatalogSchemaTableName table;
             private final Set<ColumnConstraint> columnConstraints;
 
+            @ThriftConstructor
             @JsonCreator
             public TableColumnInfo(
                     @JsonProperty("table") CatalogSchemaTableName table,
@@ -180,12 +193,14 @@ public class IOPlanPrinter
                 this.columnConstraints = requireNonNull(columnConstraints, "columnConstraints is null");
             }
 
+            @ThriftField(1)
             @JsonProperty
             public CatalogSchemaTableName getTable()
             {
                 return table;
             }
 
+            @ThriftField(2)
             @JsonProperty
             public Set<ColumnConstraint> getColumnConstraints()
             {
@@ -223,12 +238,14 @@ public class IOPlanPrinter
         }
     }
 
+    @ThriftStruct
     public static class ColumnConstraint
     {
         private final String columnName;
         private final TypeSignature typeSignature;
         private final FormattedDomain domain;
 
+        @ThriftConstructor
         @JsonCreator
         public ColumnConstraint(
                 @JsonProperty("columnName") String columnName,

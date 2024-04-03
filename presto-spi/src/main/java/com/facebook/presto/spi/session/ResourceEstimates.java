@@ -14,13 +14,12 @@
 package com.facebook.presto.spi.session;
 
 import com.facebook.drift.annotations.ThriftConstructor;
-import com.facebook.drift.annotations.ThriftField;
 import com.facebook.drift.annotations.ThriftStruct;
-import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import io.airlift.units.DataSize;
 import io.airlift.units.Duration;
 
+import java.util.Objects;
 import java.util.Optional;
 
 import static java.util.Objects.requireNonNull;
@@ -43,8 +42,6 @@ public final class ResourceEstimates
     private final Optional<DataSize> peakMemory;
     private final Optional<DataSize> peakTaskMemory;
 
-    @ThriftConstructor
-    @JsonCreator
     public ResourceEstimates(
             @JsonProperty("executionTime") Optional<Duration> executionTime,
             @JsonProperty("cpuTime") Optional<Duration> cpuTime,
@@ -57,28 +54,33 @@ public final class ResourceEstimates
         this.peakTaskMemory = requireNonNull(peakTaskMemory, "peakTaskMemory is null");
     }
 
-    @ThriftField(1)
+    @ThriftConstructor
+    public ResourceEstimates()
+    {
+        this.executionTime = Optional.empty();
+        this.cpuTime = Optional.empty();
+        this.peakMemory = Optional.empty();
+        this.peakTaskMemory = Optional.empty();
+    }
+
     @JsonProperty
     public Optional<Duration> getExecutionTime()
     {
         return executionTime;
     }
 
-    @ThriftField(2)
     @JsonProperty
     public Optional<Duration> getCpuTime()
     {
         return cpuTime;
     }
 
-    @ThriftField(3)
     @JsonProperty
     public Optional<DataSize> getPeakMemory()
     {
         return peakMemory;
     }
 
-    @ThriftField(4)
     @JsonProperty
     public Optional<DataSize> getPeakTaskMemory()
     {
@@ -95,5 +97,24 @@ public final class ResourceEstimates
         sb.append(", peakTaskMemory=").append(peakTaskMemory);
         sb.append('}');
         return sb.toString();
+    }
+
+    @Override
+    public boolean equals(Object o)
+    {
+        if (this == o) {
+            return true;
+        }
+        if (o == null || getClass() != o.getClass()) {
+            return false;
+        }
+        ResourceEstimates that = (ResourceEstimates) o;
+        return Objects.equals(executionTime, that.executionTime) && Objects.equals(cpuTime, that.cpuTime) && Objects.equals(peakMemory, that.peakMemory) && Objects.equals(peakTaskMemory, that.peakTaskMemory);
+    }
+
+    @Override
+    public int hashCode()
+    {
+        return Objects.hash(executionTime, cpuTime, peakMemory, peakTaskMemory);
     }
 }

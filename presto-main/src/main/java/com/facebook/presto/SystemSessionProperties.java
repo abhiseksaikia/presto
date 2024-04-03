@@ -148,7 +148,7 @@ public final class SystemSessionProperties
     public static final String OPTIMIZE_METADATA_QUERIES_CALL_THRESHOLD = "optimize_metadata_queries_call_threshold";
     public static final String FAST_INEQUALITY_JOINS = "fast_inequality_joins";
     public static final String QUERY_PRIORITY = "query_priority";
-    public static final String SPILL_ENABLED = "spill_enabled";
+    public static final String SPILL_ENABLED = "spaill_enabled";
     public static final String JOIN_SPILL_ENABLED = "join_spill_enabled";
     public static final String AGGREGATION_SPILL_ENABLED = "aggregation_spill_enabled";
     public static final String TOPN_SPILL_ENABLED = "topn_spill_enabled";
