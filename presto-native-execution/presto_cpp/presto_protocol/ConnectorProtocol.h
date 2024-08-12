@@ -13,7 +13,11 @@
  */
 #pragma once
 
-#include "presto_cpp/presto_protocol/presto_protocol.h"
+#include "presto_cpp/presto_protocol/core/presto_protocol_core.h"
+#include "presto_cpp/presto_protocol/connector/hive/presto_protocol_hive.h"
+#include "presto_cpp/presto_protocol/connector/iceberg/presto_protocol_iceberg.h"
+#include "presto_cpp/presto_protocol/connector/tpch/presto_protocol_tpch.h"
+
 #include "velox/common/base/Exceptions.h"
 
 namespace facebook::presto::protocol {

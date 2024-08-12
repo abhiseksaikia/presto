@@ -4,3 +4,8 @@ presto_protocol.cpp   -merge
 presto_protocol.cpp   linguist-generated=true
 presto_protocol.proto -diff -merge
 presto_protocol.proto linguist-generated=true
+
+/connector/(hive|tpch|iceberg)/.*\.(cpp|h)/ -merge
+/connector/(hive|tpch|iceberg)/.*\.(cpp|h)/ linguist-generated=true
+/connector/(hive|tpch|iceberg)/.*\.(proto)/ -diff -merge
+/connector/(hive|tpch|iceberg)/.*\.(proto)/ linguist-generated=true
