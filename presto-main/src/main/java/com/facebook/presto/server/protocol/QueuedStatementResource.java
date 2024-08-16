@@ -87,6 +87,7 @@ import static com.google.common.base.Verify.verify;
 import static com.google.common.net.HttpHeaders.X_FORWARDED_PROTO;
 import static com.google.common.util.concurrent.Futures.immediateFailedFuture;
 import static com.google.common.util.concurrent.Futures.immediateFuture;
+import static com.google.common.util.concurrent.Futures.transform;
 import static com.google.common.util.concurrent.Futures.transformAsync;
 import static com.google.common.util.concurrent.MoreExecutors.directExecutor;
 import static io.airlift.units.DataSize.Unit.MEGABYTE;
@@ -111,7 +112,7 @@ public class QueuedStatementResource
     private static final Ordering<Comparable<Duration>> WAIT_ORDERING = Ordering.natural().nullsLast();
 
     private final DispatchManager dispatchManager;
-    private final ExecutingQueryResponseProvider executingQueryResponseProvider;
+    private final LocalQueryProvider queryResultsProvider;
 
     private final Executor responseExecutor;
     private final ScheduledExecutorService timeoutExecutor;
@@ -132,7 +133,7 @@ public class QueuedStatementResource
     public QueuedStatementResource(
             DispatchManager dispatchManager,
             DispatchExecutor executor,
-            ExecutingQueryResponseProvider executingQueryResponseProvider,
+            LocalQueryProvider queryResultsProvider,
             SqlParserOptions sqlParserOptions,
             ServerConfig serverConfig,
             TracerProviderManager tracerProviderManager,
@@ -140,7 +141,7 @@ public class QueuedStatementResource
             QueryBlockingRateLimiter queryRateLimiter)
     {
         this.dispatchManager = requireNonNull(dispatchManager, "dispatchManager is null");
-        this.executingQueryResponseProvider = requireNonNull(executingQueryResponseProvider, "executingQueryResponseProvider is null");
+        this.queryResultsProvider = queryResultsProvider;
         this.sqlParserOptions = requireNonNull(sqlParserOptions, "sqlParserOptions is null");
         this.compressionEnabled = requireNonNull(serverConfig, "serverConfig is null").isQueryResultsCompressionEnabled();
         this.nestedDataSerializationEnabled = requireNonNull(serverConfig, "serverConfig is null").isNestedDataSerializationEnabled();
@@ -216,7 +217,7 @@ public class QueuedStatementResource
                 sqlParserOptions,
                 tracerProviderManager.getTracerProvider(),
                 Optional.of(sessionPropertyManager));
-        Query query = new Query(statement, sessionContext, dispatchManager, executingQueryResponseProvider, 0);
+        Query query = new Query(statement, sessionContext, dispatchManager, queryResultsProvider, 0);
         queries.put(query.getQueryId(), query);
 
         return withCompressionConfiguration(Response.ok(query.getInitialQueryResults(uriInfo, xForwardedProto, xPrestoPrefixUrl, binaryResults)), compressionEnabled).build();
@@ -253,7 +254,7 @@ public class QueuedStatementResource
                 "-- retry query " + queryId + "; attempt: " + retryCount + "\n" + failedQuery.getQuery(),
                 failedQuery.getSessionContext(),
                 dispatchManager,
-                executingQueryResponseProvider,
+                queryResultsProvider,
                 retryCount);
 
         retriedQueries.putIfAbsent(queryId, query);
@@ -384,7 +385,7 @@ public class QueuedStatementResource
         private final String query;
         private final SessionContext sessionContext;
         private final DispatchManager dispatchManager;
-        private final ExecutingQueryResponseProvider executingQueryResponseProvider;
+        private final LocalQueryProvider queryProvider;
         private final QueryId queryId;
         private final String slug = "x" + randomUUID().toString().toLowerCase(ENGLISH).replace("-", "");
         private final AtomicLong lastToken = new AtomicLong();
@@ -393,12 +394,12 @@ public class QueuedStatementResource
         @GuardedBy("this")
         private ListenableFuture<?> querySubmissionFuture;
 
-        public Query(String query, SessionContext sessionContext, DispatchManager dispatchManager, ExecutingQueryResponseProvider executingQueryResponseProvider, int retryCount)
+        public Query(String query, SessionContext sessionContext, DispatchManager dispatchManager, LocalQueryProvider queryResultsProvider, int retryCount)
         {
             this.query = requireNonNull(query, "query is null");
             this.sessionContext = requireNonNull(sessionContext, "sessionContext is null");
             this.dispatchManager = requireNonNull(dispatchManager, "dispatchManager is null");
-            this.executingQueryResponseProvider = requireNonNull(executingQueryResponseProvider, "executingQueryResponseProvider is null");
+            this.queryProvider = requireNonNull(queryResultsProvider, "queryExecutor is null");
             this.queryId = dispatchManager.createQueryId();
             this.retryCount = retryCount;
         }
@@ -496,15 +497,7 @@ public class QueuedStatementResource
                     binaryResults);
         }
 
-        public ListenableFuture<Response> toResponse(
-                long token,
-                UriInfo uriInfo,
-                String xForwardedProto,
-                String xPrestoPrefixUrl,
-                Duration maxWait,
-                boolean compressionEnabled,
-                boolean nestedDataSerializationEnabled,
-                boolean binaryResults)
+        public ListenableFuture<Response> toResponse(long token, UriInfo uriInfo, String xForwardedProto, String xPrestoPrefixUrl, Duration maxWait, boolean compressionEnabled, boolean nestedDataSerializationEnabled, boolean binaryResults)
         {
             long lastToken = this.lastToken.get();
             // token should be the last token or the next token
@@ -536,28 +529,23 @@ public class QueuedStatementResource
                         .build()));
             }
 
-            if (waitForDispatched().isDone()) {
-                Optional<ListenableFuture<Response>> executingQueryResponse = executingQueryResponseProvider.waitForExecutingResponse(
-                        queryId,
-                        slug,
-                        dispatchInfo.get(),
-                        uriInfo,
-                        xPrestoPrefixUrl,
-                        getScheme(xForwardedProto, uriInfo),
-                        maxWait,
-                        TARGET_RESULT_SIZE,
-                        compressionEnabled,
-                        nestedDataSerializationEnabled,
-                        binaryResults);
-
-                if (executingQueryResponse.isPresent()) {
-                    return executingQueryResponse.get();
-                }
+            if (!waitForDispatched().isDone()) {
+                return immediateFuture(withCompressionConfiguration(Response.ok(createQueryResults(token + 1, uriInfo, xForwardedProto, xPrestoPrefixUrl, dispatchInfo.get(), binaryResults)), compressionEnabled).build());
             }
 
-            return immediateFuture(withCompressionConfiguration(Response.ok(
-                    createQueryResults(token + 1, uriInfo, xForwardedProto, xPrestoPrefixUrl, dispatchInfo.get(), binaryResults)), compressionEnabled)
-                    .build());
+            com.facebook.presto.server.protocol.Query query;
+            try {
+                query = queryProvider.getQuery(queryId, slug);
+            }
+            catch (WebApplicationException e) {
+                return immediateFuture(withCompressionConfiguration(Response.ok(createQueryResults(token + 1, uriInfo, xForwardedProto, xPrestoPrefixUrl, dispatchInfo.get(), binaryResults)), compressionEnabled).build());
+            }
+            // If this future completes successfully, the next URI will redirect to the executing statement endpoint.
+            // Hence it is safe to hardcode the token to be 0.
+            return transform(
+                    query.waitForResults(0, uriInfo, getScheme(xForwardedProto, uriInfo), maxWait, TARGET_RESULT_SIZE, binaryResults),
+                    results -> QueryResourceUtil.toResponse(query, results, xPrestoPrefixUrl, compressionEnabled, nestedDataSerializationEnabled),
+                    directExecutor());
         }
 
         public synchronized void cancel()

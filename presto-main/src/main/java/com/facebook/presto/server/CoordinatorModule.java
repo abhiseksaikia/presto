@@ -71,9 +71,7 @@ import com.facebook.presto.operator.ForScheduler;
 import com.facebook.presto.operator.OperatorInfo;
 import com.facebook.presto.resourcemanager.ForResourceManager;
 import com.facebook.presto.resourcemanager.ResourceManagerProxy;
-import com.facebook.presto.server.protocol.ExecutingQueryResponseProvider;
 import com.facebook.presto.server.protocol.ExecutingStatementResource;
-import com.facebook.presto.server.protocol.LocalExecutingQueryResponseProvider;
 import com.facebook.presto.server.protocol.LocalQueryProvider;
 import com.facebook.presto.server.protocol.QueryBlockingRateLimiter;
 import com.facebook.presto.server.protocol.QueuedStatementResource;
@@ -188,7 +186,6 @@ public class CoordinatorModule
         newExporter(binder).export(QueryBlockingRateLimiter.class).withGeneratedName();
 
         binder.bind(LocalQueryProvider.class).in(Scopes.SINGLETON);
-        binder.bind(ExecutingQueryResponseProvider.class).to(LocalExecutingQueryResponseProvider.class).in(Scopes.SINGLETON);
 
         jaxrsBinder(binder).bind(TaskInfoResource.class);
 
