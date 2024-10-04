@@ -31,225 +31,8 @@
 #include "presto_cpp/external/json/nlohmann/json.hpp"
 #include "presto_cpp/presto_protocol/DataSize.h"
 #include "presto_cpp/presto_protocol/Duration.h"
+#include "presto_cpp/presto_protocol/core/presto_protocol_core.h"
 #include "velox/common/encode/Base64.h"
-
-using nlohmann::json;
-
-namespace facebook::presto::protocol {
-
-extern const char* const PRESTO_PAGES_MIME_TYPE;
-
-extern const char* const PRESTO_CURRENT_STATE_HTTP_HEADER;
-extern const char* const PRESTO_MAX_WAIT_HTTP_HEADER;
-extern const char* const PRESTO_MAX_SIZE_HTTP_HEADER;
-extern const char* const PRESTO_TASK_INSTANCE_ID_HEADER;
-extern const char* const PRESTO_PAGE_TOKEN_HEADER;
-extern const char* const PRESTO_PAGE_NEXT_TOKEN_HEADER;
-extern const char* const PRESTO_BUFFER_COMPLETE_HEADER;
-extern const char* const PRESTO_GET_DATA_SIZE_HEADER;
-extern const char* const PRESTO_BUFFER_REMAINING_BYTES_HEADER;
-
-extern const char* const PRESTO_MAX_WAIT_DEFAULT;
-extern const char* const PRESTO_MAX_SIZE_DEFAULT;
-
-extern const char* const PRESTO_ABORT_TASK_URL_PARAM;
-
-class Exception : public std::runtime_error {
- public:
-  explicit Exception(const std::string& message)
-      : std::runtime_error(message){};
-};
-
-class TypeError : public Exception {
- public:
-  explicit TypeError(const std::string& message) : Exception(message){};
-};
-
-class OutOfRange : public Exception {
- public:
-  explicit OutOfRange(const std::string& message) : Exception(message){};
-};
-class ParseError : public Exception {
- public:
-  explicit ParseError(const std::string& message) : Exception(message){};
-};
-
-using String = std::string;
-using Integer = int;
-using Long = int64_t;
-using boolean = bool;
-
-template <typename T>
-using List = std::vector<T>;
-template <typename T>
-using Set = std::set<T>;
-template <typename K, typename V>
-using Map = std::map<K, V>;
-
-// These will have to be customized
-//
-using UUID = std::string;
-
-using Subfield = std::string;
-using HiveType = std::string;
-using Type = std::string;
-
-using DateTime = std::string;
-using Locale = std::string;
-using TimeZoneKey = long;
-using URI = std::string;
-using SqlFunctionId = std::string;
-
-using QualifiedObjectName = std::string;
-using TypeSignature = std::string;
-
-using ConnectorId = std::string;
-using MemoryPoolId = std::string;
-using OutputBufferId = std::string;
-using PlanFragmentId = std::string;
-using PlanNodeId = std::string;
-using QueryId = std::string;
-using TaskId = std::string;
-using TransactionId = std::string;
-struct RuntimeMetric;
-using RuntimeStats = Map<String, RuntimeMetric>;
-using SplitWeight = int64_t;
-struct SourceLocation;
-
-template <typename T>
-void to_json_key(json& j, const char* key, const T& value) {
-  j[key] = value;
-}
-
-template <typename T>
-void to_json_key(json& j, const char* key, const std::shared_ptr<T>& value) {
-  if (value != nullptr) {
-    j[key] = value;
-  }
-}
-
-template <typename T>
-void to_json_key(
-    json& j,
-    const char* key,
-    const T& value,
-    const char* className,
-    const char* typeName,
-    const char* fieldName) {
-  try {
-    to_json_key(j, key, value);
-  } catch (json::type_error& e) {
-    throw TypeError(
-        std::string(e.what()) + " " + className + " " + typeName + " " +
-        fieldName);
-  }
-}
-
-template <typename T>
-void from_json_key(const json& j, const char* key, T& value) {
-  j.at(key).get_to(value);
-}
-
-template <typename T>
-void from_json_key(const json& j, const char* key, std::shared_ptr<T>& value) {
-  if (j.count(key)) {
-    j.at(key).get_to(value);
-  }
-}
-
-template <typename T>
-void from_json_key(
-    const json& j,
-    const char* key,
-    T& value,
-    const char* className,
-    const char* typeName,
-    const char* fieldName) {
-  try {
-    from_json_key(j, key, value);
-  } catch (json::type_error& e) {
-    throw TypeError(
-        std::string(e.what()) + " " + className + " " + typeName + " " +
-        fieldName);
-  } catch (json::out_of_range& e) {
-    throw OutOfRange(
-        std::string(e.what()) + " " + className + " " + typeName + " " +
-        fieldName);
-  }
-}
-
-struct KeyedSubclass {
-  std::string _type; // This member holds the subtype that was serialized.
-
-  std::string getSubclassKey(const json& j);
-  virtual ~KeyedSubclass() {}
-};
-
-struct JsonEncodedSubclass : public KeyedSubclass {
-  std::string getSubclassKey(const json& j);
-};
-
-struct Base64EncodedSubclass : public KeyedSubclass {
-  std::string getSubclassKey(const json& j);
-
-  virtual bool operator<(const Base64EncodedSubclass& /* o */) const {
-    throw std::runtime_error("missing operator<() in Base64EncodedSubclass");
-  }
-};
-
-} // namespace facebook::presto::protocol
-
-namespace nlohmann {
-std::string json_map_key(const std::string p);
-
-template <typename T>
-void to_json(json& j, const std::shared_ptr<T>& p) {
-  j = *p;
-}
-template <typename T>
-void from_json(const json& j, std::shared_ptr<T>& p) {
-  p = std::make_shared<T>();
-  j.get_to(*p);
-}
-
-template <typename V>
-struct adl_serializer<facebook::presto::protocol::Map<int, V>> {
-  static void to_json(
-      json& j,
-      const facebook::presto::protocol::Map<int, V>& p) {
-    j = json::object();
-    for (auto& el : p) {
-      j[std::to_string(el.first)] = el.second;
-    }
-  }
-
-  static void from_json(
-      const json& j,
-      facebook::presto::protocol::Map<int, V>& p) {
-    for (auto& el : j.items()) {
-      p.insert(std::pair<int, V>(std::stoi(el.key()), el.value().get<V>()));
-    }
-  }
-};
-
-template <typename K, typename V>
-struct adl_serializer<facebook::presto::protocol::Map<K, V>> {
-  static void to_json(json& j, const facebook::presto::protocol::Map<K, V>& p) {
-    j = json::object();
-    for (auto& el : p) {
-      j[json_map_key(el.first)] = el.second;
-    }
-  }
-
-  static void from_json(
-      const json& j,
-      facebook::presto::protocol::Map<K, V>& p) {
-    for (auto& el : j.items()) {
-      p.insert(std::pair<K, V>(K(el.key()), el.value().get<V>()));
-    }
-  }
-};
-} // namespace nlohmann
 
 // Forward declaration of all abstract types
 //
@@ -261,20 +44,6 @@ struct ColumnHandle : public JsonEncodedSubclass {
 };
 void to_json(json& j, const std::shared_ptr<ColumnHandle>& p);
 void from_json(const json& j, std::shared_ptr<ColumnHandle>& p);
-} // namespace facebook::presto::protocol
-namespace facebook::presto::protocol {
-struct RowExpression : public JsonEncodedSubclass {
-  std::shared_ptr<SourceLocation> sourceLocation = {};
-};
-void to_json(json& j, const std::shared_ptr<RowExpression>& p);
-void from_json(const json& j, std::shared_ptr<RowExpression>& p);
-} // namespace facebook::presto::protocol
-namespace facebook::presto::protocol {
-struct PlanNode : public JsonEncodedSubclass {
-  PlanNodeId id = {};
-};
-void to_json(json& j, const std::shared_ptr<PlanNode>& p);
-void from_json(const json& j, std::shared_ptr<PlanNode>& p);
 } // namespace facebook::presto::protocol
 
 namespace facebook::presto::protocol {
@@ -560,7 +329,7 @@ void to_json(json& j, const LocationHandle& p);
 void from_json(const json& j, LocationHandle& p);
 } // namespace facebook::presto::protocol
 namespace facebook::presto::protocol {
-struct HiveInsertTableHandle : public ConnectorInsertTableHandle {
+struct HiveInsertTableHandle {
   String schemaName = {};
   String tableName = {};
   List<HiveColumnHandle> inputColumns = {};
@@ -573,20 +342,16 @@ struct HiveInsertTableHandle : public ConnectorInsertTableHandle {
   HiveStorageFormat actualStorageFormat = {};
   HiveCompressionCodec compressionCodec = {};
   std::shared_ptr<EncryptionInformation> encryptionInformation = {};
-
-  HiveInsertTableHandle() noexcept;
 };
 void to_json(json& j, const HiveInsertTableHandle& p);
 void from_json(const json& j, HiveInsertTableHandle& p);
 } // namespace facebook::presto::protocol
 namespace facebook::presto::protocol {
-struct HiveMetadataUpdateHandle : public ConnectorMetadataUpdateHandle {
+struct HiveMetadataUpdateHandle {
   UUID requestId = {};
   SchemaTableName schemaTableName = {};
   std::shared_ptr<String> partitionName = {};
   std::shared_ptr<String> fileName = {};
-
-  HiveMetadataUpdateHandle() noexcept;
 };
 void to_json(json& j, const HiveMetadataUpdateHandle& p);
 void from_json(const json& j, HiveMetadataUpdateHandle& p);
@@ -644,7 +409,7 @@ void to_json(json& j, const TableToPartitionMapping& p);
 void from_json(const json& j, TableToPartitionMapping& p);
 } // namespace facebook::presto::protocol
 namespace facebook::presto::protocol {
-struct HiveSplit : public ConnectorSplit {
+struct HiveSplit {
   HiveFileSplit fileSplit = {};
   String database = {};
   String table = {};
@@ -664,8 +429,6 @@ struct HiveSplit : public ConnectorSplit {
   List<std::shared_ptr<ColumnHandle>> redundantColumnDomains = {};
   SplitWeight splitWeight = {};
   std::shared_ptr<String> rowIdPartitionComponent = {};
-
-  HiveSplit() noexcept;
 };
 void to_json(json& j, const HiveSplit& p);
 void from_json(const json& j, HiveSplit& p);
@@ -682,14 +445,14 @@ void to_json(json& j, const HiveTableHandle& p);
 void from_json(const json& j, HiveTableHandle& p);
 } // namespace facebook::presto::protocol
 namespace facebook::presto::protocol {
-struct HiveTableLayoutHandle : public ConnectorTableLayoutHandle {
+struct HiveTableLayoutHandle {
   SchemaTableName schemaTableName = {};
   String tablePath = {};
   List<HiveColumnHandle> partitionColumns = {};
   List<Column> dataColumns = {};
   Map<String, String> tableParameters = {};
   TupleDomain<Subfield> domainPredicate = {};
-  std::shared_ptr<RowExpression> remainingPredicate = {};
+  RowExpression remainingPredicate = {};
   Map<String, HiveColumnHandle> predicateColumns = {};
   TupleDomain<std::shared_ptr<ColumnHandle>> partitionColumnPredicate = {};
   std::shared_ptr<HiveBucketHandle> bucketHandle = {};
@@ -700,17 +463,13 @@ struct HiveTableLayoutHandle : public ConnectorTableLayoutHandle {
   bool partialAggregationsPushedDown = {};
   bool appendRowNumber = {};
   bool footerStatsUnreliable = {};
-
-  HiveTableLayoutHandle() noexcept;
 };
 void to_json(json& j, const HiveTableLayoutHandle& p);
 void from_json(const json& j, HiveTableLayoutHandle& p);
 } // namespace facebook::presto::protocol
 namespace facebook::presto::protocol {
-struct HiveTransactionHandle : public ConnectorTransactionHandle {
+struct HiveTransactionHandle {
   UUID uuid = {};
-
-  HiveTransactionHandle() noexcept;
 };
 void to_json(json& j, const HiveTransactionHandle& p);
 void from_json(const json& j, HiveTransactionHandle& p);

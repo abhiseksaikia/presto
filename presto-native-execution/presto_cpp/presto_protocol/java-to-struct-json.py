@@ -322,7 +322,7 @@ def main():
     depends = defaultdict(set)
 
     subclasses = {}
-    for abstract_name, abstract_value in config.AbstractClasses.items():
+    for abstract_name, abstract_value in config.AbstractClasses.items() if config.AbstractClasses is not None else []:
 
         classes[abstract_name].class_name = abstract_name
         classes[abstract_name].field_name = member_name(abstract_name)

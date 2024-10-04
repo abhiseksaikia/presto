@@ -11,7 +11,10 @@
 # limitations under the License.
 add_library(
   presto_protocol OBJECT presto_protocol.cpp Base64Util.cpp DataSize.cpp
-                         Duration.cpp ConnectorProtocol.cpp)
+                         Duration.cpp ConnectorProtocol.cpp
+        "hive_connector_protocol.h"
+        iceberg_connector_protocol.h
+        tpch_connector_protocol.h)
 
 target_link_libraries(presto_protocol velox_type velox_presto_serializer ${RE2})
 

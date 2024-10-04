@@ -20,51 +20,13 @@
 #include <folly/Format.h>
 #include <iostream>
 
-#include "presto_cpp/presto_protocol/ConnectorProtocol.h"
-#include "presto_cpp/presto_protocol/presto_protocol.h"
-
+#include "presto_cpp/presto_protocol/connector/tpch/presto_protocol_tpch.h"
 using namespace std::string_literals;
 
-namespace nlohmann {
-std::string json_map_key(std::string p) {
-  return p;
-}
-} // namespace nlohmann
-
 namespace facebook::presto::protocol {
-
-const char* const PRESTO_PAGES_MIME_TYPE = "application/x-presto-pages";
-
-const char* const PRESTO_CURRENT_STATE_HTTP_HEADER = "X-Presto-Current-State";
-const char* const PRESTO_MAX_WAIT_HTTP_HEADER = "X-Presto-Max-Wait";
-const char* const PRESTO_MAX_SIZE_HTTP_HEADER = "X-Presto-Max-Size";
-const char* const PRESTO_TASK_INSTANCE_ID_HEADER = "X-Presto-Task-Instance-Id";
-const char* const PRESTO_PAGE_TOKEN_HEADER = "X-Presto-Page-Sequence-Id";
-const char* const PRESTO_PAGE_NEXT_TOKEN_HEADER =
-    "X-Presto-Page-End-Sequence-Id";
-const char* const PRESTO_BUFFER_COMPLETE_HEADER = "X-Presto-Buffer-Complete";
-const char* const PRESTO_GET_DATA_SIZE_HEADER = "X-Presto-Get-Data-Size";
-const char* const PRESTO_BUFFER_REMAINING_BYTES_HEADER =
-    "X-Presto-Buffer-Remaining-Bytes";
-
-const char* const PRESTO_MAX_WAIT_DEFAULT = "2s";
-const char* const PRESTO_MAX_SIZE_DEFAULT = "4096 B";
-
-const char* const PRESTO_ABORT_TASK_URL_PARAM = "abort";
-
-std::string json_map_key(const VariableReferenceExpression& p) {
-  return fmt::format("{}<{}>", p.name, p.type);
-}
-} // namespace facebook::presto::protocol
-
-namespace facebook::presto::protocol {
-TpchColumnHandle::TpchColumnHandle() noexcept {
-  _type = "tpch";
-}
 
 void to_json(json& j, const TpchColumnHandle& p) {
   j = json::object();
-  j["@type"] = "tpch";
   to_json_key(
       j,
       "columnName",
@@ -76,7 +38,6 @@ void to_json(json& j, const TpchColumnHandle& p) {
 }
 
 void from_json(const json& j, TpchColumnHandle& p) {
-  p._type = j["@type"];
   from_json_key(
       j,
       "columnName",
@@ -88,13 +49,9 @@ void from_json(const json& j, TpchColumnHandle& p) {
 }
 } // namespace facebook::presto::protocol
 namespace facebook::presto::protocol {
-TpchPartitioningHandle::TpchPartitioningHandle() noexcept {
-  _type = "tpch";
-}
 
 void to_json(json& j, const TpchPartitioningHandle& p) {
   j = json::object();
-  j["@type"] = "tpch";
   to_json_key(j, "table", p.table, "TpchPartitioningHandle", "String", "table");
   to_json_key(
       j,
@@ -106,7 +63,6 @@ void to_json(json& j, const TpchPartitioningHandle& p) {
 }
 
 void from_json(const json& j, TpchPartitioningHandle& p) {
-  p._type = j["@type"];
   from_json_key(
       j, "table", p.table, "TpchPartitioningHandle", "String", "table");
   from_json_key(
@@ -119,46 +75,9 @@ void from_json(const json& j, TpchPartitioningHandle& p) {
 }
 } // namespace facebook::presto::protocol
 namespace facebook::presto::protocol {
-void to_json(json& j, const std::shared_ptr<ColumnHandle>& p) {
-  if (p == nullptr) {
-    return;
-  }
-  String type = p->_type;
-
-  if (type == "tpch") {
-    j = *std::static_pointer_cast<TpchColumnHandle>(p);
-    return;
-  }
-
-  throw TypeError(type + " no abstract type ColumnHandle ");
-}
-
-void from_json(const json& j, std::shared_ptr<ColumnHandle>& p) {
-  String type;
-  try {
-    type = p->getSubclassKey(j);
-  } catch (json::parse_error& e) {
-    throw ParseError(std::string(e.what()) + " ColumnHandle  ColumnHandle");
-  }
-
-  if (type == "tpch") {
-    std::shared_ptr<TpchColumnHandle> k = std::make_shared<TpchColumnHandle>();
-    j.get_to(*k);
-    p = std::static_pointer_cast<ColumnHandle>(k);
-    return;
-  }
-
-  throw TypeError(type + " no abstract type ColumnHandle ");
-}
-} // namespace facebook::presto::protocol
-namespace facebook::presto::protocol {
-TpchTableHandle::TpchTableHandle() noexcept {
-  _type = "tpch";
-}
 
 void to_json(json& j, const TpchTableHandle& p) {
   j = json::object();
-  j["@type"] = "tpch";
   to_json_key(
       j, "tableName", p.tableName, "TpchTableHandle", "String", "tableName");
   to_json_key(
@@ -171,7 +90,6 @@ void to_json(json& j, const TpchTableHandle& p) {
 }
 
 void from_json(const json& j, TpchTableHandle& p) {
-  p._type = j["@type"];
   from_json_key(
       j, "tableName", p.tableName, "TpchTableHandle", "String", "tableName");
   from_json_key(
@@ -184,13 +102,9 @@ void from_json(const json& j, TpchTableHandle& p) {
 }
 } // namespace facebook::presto::protocol
 namespace facebook::presto::protocol {
-TpchSplit::TpchSplit() noexcept {
-  _type = "tpch";
-}
 
 void to_json(json& j, const TpchSplit& p) {
   j = json::object();
-  j["@type"] = "tpch";
   to_json_key(
       j,
       "tableHandle",
@@ -217,7 +131,6 @@ void to_json(json& j, const TpchSplit& p) {
 }
 
 void from_json(const json& j, TpchSplit& p) {
-  p._type = j["@type"];
   from_json_key(
       j,
       "tableHandle",
@@ -246,13 +159,9 @@ void from_json(const json& j, TpchSplit& p) {
 }
 } // namespace facebook::presto::protocol
 namespace facebook::presto::protocol {
-TpchTableLayoutHandle::TpchTableLayoutHandle() noexcept {
-  _type = "tpch";
-}
 
 void to_json(json& j, const TpchTableLayoutHandle& p) {
   j = json::object();
-  j["@type"] = "tpch";
   to_json_key(
       j, "table", p.table, "TpchTableLayoutHandle", "TpchTableHandle", "table");
   to_json_key(
@@ -265,7 +174,6 @@ void to_json(json& j, const TpchTableLayoutHandle& p) {
 }
 
 void from_json(const json& j, TpchTableLayoutHandle& p) {
-  p._type = j["@type"];
   from_json_key(
       j, "table", p.table, "TpchTableLayoutHandle", "TpchTableHandle", "table");
   from_json_key(

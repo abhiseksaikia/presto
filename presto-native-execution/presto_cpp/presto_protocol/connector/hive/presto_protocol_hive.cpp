@@ -20,42 +20,8 @@
 #include <folly/Format.h>
 #include <iostream>
 
-#include "presto_cpp/presto_protocol/ConnectorProtocol.h"
-#include "presto_cpp/presto_protocol/presto_protocol.h"
-
+#include "presto_cpp/presto_protocol/connector/hive/presto_protocol_hive.h"
 using namespace std::string_literals;
-
-namespace nlohmann {
-std::string json_map_key(std::string p) {
-  return p;
-}
-} // namespace nlohmann
-
-namespace facebook::presto::protocol {
-
-const char* const PRESTO_PAGES_MIME_TYPE = "application/x-presto-pages";
-
-const char* const PRESTO_CURRENT_STATE_HTTP_HEADER = "X-Presto-Current-State";
-const char* const PRESTO_MAX_WAIT_HTTP_HEADER = "X-Presto-Max-Wait";
-const char* const PRESTO_MAX_SIZE_HTTP_HEADER = "X-Presto-Max-Size";
-const char* const PRESTO_TASK_INSTANCE_ID_HEADER = "X-Presto-Task-Instance-Id";
-const char* const PRESTO_PAGE_TOKEN_HEADER = "X-Presto-Page-Sequence-Id";
-const char* const PRESTO_PAGE_NEXT_TOKEN_HEADER =
-    "X-Presto-Page-End-Sequence-Id";
-const char* const PRESTO_BUFFER_COMPLETE_HEADER = "X-Presto-Buffer-Complete";
-const char* const PRESTO_GET_DATA_SIZE_HEADER = "X-Presto-Get-Data-Size";
-const char* const PRESTO_BUFFER_REMAINING_BYTES_HEADER =
-    "X-Presto-Buffer-Remaining-Bytes";
-
-const char* const PRESTO_MAX_WAIT_DEFAULT = "2s";
-const char* const PRESTO_MAX_SIZE_DEFAULT = "4096 B";
-
-const char* const PRESTO_ABORT_TASK_URL_PARAM = "abort";
-
-std::string json_map_key(const VariableReferenceExpression& p) {
-  return fmt::format("{}<{}>", p.name, p.type);
-}
-} // namespace facebook::presto::protocol
 
 namespace facebook::presto::protocol {
 // Loosly copied this here from NLOHMANN_JSON_SERIALIZE_ENUM()
@@ -1126,13 +1092,9 @@ void from_json(const json& j, LocationHandle& p) {
 }
 } // namespace facebook::presto::protocol
 namespace facebook::presto::protocol {
-HiveInsertTableHandle::HiveInsertTableHandle() noexcept {
-  _type = "hive";
-}
 
 void to_json(json& j, const HiveInsertTableHandle& p) {
   j = json::object();
-  j["@type"] = "hive";
   to_json_key(
       j,
       "schemaName",
@@ -1220,7 +1182,6 @@ void to_json(json& j, const HiveInsertTableHandle& p) {
 }
 
 void from_json(const json& j, HiveInsertTableHandle& p) {
-  p._type = j["@type"];
   from_json_key(
       j,
       "schemaName",
@@ -1308,13 +1269,9 @@ void from_json(const json& j, HiveInsertTableHandle& p) {
 }
 } // namespace facebook::presto::protocol
 namespace facebook::presto::protocol {
-HiveMetadataUpdateHandle::HiveMetadataUpdateHandle() noexcept {
-  _type = "hive";
-}
 
 void to_json(json& j, const HiveMetadataUpdateHandle& p) {
   j = json::object();
-  j["@type"] = "hive";
   to_json_key(
       j,
       "requestId",
@@ -1346,7 +1303,6 @@ void to_json(json& j, const HiveMetadataUpdateHandle& p) {
 }
 
 void from_json(const json& j, HiveMetadataUpdateHandle& p) {
-  p._type = j["@type"];
   from_json_key(
       j,
       "requestId",
@@ -1791,13 +1747,9 @@ void from_json(const json& j, TableToPartitionMapping& p) {
 }
 } // namespace facebook::presto::protocol
 namespace facebook::presto::protocol {
-HiveSplit::HiveSplit() noexcept {
-  _type = "hive";
-}
 
 void to_json(json& j, const HiveSplit& p) {
   j = json::object();
-  j["@type"] = "hive";
   to_json_key(
       j, "fileSplit", p.fileSplit, "HiveSplit", "HiveFileSplit", "fileSplit");
   to_json_key(j, "database", p.database, "HiveSplit", "String", "database");
@@ -1911,7 +1863,6 @@ void to_json(json& j, const HiveSplit& p) {
 }
 
 void from_json(const json& j, HiveSplit& p) {
-  p._type = j["@type"];
   from_json_key(
       j, "fileSplit", p.fileSplit, "HiveSplit", "HiveFileSplit", "fileSplit");
   from_json_key(j, "database", p.database, "HiveSplit", "String", "database");
@@ -2061,90 +2012,9 @@ void from_json(const json& j, HiveTableHandle& p) {
 }
 } // namespace facebook::presto::protocol
 namespace facebook::presto::protocol {
-void to_json(json& j, const std::shared_ptr<RowExpression>& p) {
-  if (p == nullptr) {
-    return;
-  }
-  String type = p->_type;
-
-  if (type == "call") {
-    j = *std::static_pointer_cast<CallExpression>(p);
-    return;
-  }
-  if (type == "constant") {
-    j = *std::static_pointer_cast<ConstantExpression>(p);
-    return;
-  }
-  if (type == "special") {
-    j = *std::static_pointer_cast<SpecialFormExpression>(p);
-    return;
-  }
-  if (type == "lambda") {
-    j = *std::static_pointer_cast<LambdaDefinitionExpression>(p);
-    return;
-  }
-  if (type == "variable") {
-    j = *std::static_pointer_cast<VariableReferenceExpression>(p);
-    return;
-  }
-
-  throw TypeError(type + " no abstract type RowExpression ");
-}
-
-void from_json(const json& j, std::shared_ptr<RowExpression>& p) {
-  String type;
-  try {
-    type = p->getSubclassKey(j);
-  } catch (json::parse_error& e) {
-    throw ParseError(std::string(e.what()) + " RowExpression  RowExpression");
-  }
-
-  if (type == "call") {
-    std::shared_ptr<CallExpression> k = std::make_shared<CallExpression>();
-    j.get_to(*k);
-    p = std::static_pointer_cast<RowExpression>(k);
-    return;
-  }
-  if (type == "constant") {
-    std::shared_ptr<ConstantExpression> k =
-        std::make_shared<ConstantExpression>();
-    j.get_to(*k);
-    p = std::static_pointer_cast<RowExpression>(k);
-    return;
-  }
-  if (type == "special") {
-    std::shared_ptr<SpecialFormExpression> k =
-        std::make_shared<SpecialFormExpression>();
-    j.get_to(*k);
-    p = std::static_pointer_cast<RowExpression>(k);
-    return;
-  }
-  if (type == "lambda") {
-    std::shared_ptr<LambdaDefinitionExpression> k =
-        std::make_shared<LambdaDefinitionExpression>();
-    j.get_to(*k);
-    p = std::static_pointer_cast<RowExpression>(k);
-    return;
-  }
-  if (type == "variable") {
-    std::shared_ptr<VariableReferenceExpression> k =
-        std::make_shared<VariableReferenceExpression>();
-    j.get_to(*k);
-    p = std::static_pointer_cast<RowExpression>(k);
-    return;
-  }
-
-  throw TypeError(type + " no abstract type RowExpression ");
-}
-} // namespace facebook::presto::protocol
-namespace facebook::presto::protocol {
-HiveTableLayoutHandle::HiveTableLayoutHandle() noexcept {
-  _type = "hive";
-}
 
 void to_json(json& j, const HiveTableLayoutHandle& p) {
   j = json::object();
-  j["@type"] = "hive";
   to_json_key(
       j,
       "schemaTableName",
@@ -2267,7 +2137,6 @@ void to_json(json& j, const HiveTableLayoutHandle& p) {
 }
 
 void from_json(const json& j, HiveTableLayoutHandle& p) {
-  p._type = j["@type"];
   from_json_key(
       j,
       "schemaTableName",
@@ -2390,305 +2259,13 @@ void from_json(const json& j, HiveTableLayoutHandle& p) {
 }
 } // namespace facebook::presto::protocol
 namespace facebook::presto::protocol {
-HiveTransactionHandle::HiveTransactionHandle() noexcept {
-  _type = "hive";
-}
 
 void to_json(json& j, const HiveTransactionHandle& p) {
   j = json::object();
-  j["@type"] = "hive";
   to_json_key(j, "uuid", p.uuid, "HiveTransactionHandle", "UUID", "uuid");
 }
 
 void from_json(const json& j, HiveTransactionHandle& p) {
-  p._type = j["@type"];
   from_json_key(j, "uuid", p.uuid, "HiveTransactionHandle", "UUID", "uuid");
-}
-} // namespace facebook::presto::protocol
-namespace facebook::presto::protocol {
-void to_json(json& j, const std::shared_ptr<PlanNode>& p) {
-  if (p == nullptr) {
-    return;
-  }
-  String type = p->_type;
-
-  if (type == ".AggregationNode") {
-    j = *std::static_pointer_cast<AggregationNode>(p);
-    return;
-  }
-  if (type == "com.facebook.presto.sql.planner.plan.GroupIdNode") {
-    j = *std::static_pointer_cast<GroupIdNode>(p);
-    return;
-  }
-  if (type == ".DistinctLimitNode") {
-    j = *std::static_pointer_cast<DistinctLimitNode>(p);
-    return;
-  }
-  if (type == "com.facebook.presto.sql.planner.plan.EnforceSingleRowNode") {
-    j = *std::static_pointer_cast<EnforceSingleRowNode>(p);
-    return;
-  }
-  if (type == "com.facebook.presto.sql.planner.plan.ExchangeNode") {
-    j = *std::static_pointer_cast<ExchangeNode>(p);
-    return;
-  }
-  if (type == ".FilterNode") {
-    j = *std::static_pointer_cast<FilterNode>(p);
-    return;
-  }
-  if (type == "com.facebook.presto.sql.planner.plan.JoinNode") {
-    j = *std::static_pointer_cast<JoinNode>(p);
-    return;
-  }
-  if (type == ".LimitNode") {
-    j = *std::static_pointer_cast<LimitNode>(p);
-    return;
-  }
-  if (type == ".MarkDistinctNode") {
-    j = *std::static_pointer_cast<MarkDistinctNode>(p);
-    return;
-  }
-  if (type == ".SortNode") {
-    j = *std::static_pointer_cast<SortNode>(p);
-    return;
-  }
-  if (type == ".OutputNode") {
-    j = *std::static_pointer_cast<OutputNode>(p);
-    return;
-  }
-  if (type == ".ProjectNode") {
-    j = *std::static_pointer_cast<ProjectNode>(p);
-    return;
-  }
-  if (type == "com.facebook.presto.sql.planner.plan.RowNumberNode") {
-    j = *std::static_pointer_cast<RowNumberNode>(p);
-    return;
-  }
-  if (type == "com.facebook.presto.sql.planner.plan.RemoteSourceNode") {
-    j = *std::static_pointer_cast<RemoteSourceNode>(p);
-    return;
-  }
-  if (type == "com.facebook.presto.sql.planner.plan.SampleNode") {
-    j = *std::static_pointer_cast<SampleNode>(p);
-    return;
-  }
-  if (type == "com.facebook.presto.sql.planner.plan.SemiJoinNode") {
-    j = *std::static_pointer_cast<SemiJoinNode>(p);
-    return;
-  }
-  if (type == ".TableScanNode") {
-    j = *std::static_pointer_cast<TableScanNode>(p);
-    return;
-  }
-  if (type == "com.facebook.presto.sql.planner.plan.TableWriterNode") {
-    j = *std::static_pointer_cast<TableWriterNode>(p);
-    return;
-  }
-  if (type == "com.facebook.presto.sql.planner.plan.TableWriterMergeNode") {
-    j = *std::static_pointer_cast<TableWriterMergeNode>(p);
-    return;
-  }
-  if (type == ".TopNNode") {
-    j = *std::static_pointer_cast<TopNNode>(p);
-    return;
-  }
-  if (type == "com.facebook.presto.sql.planner.plan.TopNRowNumberNode") {
-    j = *std::static_pointer_cast<TopNRowNumberNode>(p);
-    return;
-  }
-  if (type == "com.facebook.presto.sql.planner.plan.UnnestNode") {
-    j = *std::static_pointer_cast<UnnestNode>(p);
-    return;
-  }
-  if (type == ".ValuesNode") {
-    j = *std::static_pointer_cast<ValuesNode>(p);
-    return;
-  }
-  if (type == "com.facebook.presto.sql.planner.plan.AssignUniqueId") {
-    j = *std::static_pointer_cast<AssignUniqueId>(p);
-    return;
-  }
-  if (type == "com.facebook.presto.sql.planner.plan.MergeJoinNode") {
-    j = *std::static_pointer_cast<MergeJoinNode>(p);
-    return;
-  }
-  if (type == "com.facebook.presto.sql.planner.plan.WindowNode") {
-    j = *std::static_pointer_cast<WindowNode>(p);
-    return;
-  }
-
-  throw TypeError(type + " no abstract type PlanNode ");
-}
-
-void from_json(const json& j, std::shared_ptr<PlanNode>& p) {
-  String type;
-  try {
-    type = p->getSubclassKey(j);
-  } catch (json::parse_error& e) {
-    throw ParseError(std::string(e.what()) + " PlanNode  PlanNode");
-  }
-
-  if (type == ".AggregationNode") {
-    std::shared_ptr<AggregationNode> k = std::make_shared<AggregationNode>();
-    j.get_to(*k);
-    p = std::static_pointer_cast<PlanNode>(k);
-    return;
-  }
-  if (type == "com.facebook.presto.sql.planner.plan.GroupIdNode") {
-    std::shared_ptr<GroupIdNode> k = std::make_shared<GroupIdNode>();
-    j.get_to(*k);
-    p = std::static_pointer_cast<PlanNode>(k);
-    return;
-  }
-  if (type == ".DistinctLimitNode") {
-    std::shared_ptr<DistinctLimitNode> k =
-        std::make_shared<DistinctLimitNode>();
-    j.get_to(*k);
-    p = std::static_pointer_cast<PlanNode>(k);
-    return;
-  }
-  if (type == "com.facebook.presto.sql.planner.plan.EnforceSingleRowNode") {
-    std::shared_ptr<EnforceSingleRowNode> k =
-        std::make_shared<EnforceSingleRowNode>();
-    j.get_to(*k);
-    p = std::static_pointer_cast<PlanNode>(k);
-    return;
-  }
-  if (type == "com.facebook.presto.sql.planner.plan.ExchangeNode") {
-    std::shared_ptr<ExchangeNode> k = std::make_shared<ExchangeNode>();
-    j.get_to(*k);
-    p = std::static_pointer_cast<PlanNode>(k);
-    return;
-  }
-  if (type == ".FilterNode") {
-    std::shared_ptr<FilterNode> k = std::make_shared<FilterNode>();
-    j.get_to(*k);
-    p = std::static_pointer_cast<PlanNode>(k);
-    return;
-  }
-  if (type == "com.facebook.presto.sql.planner.plan.JoinNode") {
-    std::shared_ptr<JoinNode> k = std::make_shared<JoinNode>();
-    j.get_to(*k);
-    p = std::static_pointer_cast<PlanNode>(k);
-    return;
-  }
-  if (type == ".LimitNode") {
-    std::shared_ptr<LimitNode> k = std::make_shared<LimitNode>();
-    j.get_to(*k);
-    p = std::static_pointer_cast<PlanNode>(k);
-    return;
-  }
-  if (type == ".MarkDistinctNode") {
-    std::shared_ptr<MarkDistinctNode> k = std::make_shared<MarkDistinctNode>();
-    j.get_to(*k);
-    p = std::static_pointer_cast<PlanNode>(k);
-    return;
-  }
-  if (type == ".SortNode") {
-    std::shared_ptr<SortNode> k = std::make_shared<SortNode>();
-    j.get_to(*k);
-    p = std::static_pointer_cast<PlanNode>(k);
-    return;
-  }
-  if (type == ".OutputNode") {
-    std::shared_ptr<OutputNode> k = std::make_shared<OutputNode>();
-    j.get_to(*k);
-    p = std::static_pointer_cast<PlanNode>(k);
-    return;
-  }
-  if (type == ".ProjectNode") {
-    std::shared_ptr<ProjectNode> k = std::make_shared<ProjectNode>();
-    j.get_to(*k);
-    p = std::static_pointer_cast<PlanNode>(k);
-    return;
-  }
-  if (type == "com.facebook.presto.sql.planner.plan.RowNumberNode") {
-    std::shared_ptr<RowNumberNode> k = std::make_shared<RowNumberNode>();
-    j.get_to(*k);
-    p = std::static_pointer_cast<PlanNode>(k);
-    return;
-  }
-  if (type == "com.facebook.presto.sql.planner.plan.RemoteSourceNode") {
-    std::shared_ptr<RemoteSourceNode> k = std::make_shared<RemoteSourceNode>();
-    j.get_to(*k);
-    p = std::static_pointer_cast<PlanNode>(k);
-    return;
-  }
-  if (type == "com.facebook.presto.sql.planner.plan.SampleNode") {
-    std::shared_ptr<SampleNode> k = std::make_shared<SampleNode>();
-    j.get_to(*k);
-    p = std::static_pointer_cast<PlanNode>(k);
-    return;
-  }
-  if (type == "com.facebook.presto.sql.planner.plan.SemiJoinNode") {
-    std::shared_ptr<SemiJoinNode> k = std::make_shared<SemiJoinNode>();
-    j.get_to(*k);
-    p = std::static_pointer_cast<PlanNode>(k);
-    return;
-  }
-  if (type == ".TableScanNode") {
-    std::shared_ptr<TableScanNode> k = std::make_shared<TableScanNode>();
-    j.get_to(*k);
-    p = std::static_pointer_cast<PlanNode>(k);
-    return;
-  }
-  if (type == "com.facebook.presto.sql.planner.plan.TableWriterNode") {
-    std::shared_ptr<TableWriterNode> k = std::make_shared<TableWriterNode>();
-    j.get_to(*k);
-    p = std::static_pointer_cast<PlanNode>(k);
-    return;
-  }
-  if (type == "com.facebook.presto.sql.planner.plan.TableWriterMergeNode") {
-    std::shared_ptr<TableWriterMergeNode> k =
-        std::make_shared<TableWriterMergeNode>();
-    j.get_to(*k);
-    p = std::static_pointer_cast<PlanNode>(k);
-    return;
-  }
-  if (type == ".TopNNode") {
-    std::shared_ptr<TopNNode> k = std::make_shared<TopNNode>();
-    j.get_to(*k);
-    p = std::static_pointer_cast<PlanNode>(k);
-    return;
-  }
-  if (type == "com.facebook.presto.sql.planner.plan.TopNRowNumberNode") {
-    std::shared_ptr<TopNRowNumberNode> k =
-        std::make_shared<TopNRowNumberNode>();
-    j.get_to(*k);
-    p = std::static_pointer_cast<PlanNode>(k);
-    return;
-  }
-  if (type == "com.facebook.presto.sql.planner.plan.UnnestNode") {
-    std::shared_ptr<UnnestNode> k = std::make_shared<UnnestNode>();
-    j.get_to(*k);
-    p = std::static_pointer_cast<PlanNode>(k);
-    return;
-  }
-  if (type == ".ValuesNode") {
-    std::shared_ptr<ValuesNode> k = std::make_shared<ValuesNode>();
-    j.get_to(*k);
-    p = std::static_pointer_cast<PlanNode>(k);
-    return;
-  }
-  if (type == "com.facebook.presto.sql.planner.plan.AssignUniqueId") {
-    std::shared_ptr<AssignUniqueId> k = std::make_shared<AssignUniqueId>();
-    j.get_to(*k);
-    p = std::static_pointer_cast<PlanNode>(k);
-    return;
-  }
-  if (type == "com.facebook.presto.sql.planner.plan.MergeJoinNode") {
-    std::shared_ptr<MergeJoinNode> k = std::make_shared<MergeJoinNode>();
-    j.get_to(*k);
-    p = std::static_pointer_cast<PlanNode>(k);
-    return;
-  }
-  if (type == "com.facebook.presto.sql.planner.plan.WindowNode") {
-    std::shared_ptr<WindowNode> k = std::make_shared<WindowNode>();
-    j.get_to(*k);
-    p = std::static_pointer_cast<PlanNode>(k);
-    return;
-  }
-
-  throw TypeError(type + " no abstract type PlanNode ");
 }
 } // namespace facebook::presto::protocol

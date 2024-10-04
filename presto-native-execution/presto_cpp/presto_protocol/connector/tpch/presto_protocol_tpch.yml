@@ -31,31 +31,6 @@ ExtraFields:
 AddToOutput:
   - NodeState
 AbstractClasses:
-    ColumnHandle:
-      super: JsonEncodedSubclass
-      comparable: true
-      subclasses:
-        - { name: TpchColumnHandle,         key: tpch }
-
-    ConnectorPartitioningHandle:
-      super: JsonEncodedSubclass
-      subclasses:
-        - { name: TpchPartitioningHandle,   key: tpch}
-
-    ConnectorTableHandle:
-      super: JsonEncodedSubclass
-      subclasses:
-        - { name: TpchTableHandle,          key: tpch }
-
-    ConnectorTableLayoutHandle:
-      super: JsonEncodedSubclass
-      subclasses:
-        - { name: TpchTableLayoutHandle,    key: tpch }
-
-    ConnectorSplit:
-      super: JsonEncodedSubclass
-      subclasses:
-        - { name: TpchSplit,            key: tpch }
 
 
 JavaClasses:

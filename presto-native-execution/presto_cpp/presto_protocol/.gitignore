@@ -1,1 +1,3 @@
 presto_protocol.json
+/core/presto_protocol_core.json
+/connector/.*/presto_protocol_*.json

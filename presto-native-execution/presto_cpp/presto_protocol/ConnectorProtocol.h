@@ -14,14 +14,9 @@
 #pragma once
 
 #include "presto_cpp/presto_protocol/core/presto_protocol_core.h"
-#include "presto_cpp/presto_protocol/connector/hive/presto_protocol_hive.h"
-#include "presto_cpp/presto_protocol/connector/iceberg/presto_protocol_iceberg.h"
-#include "presto_cpp/presto_protocol/connector/tpch/presto_protocol_tpch.h"
-
 #include "velox/common/base/Exceptions.h"
 
 namespace facebook::presto::protocol {
-
 class ConnectorProtocol;
 
 void registerConnectorProtocol(
@@ -33,66 +28,66 @@ void unregisterConnectorProtocol(const std::string& connectorName);
 const ConnectorProtocol& getConnectorProtocol(const std::string& connectorName);
 
 class ConnectorProtocol {
- public:
-  virtual ~ConnectorProtocol() = default;
+public:
+    virtual ~ConnectorProtocol() = default;
 
-  virtual void to_json(json& j, const std::shared_ptr<ConnectorTableHandle>& p)
-      const = 0;
-  virtual void from_json(
-      const json& j,
-      std::shared_ptr<ConnectorTableHandle>& p) const = 0;
+    virtual void to_json(json& j, const std::shared_ptr<ConnectorTableHandle>& p)
+        const = 0;
+    virtual void from_json(
+        const json& j,
+        std::shared_ptr<ConnectorTableHandle>& p) const = 0;
 
-  virtual void to_json(
-      json& j,
-      const std::shared_ptr<ConnectorTableLayoutHandle>& p) const = 0;
-  virtual void from_json(
-      const json& j,
-      std::shared_ptr<ConnectorTableLayoutHandle>& p) const = 0;
+    virtual void to_json(
+        json& j,
+        const std::shared_ptr<ConnectorTableLayoutHandle>& p) const = 0;
+    virtual void from_json(
+        const json& j,
+        std::shared_ptr<ConnectorTableLayoutHandle>& p) const = 0;
 
-  virtual void to_json(json& j, const std::shared_ptr<ColumnHandle>& p)
-      const = 0;
-  virtual void from_json(const json& j, std::shared_ptr<ColumnHandle>& p)
-      const = 0;
+    virtual void to_json(json& j, const std::shared_ptr<ColumnHandle>& p)
+        const = 0;
+    virtual void from_json(const json& j, std::shared_ptr<ColumnHandle>& p)
+        const = 0;
 
-  virtual void to_json(
-      json& j,
-      const std::shared_ptr<ConnectorInsertTableHandle>& p) const = 0;
-  virtual void from_json(
-      const json& j,
-      std::shared_ptr<ConnectorInsertTableHandle>& p) const = 0;
+    virtual void to_json(
+        json& j,
+        const std::shared_ptr<ConnectorInsertTableHandle>& p) const = 0;
+    virtual void from_json(
+        const json& j,
+        std::shared_ptr<ConnectorInsertTableHandle>& p) const = 0;
 
-  virtual void to_json(
-      json& j,
-      const std::shared_ptr<ConnectorOutputTableHandle>& p) const = 0;
-  virtual void from_json(
-      const json& j,
-      std::shared_ptr<ConnectorOutputTableHandle>& p) const = 0;
+    virtual void to_json(
+        json& j,
+        const std::shared_ptr<ConnectorOutputTableHandle>& p) const = 0;
+    virtual void from_json(
+        const json& j,
+        std::shared_ptr<ConnectorOutputTableHandle>& p) const = 0;
 
-  virtual void to_json(json& j, const std::shared_ptr<ConnectorSplit>& p)
-      const = 0;
-  virtual void from_json(const json& j, std::shared_ptr<ConnectorSplit>& p)
-      const = 0;
+    virtual void to_json(json& j, const std::shared_ptr<ConnectorSplit>& p)
+        const = 0;
+    virtual void from_json(const json& j, std::shared_ptr<ConnectorSplit>& p)
+        const = 0;
 
-  virtual void to_json(
-      json& j,
-      const std::shared_ptr<ConnectorPartitioningHandle>& p) const = 0;
-  virtual void from_json(
-      const json& j,
-      std::shared_ptr<ConnectorPartitioningHandle>& p) const = 0;
+    virtual void to_json(
+        json& j,
+        const std::shared_ptr<ConnectorPartitioningHandle>& p) const = 0;
+    virtual void from_json(
+        const json& j,
+        std::shared_ptr<ConnectorPartitioningHandle>& p) const = 0;
 
-  virtual void to_json(
-      json& j,
-      const std::shared_ptr<ConnectorTransactionHandle>& p) const = 0;
-  virtual void from_json(
-      const json& j,
-      std::shared_ptr<ConnectorTransactionHandle>& p) const = 0;
+    virtual void to_json(
+        json& j,
+        const std::shared_ptr<ConnectorTransactionHandle>& p) const = 0;
+    virtual void from_json(
+        const json& j,
+        std::shared_ptr<ConnectorTransactionHandle>& p) const = 0;
 
-  virtual void to_json(
-      json& j,
-      const std::shared_ptr<ConnectorMetadataUpdateHandle>& p) const = 0;
-  virtual void from_json(
-      const json& j,
-      std::shared_ptr<ConnectorMetadataUpdateHandle>& p) const = 0;
+    virtual void to_json(
+        json& j,
+        const std::shared_ptr<ConnectorMetadataUpdateHandle>& p) const = 0;
+    virtual void from_json(
+        const json& j,
+        std::shared_ptr<ConnectorMetadataUpdateHandle>& p) const = 0;
 };
 
 namespace {
@@ -110,127 +105,128 @@ template <
     typename ConnectorTransactionHandleType = NotImplemented,
     typename ConnectorMetadataUpdateHandleType = NotImplemented>
 class ConnectorProtocolTemplate final : public ConnectorProtocol {
- public:
-  void to_json(json& j, const std::shared_ptr<ConnectorTableHandle>& p)
-      const final {
-    to_json_template<ConnectorTableHandleType>(j, p);
-  }
-  void from_json(const json& j, std::shared_ptr<ConnectorTableHandle>& p)
-      const final {
-    from_json_template<ConnectorTableHandleType>(j, p);
-  }
+public:
+    void to_json(json& j, const std::shared_ptr<ConnectorTableHandle>& p)
+        const final {
+        to_json_template<ConnectorTableHandleType>(j, p);
+    }
+    void from_json(const json& j, std::shared_ptr<ConnectorTableHandle>& p)
+        const final {
+        from_json_template<ConnectorTableHandleType>(j, p);
+    }
 
-  void to_json(json& j, const std::shared_ptr<ConnectorTableLayoutHandle>& p)
-      const final {
-    to_json_template<ConnectorTableLayoutHandleType>(j, p);
-  }
-  void from_json(const json& j, std::shared_ptr<ConnectorTableLayoutHandle>& p)
-      const final {
-    from_json_template<ConnectorTableLayoutHandleType>(j, p);
-  }
+    void to_json(json& j, const std::shared_ptr<ConnectorTableLayoutHandle>& p)
+        const final {
+        to_json_template<ConnectorTableLayoutHandleType>(j, p);
+    }
+    void from_json(const json& j, std::shared_ptr<ConnectorTableLayoutHandle>& p)
+        const final {
+        from_json_template<ConnectorTableLayoutHandleType>(j, p);
+    }
 
-  void to_json(json& j, const std::shared_ptr<ColumnHandle>& p) const final {
-    to_json_template<ColumnHandleType>(j, p);
-  }
-  void from_json(const json& j, std::shared_ptr<ColumnHandle>& p) const final {
-    from_json_template<ColumnHandleType>(j, p);
-  }
+    void to_json(json& j, const std::shared_ptr<ColumnHandle>& p) const final {
+        to_json_template<ColumnHandleType>(j, p);
+    }
+    void from_json(const json& j, std::shared_ptr<ColumnHandle>& p) const final {
+        from_json_template<ColumnHandleType>(j, p);
+    }
 
-  void to_json(json& j, const std::shared_ptr<ConnectorInsertTableHandle>& p)
-      const final {
-    to_json_template<ConnectorInsertTableHandleType>(j, p);
-  }
-  void from_json(const json& j, std::shared_ptr<ConnectorInsertTableHandle>& p)
-      const final {
-    from_json_template<ConnectorInsertTableHandleType>(j, p);
-  }
+    void to_json(json& j, const std::shared_ptr<ConnectorInsertTableHandle>& p)
+        const final {
+        to_json_template<ConnectorInsertTableHandleType>(j, p);
+    }
+    void from_json(const json& j, std::shared_ptr<ConnectorInsertTableHandle>& p)
+        const final {
+        from_json_template<ConnectorInsertTableHandleType>(j, p);
+    }
 
-  void to_json(json& j, const std::shared_ptr<ConnectorOutputTableHandle>& p)
-      const final {
-    to_json_template<ConnectorOutputTableHandleType>(j, p);
-  }
-  void from_json(const json& j, std::shared_ptr<ConnectorOutputTableHandle>& p)
-      const final {
-    from_json_template<ConnectorOutputTableHandleType>(j, p);
-  }
+    void to_json(json& j, const std::shared_ptr<ConnectorOutputTableHandle>& p)
+        const final {
+        to_json_template<ConnectorOutputTableHandleType>(j, p);
+    }
+    void from_json(const json& j, std::shared_ptr<ConnectorOutputTableHandle>& p)
+        const final {
+        from_json_template<ConnectorOutputTableHandleType>(j, p);
+    }
 
-  void to_json(json& j, const std::shared_ptr<ConnectorSplit>& p) const final {
-    to_json_template<ConnectorSplitType>(j, p);
-  }
-  void from_json(const json& j, std::shared_ptr<ConnectorSplit>& p)
-      const final {
-    from_json_template<ConnectorSplitType>(j, p);
-  }
+    void to_json(json& j, const std::shared_ptr<ConnectorSplit>& p) const final {
+        to_json_template<ConnectorSplitType>(j, p);
+    }
+    void from_json(const json& j, std::shared_ptr<ConnectorSplit>& p)
+        const final {
+        from_json_template<ConnectorSplitType>(j, p);
+    }
 
-  void to_json(json& j, const std::shared_ptr<ConnectorPartitioningHandle>& p)
-      const final {
-    to_json_template<ConnectorPartitioningHandleType>(j, p);
-  }
-  void from_json(const json& j, std::shared_ptr<ConnectorPartitioningHandle>& p)
-      const final {
-    from_json_template<ConnectorPartitioningHandleType>(j, p);
-  }
+    void to_json(json& j, const std::shared_ptr<ConnectorPartitioningHandle>& p)
+        const final {
+        to_json_template<ConnectorPartitioningHandleType>(j, p);
+    }
+    void from_json(const json& j, std::shared_ptr<ConnectorPartitioningHandle>& p)
+        const final {
+        from_json_template<ConnectorPartitioningHandleType>(j, p);
+    }
 
-  void to_json(json& j, const std::shared_ptr<ConnectorTransactionHandle>& p)
-      const final {
-    to_json_template<ConnectorTransactionHandleType>(j, p);
-  }
-  void from_json(const json& j, std::shared_ptr<ConnectorTransactionHandle>& p)
-      const final {
-    from_json_template<ConnectorTransactionHandleType>(j, p);
-  }
+    void to_json(json& j, const std::shared_ptr<ConnectorTransactionHandle>& p)
+        const final {
+        to_json_template<ConnectorTransactionHandleType>(j, p);
+    }
+    void from_json(const json& j, std::shared_ptr<ConnectorTransactionHandle>& p)
+        const final {
+        from_json_template<ConnectorTransactionHandleType>(j, p);
+    }
 
-  void to_json(json& j, const std::shared_ptr<ConnectorMetadataUpdateHandle>& p)
-      const final {
-    to_json_template<ConnectorMetadataUpdateHandleType>(j, p);
-  }
-  void from_json(
-      const json& j,
-      std::shared_ptr<ConnectorMetadataUpdateHandle>& p) const final {
-    from_json_template<ConnectorMetadataUpdateHandleType>(j, p);
-  }
+    void to_json(json& j, const std::shared_ptr<ConnectorMetadataUpdateHandle>& p)
+        const final {
+        to_json_template<ConnectorMetadataUpdateHandleType>(j, p);
+    }
+    void from_json(
+        const json& j,
+        std::shared_ptr<ConnectorMetadataUpdateHandle>& p) const final {
+        from_json_template<ConnectorMetadataUpdateHandleType>(j, p);
+    }
 
- private:
-  template <typename DERIVED, typename BASE>
-  static void to_json_template(
-      json& j,
-      const std::shared_ptr<BASE>& p,
-      typename std::enable_if<std::is_base_of<BASE, DERIVED>::value, BASE>::
-          type* = 0) {
-    j = *std::static_pointer_cast<DERIVED>(p);
-  }
+private:
+    template <typename DERIVED, typename BASE>
+    static void to_json_template(
+        json& j,
+        const std::shared_ptr<BASE>& p,
+        typename std::enable_if<std::is_base_of<BASE, DERIVED>::value, BASE>::
+            type* = 0) {
+        j = *std::static_pointer_cast<DERIVED>(p);
+    }
 
-  template <typename DERIVED, typename BASE>
-  static void to_json_template(
-      json&,
-      const std::shared_ptr<BASE>&,
-      typename std::enable_if<
-          std::is_same<DERIVED, NotImplemented>::value,
-          BASE>::type* = 0) {
-    VELOX_NYI("Not implemented: {}", typeid(BASE).name());
-  }
+    template <typename DERIVED, typename BASE>
+    static void to_json_template(
+        json&,
+        const std::shared_ptr<BASE>&,
+        typename std::enable_if<
+            std::is_same<DERIVED, NotImplemented>::value,
+            BASE>::type* = 0) {
+        VELOX_NYI("Not implemented: {}", typeid(BASE).name());
+    }
 
-  template <typename DERIVED, typename BASE>
-  static void from_json_template(
-      const json& j,
-      std::shared_ptr<BASE>& p,
-      typename std::enable_if<std::is_base_of<BASE, DERIVED>::value, BASE>::
-          type* = 0) {
-    auto k = std::make_shared<DERIVED>();
-    j.get_to(*k);
-    p = k;
-  }
+    template <typename DERIVED, typename BASE>
+    static void from_json_template(
+        const json& j,
+        std::shared_ptr<BASE>& p,
+        typename std::enable_if<std::is_base_of<BASE, DERIVED>::value, BASE>::
+            type* = 0) {
+        auto k = std::make_shared<DERIVED>();
+        j.get_to(*k);
+        p = k;
+    }
 
-  template <typename DERIVED, typename BASE>
-  static void from_json_template(
-      const json&,
-      std::shared_ptr<BASE>&,
-      typename std::enable_if<
-          std::is_same<DERIVED, NotImplemented>::value,
-          BASE>::type* = 0) {
-    VELOX_NYI("Not implemented: {}", typeid(BASE).name());
-  }
+    template <typename DERIVED, typename BASE>
+    static void from_json_template(
+        const json&,
+        std::shared_ptr<BASE>&,
+        typename std::enable_if<
+            std::is_same<DERIVED, NotImplemented>::value,
+            BASE>::type* = 0) {
+        VELOX_NYI("Not implemented: {}", typeid(BASE).name());
+    }
 };
+}// namespace facebook::presto::protocol
 
 using HiveConnectorProtocol = ConnectorProtocolTemplate<
     HiveTableHandle,
