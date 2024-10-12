@@ -96,7 +96,7 @@ JavaClasses:
   - presto-hive-metastore/src/main/java/com/facebook/presto/hive/BucketFunctionType.java
   - presto-hive-metastore/src/main/java/com/facebook/presto/hive/BucketFunctionType.java
   - presto-hive-common/src/main/java/com/facebook/presto/hive/BaseHiveColumnHandle.java
-  - presto-hive-metastore/src/main/java/com/facebook/presto/hive/metastore/Column.java
+  # - presto-hive-metastore/src/main/java/com/facebook/presto/hive/metastore/Column.java commented as otherwise it will generate a Column struct different than what we use in core, this is to keep the same behavior as before
   - presto-hive/src/main/java/com/facebook/presto/hive/DwrfEncryptionMetadata.java
   - presto-hive/src/main/java/com/facebook/presto/hive/EncryptionInformation.java
   - presto-hive/src/main/java/com/facebook/presto/hive/HiveBucketHandle.java

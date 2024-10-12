@@ -54,6 +54,11 @@ extern const char* const PRESTO_MAX_SIZE_DEFAULT;
 
 extern const char* const PRESTO_ABORT_TASK_URL_PARAM;
 
+enum class NodeSelectionStrategy {
+  HARD_AFFINITY,
+  SOFT_AFFINITY,
+  NO_PREFERENCE
+};
 class Exception : public std::runtime_error {
  public:
   explicit Exception(const std::string& message)

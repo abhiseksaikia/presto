@@ -206,25 +206,6 @@ void from_json(const json& j, BucketConversion& p) {
 } // namespace facebook::presto::protocol
 namespace facebook::presto::protocol {
 
-void to_json(json& j, const Column& p) {
-  j = json::object();
-  to_json_key(j, "name", p.name, "Column", "String", "name");
-  to_json_key(j, "type", p.type, "Column", "HiveType", "type");
-  to_json_key(j, "comment", p.comment, "Column", "String", "comment");
-  to_json_key(
-      j, "typeMetadata", p.typeMetadata, "Column", "String", "typeMetadata");
-}
-
-void from_json(const json& j, Column& p) {
-  from_json_key(j, "name", p.name, "Column", "String", "name");
-  from_json_key(j, "type", p.type, "Column", "HiveType", "type");
-  from_json_key(j, "comment", p.comment, "Column", "String", "comment");
-  from_json_key(
-      j, "typeMetadata", p.typeMetadata, "Column", "String", "typeMetadata");
-}
-} // namespace facebook::presto::protocol
-namespace facebook::presto::protocol {
-
 void to_json(json& j, const DwrfEncryptionMetadata& p) {
   j = json::object();
   to_json_key(

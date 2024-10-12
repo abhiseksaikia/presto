@@ -34,18 +34,6 @@
 #include "presto_cpp/presto_protocol/core/presto_protocol_core.h"
 #include "velox/common/encode/Base64.h"
 
-// Forward declaration of all abstract types
-//
-namespace facebook::presto::protocol {
-struct ColumnHandle : public JsonEncodedSubclass {
-  virtual bool operator<(const ColumnHandle& /* o */) const {
-    throw std::runtime_error("missing operator<() in {class_name} subclass");
-  }
-};
-void to_json(json& j, const std::shared_ptr<ColumnHandle>& p);
-void from_json(const json& j, std::shared_ptr<ColumnHandle>& p);
-} // namespace facebook::presto::protocol
-
 namespace facebook::presto::protocol {
 enum class ColumnType { PARTITION_KEY, REGULAR, SYNTHESIZED, AGGREGATED };
 extern void to_json(json& j, const ColumnType& e);
@@ -99,16 +87,6 @@ struct BucketConversion {
 };
 void to_json(json& j, const BucketConversion& p);
 void from_json(const json& j, BucketConversion& p);
-} // namespace facebook::presto::protocol
-namespace facebook::presto::protocol {
-struct Column {
-  String name = {};
-  HiveType type = {};
-  std::shared_ptr<String> comment = {};
-  std::shared_ptr<String> typeMetadata = {};
-};
-void to_json(json& j, const Column& p);
-void from_json(const json& j, Column& p);
 } // namespace facebook::presto::protocol
 namespace facebook::presto::protocol {
 struct DwrfEncryptionMetadata {
