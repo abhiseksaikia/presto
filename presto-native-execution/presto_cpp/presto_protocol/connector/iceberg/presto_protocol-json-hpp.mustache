@@ -35,29 +35,7 @@
 #include "presto_cpp/external/json/nlohmann/json.hpp"
 #include "presto_cpp/presto_protocol/DataSize.h"
 #include "presto_cpp/presto_protocol/Duration.h"
-#include "presto_cpp/presto_protocol/core/presto_protocol_core.h"
-
-
-// Forward declaration of all abstract types
-//
-{{#.}}
-{{#abstract}}
-namespace facebook::presto::protocol {
-    struct {{&class_name}} : public {{&super_class}} {
-        {{#fields}}
-        {{#field_local}}{{#optional}}std::shared_ptr<{{/optional}}{{&field_text}}{{#optional}}>{{/optional}} {{&field_name}} = {};{{/field_local}}
-        {{/fields}}
-        {{#comparable}}
-            virtual bool operator<(const {{&class_name}}& /* o */) const {
-                throw std::runtime_error("missing operator<() in {class_name} subclass");
-            }
-        {{/comparable}}
-    };
-    void to_json(json& j, const std::shared_ptr<{{&class_name}}>& p);
-    void from_json(const json& j, std::shared_ptr<{{&class_name}}>& p);
-}
-{{/abstract}}
-{{/.}}
+#include "presto_cpp/presto_protocol/connector/hive/presto_protocol_hive.h"
 
 {{#.}}
 {{#hinc}}
