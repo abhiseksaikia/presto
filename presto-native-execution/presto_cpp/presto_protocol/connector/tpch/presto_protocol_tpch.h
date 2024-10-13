@@ -34,32 +34,11 @@
 #include "presto_cpp/presto_protocol/core/presto_protocol_core.h"
 #include "velox/common/encode/Base64.h"
 
-// Forward declaration of all abstract types
-//
 namespace facebook::presto::protocol {
-struct PlanNode : public JsonEncodedSubclass {
-  PlanNodeId id = {};
+struct TpchTransactionHandle : public ConnectorTransactionHandle {
+  String instance = {};
 };
-void to_json(json& j, const std::shared_ptr<PlanNode>& p);
-void from_json(const json& j, std::shared_ptr<PlanNode>& p);
 } // namespace facebook::presto::protocol
-namespace facebook::presto::protocol {
-struct RowExpression : public JsonEncodedSubclass {
-  std::shared_ptr<SourceLocation> sourceLocation = {};
-};
-void to_json(json& j, const std::shared_ptr<RowExpression>& p);
-void from_json(const json& j, std::shared_ptr<RowExpression>& p);
-} // namespace facebook::presto::protocol
-namespace facebook::presto::protocol {
-struct ColumnHandle : public JsonEncodedSubclass {
-  virtual bool operator<(const ColumnHandle& /* o */) const {
-    throw std::runtime_error("missing operator<() in {class_name} subclass");
-  }
-};
-void to_json(json& j, const std::shared_ptr<ColumnHandle>& p);
-void from_json(const json& j, std::shared_ptr<ColumnHandle>& p);
-} // namespace facebook::presto::protocol
-
 /*
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
