@@ -49,52 +49,32 @@ AbstractClasses:
     super: JsonEncodedSubclass
     comparable: true
     subclasses:
-      - { name: HiveColumnHandle,         key: hive }
       - { name: IcebergColumnHandle,      key: hive-iceberg }
-      - { name: TpchColumnHandle,         key: tpch }
-      - { name: SystemColumnHandle,       key: $system@system }
 
   ConnectorPartitioningHandle:
     super: JsonEncodedSubclass
     subclasses:
-      - { name: SystemPartitioningHandle, key: $remote }
       - { name: HivePartitioningHandle,   key: hive}
-      - { name: TpchPartitioningHandle,   key: tpch}
 
   ConnectorTableHandle:
     super: JsonEncodedSubclass
     subclasses:
-      - { name: HiveTableHandle,          key: hive }
       - { name: IcebergTableHandle,       key: hive-iceberg }
-      - { name: TpchTableHandle,          key: tpch }
-      - { name: SystemTableHandle,        key: $system@system }
 
   ConnectorOutputTableHandle:
     super: JsonEncodedSubclass
     subclasses:
-      - { name: HiveOutputTableHandle,          key: hive }
       - { name: IcebergOutputTableHandle,       key: hive-iceberg }
 
   ConnectorInsertTableHandle:
     super: JsonEncodedSubclass
     subclasses:
-      - { name: HiveInsertTableHandle,          key: hive }
       - { name: IcebergInsertTableHandle,       key: hive-iceberg }
-
-  ConnectorTransactionHandle:
-    super: JsonEncodedSubclass
-    subclasses:
-      - { name: HiveTransactionHandle,    key: hive }
-      - { name: RemoteTransactionHandle,  key: $remote }
-      - { name: SystemTransactionHandle,  key: $system@system }
 
   ConnectorTableLayoutHandle:
     super: JsonEncodedSubclass
     subclasses:
-      - { name: HiveTableLayoutHandle,    key: hive }
       - { name: IcebergTableLayoutHandle, key: hive-iceberg }
-      - { name: TpchTableLayoutHandle,    key: tpch }
-      - { name: SystemTableLayoutHandle,  key: $system@system }
 
   ConnectorMetadataUpdateHandle:
     super: JsonEncodedSubclass
@@ -104,12 +84,7 @@ AbstractClasses:
   ConnectorSplit:
     super: JsonEncodedSubclass
     subclasses:
-      - { name: HiveSplit,            key: hive }
       - { name: IcebergSplit,         key: hive-iceberg }
-      - { name: TpchSplit,            key: tpch }
-      - { name: RemoteSplit,          key: $remote }
-      - { name: EmptySplit,           key: $empty }
-      - { name: SystemSplit,          key: $system@system }
 
   ConnectorHistogram:
     super: JsonEncodedSubclass

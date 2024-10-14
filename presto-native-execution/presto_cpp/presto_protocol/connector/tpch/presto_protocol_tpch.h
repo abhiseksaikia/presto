@@ -34,11 +34,14 @@
 #include "presto_cpp/presto_protocol/core/presto_protocol_core.h"
 #include "velox/common/encode/Base64.h"
 
-namespace facebook::presto::protocol {
+namespace facebook::presto::protocol::tpch {
 struct TpchTransactionHandle : public ConnectorTransactionHandle {
   String instance = {};
 };
-} // namespace facebook::presto::protocol
+void to_json(json& j, const TpchTransactionHandle& p);
+
+void from_json(const json& j, TpchTransactionHandle& p);
+} // namespace facebook::presto::protocol::tpch
 /*
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -56,7 +59,7 @@ struct TpchTransactionHandle : public ConnectorTransactionHandle {
 // TpchColumnHandle is special since it needs an implementation of
 // operator<().
 
-namespace facebook::presto::protocol {
+namespace facebook::presto::protocol::tpch {
 struct TpchColumnHandle : public ColumnHandle {
   String columnName = {};
   Type type = {};
@@ -69,8 +72,8 @@ struct TpchColumnHandle : public ColumnHandle {
 };
 void to_json(json& j, const TpchColumnHandle& p);
 void from_json(const json& j, TpchColumnHandle& p);
-} // namespace facebook::presto::protocol
-namespace facebook::presto::protocol {
+} // namespace facebook::presto::protocol::tpch
+namespace facebook::presto::protocol::tpch {
 struct TpchPartitioningHandle : public ConnectorPartitioningHandle {
   String table = {};
   int64_t totalRows = {};
@@ -79,8 +82,8 @@ struct TpchPartitioningHandle : public ConnectorPartitioningHandle {
 };
 void to_json(json& j, const TpchPartitioningHandle& p);
 void from_json(const json& j, TpchPartitioningHandle& p);
-} // namespace facebook::presto::protocol
-namespace facebook::presto::protocol {
+} // namespace facebook::presto::protocol::tpch
+namespace facebook::presto::protocol::tpch {
 struct TpchTableHandle : public ConnectorTableHandle {
   String tableName = {};
   double scaleFactor = {};
@@ -89,8 +92,8 @@ struct TpchTableHandle : public ConnectorTableHandle {
 };
 void to_json(json& j, const TpchTableHandle& p);
 void from_json(const json& j, TpchTableHandle& p);
-} // namespace facebook::presto::protocol
-namespace facebook::presto::protocol {
+} // namespace facebook::presto::protocol::tpch
+namespace facebook::presto::protocol::tpch {
 struct TpchSplit : public ConnectorSplit {
   TpchTableHandle tableHandle = {};
   int partNumber = {};
@@ -102,8 +105,8 @@ struct TpchSplit : public ConnectorSplit {
 };
 void to_json(json& j, const TpchSplit& p);
 void from_json(const json& j, TpchSplit& p);
-} // namespace facebook::presto::protocol
-namespace facebook::presto::protocol {
+} // namespace facebook::presto::protocol::tpch
+namespace facebook::presto::protocol::tpch {
 struct TpchTableLayoutHandle : public ConnectorTableLayoutHandle {
   TpchTableHandle table = {};
   TupleDomain<std::shared_ptr<ColumnHandle>> predicate = {};
@@ -112,4 +115,4 @@ struct TpchTableLayoutHandle : public ConnectorTableLayoutHandle {
 };
 void to_json(json& j, const TpchTableLayoutHandle& p);
 void from_json(const json& j, TpchTableLayoutHandle& p);
-} // namespace facebook::presto::protocol
+} // namespace facebook::presto::protocol::tpch

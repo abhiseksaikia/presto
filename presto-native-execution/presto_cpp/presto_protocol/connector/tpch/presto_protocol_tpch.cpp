@@ -23,7 +23,7 @@
 #include "presto_cpp/presto_protocol/connector/tpch/presto_protocol_tpch.h"
 using namespace std::string_literals;
 
-namespace facebook::presto::protocol {
+namespace facebook::presto::protocol::tpch {
 void to_json(json& j, const std::shared_ptr<PlanNode>& p) {
   if (p == nullptr) {
     return;
@@ -309,8 +309,8 @@ void from_json(const json& j, std::shared_ptr<PlanNode>& p) {
 
   throw TypeError(type + " no abstract type PlanNode ");
 }
-} // namespace facebook::presto::protocol
-namespace facebook::presto::protocol {
+} // namespace facebook::presto::protocol::tpch
+namespace facebook::presto::protocol::tpch {
 void to_json(json& j, const std::shared_ptr<RowExpression>& p) {
   if (p == nullptr) {
     return;
@@ -386,8 +386,8 @@ void from_json(const json& j, std::shared_ptr<RowExpression>& p) {
 
   throw TypeError(type + " no abstract type RowExpression ");
 }
-} // namespace facebook::presto::protocol
-namespace facebook::presto::protocol {
+} // namespace facebook::presto::protocol::tpch
+namespace facebook::presto::protocol::tpch {
 TpchColumnHandle::TpchColumnHandle() noexcept {
   _type = "tpch";
 }
@@ -416,8 +416,8 @@ void from_json(const json& j, TpchColumnHandle& p) {
       "columnName");
   from_json_key(j, "type", p.type, "TpchColumnHandle", "Type", "type");
 }
-} // namespace facebook::presto::protocol
-namespace facebook::presto::protocol {
+} // namespace facebook::presto::protocol::tpch
+namespace facebook::presto::protocol::tpch {
 TpchPartitioningHandle::TpchPartitioningHandle() noexcept {
   _type = "tpch";
 }
@@ -447,28 +447,16 @@ void from_json(const json& j, TpchPartitioningHandle& p) {
       "int64_t",
       "totalRows");
 }
-} // namespace facebook::presto::protocol
-namespace facebook::presto::protocol {
+} // namespace facebook::presto::protocol::tpch
+namespace facebook::presto::protocol::tpch {
 void to_json(json& j, const std::shared_ptr<ColumnHandle>& p) {
   if (p == nullptr) {
     return;
   }
   String type = p->_type;
 
-  if (type == "hive") {
-    j = *std::static_pointer_cast<HiveColumnHandle>(p);
-    return;
-  }
-  if (type == "hive-iceberg") {
-    j = *std::static_pointer_cast<IcebergColumnHandle>(p);
-    return;
-  }
   if (type == "tpch") {
     j = *std::static_pointer_cast<TpchColumnHandle>(p);
-    return;
-  }
-  if (type == "$system@system") {
-    j = *std::static_pointer_cast<SystemColumnHandle>(p);
     return;
   }
 
@@ -483,28 +471,8 @@ void from_json(const json& j, std::shared_ptr<ColumnHandle>& p) {
     throw ParseError(std::string(e.what()) + " ColumnHandle  ColumnHandle");
   }
 
-  if (type == "hive") {
-    std::shared_ptr<HiveColumnHandle> k = std::make_shared<HiveColumnHandle>();
-    j.get_to(*k);
-    p = std::static_pointer_cast<ColumnHandle>(k);
-    return;
-  }
-  if (type == "hive-iceberg") {
-    std::shared_ptr<IcebergColumnHandle> k =
-        std::make_shared<IcebergColumnHandle>();
-    j.get_to(*k);
-    p = std::static_pointer_cast<ColumnHandle>(k);
-    return;
-  }
   if (type == "tpch") {
     std::shared_ptr<TpchColumnHandle> k = std::make_shared<TpchColumnHandle>();
-    j.get_to(*k);
-    p = std::static_pointer_cast<ColumnHandle>(k);
-    return;
-  }
-  if (type == "$system@system") {
-    std::shared_ptr<SystemColumnHandle> k =
-        std::make_shared<SystemColumnHandle>();
     j.get_to(*k);
     p = std::static_pointer_cast<ColumnHandle>(k);
     return;
@@ -512,8 +480,8 @@ void from_json(const json& j, std::shared_ptr<ColumnHandle>& p) {
 
   throw TypeError(type + " no abstract type ColumnHandle ");
 }
-} // namespace facebook::presto::protocol
-namespace facebook::presto::protocol {
+} // namespace facebook::presto::protocol::tpch
+namespace facebook::presto::protocol::tpch {
 TpchTableHandle::TpchTableHandle() noexcept {
   _type = "tpch";
 }
@@ -544,8 +512,8 @@ void from_json(const json& j, TpchTableHandle& p) {
       "double",
       "scaleFactor");
 }
-} // namespace facebook::presto::protocol
-namespace facebook::presto::protocol {
+} // namespace facebook::presto::protocol::tpch
+namespace facebook::presto::protocol::tpch {
 TpchSplit::TpchSplit() noexcept {
   _type = "tpch";
 }
@@ -606,8 +574,8 @@ void from_json(const json& j, TpchSplit& p) {
       "TupleDomain<std::shared_ptr<ColumnHandle>>",
       "predicate");
 }
-} // namespace facebook::presto::protocol
-namespace facebook::presto::protocol {
+} // namespace facebook::presto::protocol::tpch
+namespace facebook::presto::protocol::tpch {
 TpchTableLayoutHandle::TpchTableLayoutHandle() noexcept {
   _type = "tpch";
 }
@@ -638,4 +606,4 @@ void from_json(const json& j, TpchTableLayoutHandle& p) {
       "TupleDomain<std::shared_ptr<ColumnHandle>>",
       "predicate");
 }
-} // namespace facebook::presto::protocol
+} // namespace facebook::presto::protocol::tpch

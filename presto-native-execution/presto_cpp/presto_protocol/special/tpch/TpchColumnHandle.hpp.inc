@@ -15,7 +15,7 @@
 // TpchColumnHandle is special since it needs an implementation of
 // operator<().
 
-namespace facebook::presto::protocol {
+namespace facebook::presto::protocol::tpch {
 struct TpchColumnHandle : public ColumnHandle {
   String columnName = {};
   Type type = {};

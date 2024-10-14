@@ -15,14 +15,14 @@
 // HiveColumnHandle is special since it needs an implementation of
 // operator<().
 
-namespace facebook::presto::protocol {
+namespace facebook::presto::protocol::hive {
 
 struct HiveColumnHandle : public ColumnHandle {
   String name = {};
   HiveType hiveType = {};
   TypeSignature typeSignature = {};
   int hiveColumnIndex = {};
-  ColumnType columnType = {};
+  hive::ColumnType columnType = {};
   std::shared_ptr<String> comment = {};
   List<Subfield> requiredSubfields = {};
   std::shared_ptr<Aggregation> partialAggregation = {};

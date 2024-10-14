@@ -15,7 +15,7 @@
 // TpchTransactionHandle is special since
 // the corresponding class in Java is an enum.
 
-namespace facebook::presto::protocol {
+namespace facebook::presto::protocol::tpch {
 
 struct TpchTransactionHandle : public ConnectorTransactionHandle {
   String instance = {};

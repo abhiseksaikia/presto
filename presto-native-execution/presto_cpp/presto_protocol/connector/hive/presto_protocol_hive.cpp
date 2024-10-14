@@ -23,7 +23,7 @@
 #include "presto_cpp/presto_protocol/connector/hive/presto_protocol_hive.h"
 using namespace std::string_literals;
 
-namespace facebook::presto::protocol {
+namespace facebook::presto::protocol::hive {
 // Loosly copied this here from NLOHMANN_JSON_SERIALIZE_ENUM()
 
 // NOLINTNEXTLINE: cppcoreguidelines-avoid-c-arrays
@@ -59,8 +59,8 @@ void from_json(const json& j, ColumnType& e) {
            : std::begin(ColumnType_enum_table))
           ->first;
 }
-} // namespace facebook::presto::protocol
-namespace facebook::presto::protocol {
+} // namespace facebook::presto::protocol::hive
+namespace facebook::presto::protocol::hive {
 HiveColumnHandle::HiveColumnHandle() noexcept {
   _type = "hive";
 }
@@ -152,8 +152,8 @@ void from_json(const json& j, HiveColumnHandle& p) {
       "Aggregation",
       "partialAggregation");
 }
-} // namespace facebook::presto::protocol
-namespace facebook::presto::protocol {
+} // namespace facebook::presto::protocol::hive
+namespace facebook::presto::protocol::hive {
 
 void to_json(json& j, const BucketConversion& p) {
   j = json::object();
@@ -203,8 +203,8 @@ void from_json(const json& j, BucketConversion& p) {
       "List<HiveColumnHandle>",
       "bucketColumnHandles");
 }
-} // namespace facebook::presto::protocol
-namespace facebook::presto::protocol {
+} // namespace facebook::presto::protocol::hive
+namespace facebook::presto::protocol::hive {
 
 void to_json(json& j, const DwrfEncryptionMetadata& p) {
   j = json::object();
@@ -268,8 +268,8 @@ void from_json(const json& j, DwrfEncryptionMetadata& p) {
       "String",
       "encryptionProvider");
 }
-} // namespace facebook::presto::protocol
-namespace facebook::presto::protocol {
+} // namespace facebook::presto::protocol::hive
+namespace facebook::presto::protocol::hive {
 
 void to_json(json& j, const EncryptionInformation& p) {
   j = json::object();
@@ -291,8 +291,8 @@ void from_json(const json& j, EncryptionInformation& p) {
       "DwrfEncryptionMetadata",
       "dwrfEncryptionMetadata");
 }
-} // namespace facebook::presto::protocol
-namespace facebook::presto::protocol {
+} // namespace facebook::presto::protocol::hive
+namespace facebook::presto::protocol::hive {
 
 void to_json(json& j, const HiveBucketFilter& p) {
   j = json::object();
@@ -314,8 +314,8 @@ void from_json(const json& j, HiveBucketFilter& p) {
       "List<Integer>",
       "bucketsToKeep");
 }
-} // namespace facebook::presto::protocol
-namespace facebook::presto::protocol {
+} // namespace facebook::presto::protocol::hive
+namespace facebook::presto::protocol::hive {
 
 void to_json(json& j, const HiveBucketHandle& p) {
   j = json::object();
@@ -365,8 +365,8 @@ void from_json(const json& j, HiveBucketHandle& p) {
       "int",
       "readBucketCount");
 }
-} // namespace facebook::presto::protocol
-namespace facebook::presto::protocol {
+} // namespace facebook::presto::protocol::hive
+namespace facebook::presto::protocol::hive {
 // Loosly copied this here from NLOHMANN_JSON_SERIALIZE_ENUM()
 
 // NOLINTNEXTLINE: cppcoreguidelines-avoid-c-arrays
@@ -404,8 +404,8 @@ void from_json(const json& j, BucketFunctionType& e) {
            : std::begin(BucketFunctionType_enum_table))
           ->first;
 }
-} // namespace facebook::presto::protocol
-namespace facebook::presto::protocol {
+} // namespace facebook::presto::protocol::hive
+namespace facebook::presto::protocol::hive {
 // Loosly copied this here from NLOHMANN_JSON_SERIALIZE_ENUM()
 
 // NOLINTNEXTLINE: cppcoreguidelines-avoid-c-arrays
@@ -435,8 +435,8 @@ void from_json(const json& j, Order& e) {
   e = ((it != std::end(Order_enum_table)) ? it : std::begin(Order_enum_table))
           ->first;
 }
-} // namespace facebook::presto::protocol
-namespace facebook::presto::protocol {
+} // namespace facebook::presto::protocol::hive
+namespace facebook::presto::protocol::hive {
 
 void to_json(json& j, const SortingColumn& p) {
   j = json::object();
@@ -450,8 +450,8 @@ void from_json(const json& j, SortingColumn& p) {
       j, "columnName", p.columnName, "SortingColumn", "String", "columnName");
   from_json_key(j, "order", p.order, "SortingColumn", "Order", "order");
 }
-} // namespace facebook::presto::protocol
-namespace facebook::presto::protocol {
+} // namespace facebook::presto::protocol::hive
+namespace facebook::presto::protocol::hive {
 
 void to_json(json& j, const HiveBucketProperty& p) {
   j = json::object();
@@ -518,8 +518,8 @@ void from_json(const json& j, HiveBucketProperty& p) {
   from_json_key(
       j, "types", p.types, "HiveBucketProperty", "List<Type>", "types");
 }
-} // namespace facebook::presto::protocol
-namespace facebook::presto::protocol {
+} // namespace facebook::presto::protocol::hive
+namespace facebook::presto::protocol::hive {
 
 void to_json(json& j, const HiveFileSplit& p) {
   j = json::object();
@@ -593,8 +593,8 @@ void from_json(const json& j, HiveFileSplit& p) {
       "int64_t",
       "affinitySchedulingFileSectionIndex");
 }
-} // namespace facebook::presto::protocol
-namespace facebook::presto::protocol {
+} // namespace facebook::presto::protocol::hive
+namespace facebook::presto::protocol::hive {
 // Loosly copied this here from NLOHMANN_JSON_SERIALIZE_ENUM()
 
 // NOLINTNEXTLINE: cppcoreguidelines-avoid-c-arrays
@@ -635,8 +635,8 @@ void from_json(const json& j, HiveCompressionCodec& e) {
            : std::begin(HiveCompressionCodec_enum_table))
           ->first;
 }
-} // namespace facebook::presto::protocol
-namespace facebook::presto::protocol {
+} // namespace facebook::presto::protocol::hive
+namespace facebook::presto::protocol::hive {
 // Loosly copied this here from NLOHMANN_JSON_SERIALIZE_ENUM()
 
 // NOLINTNEXTLINE: cppcoreguidelines-avoid-c-arrays
@@ -676,8 +676,8 @@ void from_json(const json& j, PrestoTableType& e) {
            : std::begin(PrestoTableType_enum_table))
           ->first;
 }
-} // namespace facebook::presto::protocol
-namespace facebook::presto::protocol {
+} // namespace facebook::presto::protocol::hive
+namespace facebook::presto::protocol::hive {
 
 void to_json(json& j, const StorageFormat& p) {
   j = json::object();
@@ -715,8 +715,8 @@ void from_json(const json& j, StorageFormat& p) {
       "String",
       "outputFormat");
 }
-} // namespace facebook::presto::protocol
-namespace facebook::presto::protocol {
+} // namespace facebook::presto::protocol::hive
+namespace facebook::presto::protocol::hive {
 
 void to_json(json& j, const Storage& p) {
   j = json::object();
@@ -784,8 +784,8 @@ void from_json(const json& j, Storage& p) {
       "Map<String, String>",
       "parameters");
 }
-} // namespace facebook::presto::protocol
-namespace facebook::presto::protocol {
+} // namespace facebook::presto::protocol::hive
+namespace facebook::presto::protocol::hive {
 
 void to_json(json& j, const Table& p) {
   j = json::object();
@@ -867,7 +867,7 @@ void from_json(const json& j, Table& p) {
       "String",
       "viewExpandedText");
 }
-} // namespace facebook::presto::protocol
+} // namespace facebook::presto::protocol::hive
 /*
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -881,7 +881,7 @@ void from_json(const json& j, Table& p) {
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-namespace facebook::presto::protocol {
+namespace facebook::presto::protocol::hive {
 
 void to_json(json& j, const HivePageSinkMetadata& p) {
   j = json::object();
@@ -905,7 +905,7 @@ void from_json(const json& j, HivePageSinkMetadata& p) {
       "schemaTableName");
   from_json_key(j, "table", p.table, "HivePageSinkMetadata", "Table", "table");
 }
-} // namespace facebook::presto::protocol
+} // namespace facebook::presto::protocol::hive
 /*
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -919,7 +919,7 @@ void from_json(const json& j, HivePageSinkMetadata& p) {
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-namespace facebook::presto::protocol {
+namespace facebook::presto::protocol::hive {
 
 static const std::pair<HiveStorageFormat, json> HiveStorageFormat_enum_table[] =
     { // NOLINT: cert-err58-cpp
@@ -967,8 +967,8 @@ void from_json(const json& j, HiveStorageFormat& e) {
            : std::begin(HiveStorageFormat_enum_table))
           ->first;
 }
-} // namespace facebook::presto::protocol
-namespace facebook::presto::protocol {
+} // namespace facebook::presto::protocol::hive
+namespace facebook::presto::protocol::hive {
 // Loosly copied this here from NLOHMANN_JSON_SERIALIZE_ENUM()
 
 // NOLINTNEXTLINE: cppcoreguidelines-avoid-c-arrays
@@ -1003,8 +1003,8 @@ void from_json(const json& j, TableType& e) {
            : std::begin(TableType_enum_table))
           ->first;
 }
-} // namespace facebook::presto::protocol
-namespace facebook::presto::protocol {
+} // namespace facebook::presto::protocol::hive
+namespace facebook::presto::protocol::hive {
 // Loosly copied this here from NLOHMANN_JSON_SERIALIZE_ENUM()
 
 // NOLINTNEXTLINE: cppcoreguidelines-avoid-c-arrays
@@ -1042,8 +1042,8 @@ void from_json(const json& j, WriteMode& e) {
            : std::begin(WriteMode_enum_table))
           ->first;
 }
-} // namespace facebook::presto::protocol
-namespace facebook::presto::protocol {
+} // namespace facebook::presto::protocol::hive
+namespace facebook::presto::protocol::hive {
 
 void to_json(json& j, const LocationHandle& p) {
   j = json::object();
@@ -1071,8 +1071,8 @@ void from_json(const json& j, LocationHandle& p) {
   from_json_key(
       j, "writeMode", p.writeMode, "LocationHandle", "WriteMode", "writeMode");
 }
-} // namespace facebook::presto::protocol
-namespace facebook::presto::protocol {
+} // namespace facebook::presto::protocol::hive
+namespace facebook::presto::protocol::hive {
 HiveInsertTableHandle::HiveInsertTableHandle() noexcept {
   _type = "hive";
 }
@@ -1253,8 +1253,8 @@ void from_json(const json& j, HiveInsertTableHandle& p) {
       "EncryptionInformation",
       "encryptionInformation");
 }
-} // namespace facebook::presto::protocol
-namespace facebook::presto::protocol {
+} // namespace facebook::presto::protocol::hive
+namespace facebook::presto::protocol::hive {
 HiveMetadataUpdateHandle::HiveMetadataUpdateHandle() noexcept {
   _type = "hive";
 }
@@ -1323,8 +1323,8 @@ void from_json(const json& j, HiveMetadataUpdateHandle& p) {
       "String",
       "fileName");
 }
-} // namespace facebook::presto::protocol
-namespace facebook::presto::protocol {
+} // namespace facebook::presto::protocol::hive
+namespace facebook::presto::protocol::hive {
 HiveOutputTableHandle::HiveOutputTableHandle() noexcept {
   _type = "hive";
 }
@@ -1547,8 +1547,8 @@ void from_json(const json& j, HiveOutputTableHandle& p) {
       "EncryptionInformation",
       "encryptionInformation");
 }
-} // namespace facebook::presto::protocol
-namespace facebook::presto::protocol {
+} // namespace facebook::presto::protocol::hive
+namespace facebook::presto::protocol::hive {
 
 void to_json(json& j, const HivePartitionKey& p) {
   j = json::object();
@@ -1560,8 +1560,8 @@ void from_json(const json& j, HivePartitionKey& p) {
   from_json_key(j, "name", p.name, "HivePartitionKey", "String", "name");
   from_json_key(j, "value", p.value, "HivePartitionKey", "String", "value");
 }
-} // namespace facebook::presto::protocol
-namespace facebook::presto::protocol {
+} // namespace facebook::presto::protocol::hive
+namespace facebook::presto::protocol::hive {
 HivePartitioningHandle::HivePartitioningHandle() noexcept {
   _type = "hive";
 }
@@ -1634,8 +1634,8 @@ void from_json(const json& j, HivePartitioningHandle& p) {
   from_json_key(
       j, "types", p.types, "HivePartitioningHandle", "List<Type>", "types");
 }
-} // namespace facebook::presto::protocol
-namespace facebook::presto::protocol {
+} // namespace facebook::presto::protocol::hive
+namespace facebook::presto::protocol::hive {
 void to_json(json& j, const std::shared_ptr<ColumnHandle>& p) {
   if (p == nullptr) {
     return;
@@ -1667,8 +1667,8 @@ void from_json(const json& j, std::shared_ptr<ColumnHandle>& p) {
 
   throw TypeError(type + " no abstract type ColumnHandle ");
 }
-} // namespace facebook::presto::protocol
-namespace facebook::presto::protocol {
+} // namespace facebook::presto::protocol::hive
+namespace facebook::presto::protocol::hive {
 
 void to_json(json& j, const TableToPartitionMapping& p) {
   j = json::object();
@@ -1704,8 +1704,8 @@ void from_json(const json& j, TableToPartitionMapping& p) {
       "Map<Integer, Column>",
       "partitionSchemaDifference");
 }
-} // namespace facebook::presto::protocol
-namespace facebook::presto::protocol {
+} // namespace facebook::presto::protocol::hive
+namespace facebook::presto::protocol::hive {
 HiveSplit::HiveSplit() noexcept {
   _type = "hive";
 }
@@ -1938,8 +1938,8 @@ void from_json(const json& j, HiveSplit& p) {
       "String",
       "rowIdPartitionComponent");
 }
-} // namespace facebook::presto::protocol
-namespace facebook::presto::protocol {
+} // namespace facebook::presto::protocol::hive
+namespace facebook::presto::protocol::hive {
 HiveTableHandle::HiveTableHandle() noexcept {
   _type = "hive";
 }
@@ -1974,8 +1974,8 @@ void from_json(const json& j, HiveTableHandle& p) {
       "List<List<String>>",
       "analyzePartitionValues");
 }
-} // namespace facebook::presto::protocol
-namespace facebook::presto::protocol {
+} // namespace facebook::presto::protocol::hive
+namespace facebook::presto::protocol::hive {
 void to_json(json& j, const std::shared_ptr<RowExpression>& p) {
   if (p == nullptr) {
     return;
@@ -2051,8 +2051,8 @@ void from_json(const json& j, std::shared_ptr<RowExpression>& p) {
 
   throw TypeError(type + " no abstract type RowExpression ");
 }
-} // namespace facebook::presto::protocol
-namespace facebook::presto::protocol {
+} // namespace facebook::presto::protocol::hive
+namespace facebook::presto::protocol::hive {
 HiveTableLayoutHandle::HiveTableLayoutHandle() noexcept {
   _type = "hive";
 }
@@ -2303,8 +2303,8 @@ void from_json(const json& j, HiveTableLayoutHandle& p) {
       "bool",
       "footerStatsUnreliable");
 }
-} // namespace facebook::presto::protocol
-namespace facebook::presto::protocol {
+} // namespace facebook::presto::protocol::hive
+namespace facebook::presto::protocol::hive {
 HiveTransactionHandle::HiveTransactionHandle() noexcept {
   _type = "hive";
 }
@@ -2319,8 +2319,8 @@ void from_json(const json& j, HiveTransactionHandle& p) {
   p._type = j["@type"];
   from_json_key(j, "uuid", p.uuid, "HiveTransactionHandle", "UUID", "uuid");
 }
-} // namespace facebook::presto::protocol
-namespace facebook::presto::protocol {
+} // namespace facebook::presto::protocol::hive
+namespace facebook::presto::protocol::hive {
 void to_json(json& j, const std::shared_ptr<PlanNode>& p) {
   if (p == nullptr) {
     return;
@@ -2606,4 +2606,4 @@ void from_json(const json& j, std::shared_ptr<PlanNode>& p) {
 
   throw TypeError(type + " no abstract type PlanNode ");
 }
-} // namespace facebook::presto::protocol
+} // namespace facebook::presto::protocol::hive

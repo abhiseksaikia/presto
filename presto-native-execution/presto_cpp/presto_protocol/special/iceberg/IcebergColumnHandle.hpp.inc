@@ -15,13 +15,13 @@
 // IcebergColumnHandle is special since it needs an implementation of
 // operator<().
 
-namespace facebook::presto::protocol {
+namespace facebook::presto::protocol::iceberg {
 
 struct IcebergColumnHandle : public ColumnHandle {
   ColumnIdentity columnIdentity = {};
   Type type = {};
   std::shared_ptr<String> comment = {};
-  ColumnType columnType = {};
+  hive::ColumnType columnType = {};
   List<Subfield> requiredSubfields = {};
 
   IcebergColumnHandle() noexcept;

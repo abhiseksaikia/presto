@@ -34,11 +34,11 @@
 #include "presto_cpp/presto_protocol/core/presto_protocol_core.h"
 #include "velox/common/encode/Base64.h"
 
-namespace facebook::presto::protocol {
+namespace facebook::presto::protocol::hive {
 enum class ColumnType { PARTITION_KEY, REGULAR, SYNTHESIZED, AGGREGATED };
 extern void to_json(json& j, const ColumnType& e);
 extern void from_json(const json& j, ColumnType& e);
-} // namespace facebook::presto::protocol
+} // namespace facebook::presto::protocol::hive
 /*
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -56,14 +56,14 @@ extern void from_json(const json& j, ColumnType& e);
 // HiveColumnHandle is special since it needs an implementation of
 // operator<().
 
-namespace facebook::presto::protocol {
+namespace facebook::presto::protocol::hive {
 
 struct HiveColumnHandle : public ColumnHandle {
   String name = {};
   HiveType hiveType = {};
   TypeSignature typeSignature = {};
   int hiveColumnIndex = {};
-  ColumnType columnType = {};
+  hive::ColumnType columnType = {};
   std::shared_ptr<String> comment = {};
   List<Subfield> requiredSubfields = {};
   std::shared_ptr<Aggregation> partialAggregation = {};
@@ -78,8 +78,8 @@ struct HiveColumnHandle : public ColumnHandle {
 void to_json(json& j, const HiveColumnHandle& p);
 void from_json(const json& j, HiveColumnHandle& p);
 
-} // namespace facebook::presto::protocol
-namespace facebook::presto::protocol {
+} // namespace facebook::presto::protocol::hive
+namespace facebook::presto::protocol::hive {
 struct BucketConversion {
   int tableBucketCount = {};
   int partitionBucketCount = {};
@@ -87,8 +87,8 @@ struct BucketConversion {
 };
 void to_json(json& j, const BucketConversion& p);
 void from_json(const json& j, BucketConversion& p);
-} // namespace facebook::presto::protocol
-namespace facebook::presto::protocol {
+} // namespace facebook::presto::protocol::hive
+namespace facebook::presto::protocol::hive {
 struct DwrfEncryptionMetadata {
   Map<String, String> fieldToKeyData = {};
   Map<String, String> extraMetadata = {};
@@ -97,22 +97,22 @@ struct DwrfEncryptionMetadata {
 };
 void to_json(json& j, const DwrfEncryptionMetadata& p);
 void from_json(const json& j, DwrfEncryptionMetadata& p);
-} // namespace facebook::presto::protocol
-namespace facebook::presto::protocol {
+} // namespace facebook::presto::protocol::hive
+namespace facebook::presto::protocol::hive {
 struct EncryptionInformation {
   std::shared_ptr<DwrfEncryptionMetadata> dwrfEncryptionMetadata = {};
 };
 void to_json(json& j, const EncryptionInformation& p);
 void from_json(const json& j, EncryptionInformation& p);
-} // namespace facebook::presto::protocol
-namespace facebook::presto::protocol {
+} // namespace facebook::presto::protocol::hive
+namespace facebook::presto::protocol::hive {
 struct HiveBucketFilter {
   List<Integer> bucketsToKeep = {};
 };
 void to_json(json& j, const HiveBucketFilter& p);
 void from_json(const json& j, HiveBucketFilter& p);
-} // namespace facebook::presto::protocol
-namespace facebook::presto::protocol {
+} // namespace facebook::presto::protocol::hive
+namespace facebook::presto::protocol::hive {
 struct HiveBucketHandle {
   List<HiveColumnHandle> columns = {};
   int tableBucketCount = {};
@@ -120,26 +120,26 @@ struct HiveBucketHandle {
 };
 void to_json(json& j, const HiveBucketHandle& p);
 void from_json(const json& j, HiveBucketHandle& p);
-} // namespace facebook::presto::protocol
-namespace facebook::presto::protocol {
+} // namespace facebook::presto::protocol::hive
+namespace facebook::presto::protocol::hive {
 enum class BucketFunctionType { HIVE_COMPATIBLE, PRESTO_NATIVE };
 extern void to_json(json& j, const BucketFunctionType& e);
 extern void from_json(const json& j, BucketFunctionType& e);
-} // namespace facebook::presto::protocol
-namespace facebook::presto::protocol {
+} // namespace facebook::presto::protocol::hive
+namespace facebook::presto::protocol::hive {
 enum class Order { ASCENDING, DESCENDING };
 extern void to_json(json& j, const Order& e);
 extern void from_json(const json& j, Order& e);
-} // namespace facebook::presto::protocol
-namespace facebook::presto::protocol {
+} // namespace facebook::presto::protocol::hive
+namespace facebook::presto::protocol::hive {
 struct SortingColumn {
   String columnName = {};
   Order order = {};
 };
 void to_json(json& j, const SortingColumn& p);
 void from_json(const json& j, SortingColumn& p);
-} // namespace facebook::presto::protocol
-namespace facebook::presto::protocol {
+} // namespace facebook::presto::protocol::hive
+namespace facebook::presto::protocol::hive {
 struct HiveBucketProperty {
   List<String> bucketedBy = {};
   int bucketCount = {};
@@ -149,8 +149,8 @@ struct HiveBucketProperty {
 };
 void to_json(json& j, const HiveBucketProperty& p);
 void from_json(const json& j, HiveBucketProperty& p);
-} // namespace facebook::presto::protocol
-namespace facebook::presto::protocol {
+} // namespace facebook::presto::protocol::hive
+namespace facebook::presto::protocol::hive {
 struct HiveFileSplit {
   String path = {};
   int64_t start = {};
@@ -163,13 +163,13 @@ struct HiveFileSplit {
 };
 void to_json(json& j, const HiveFileSplit& p);
 void from_json(const json& j, HiveFileSplit& p);
-} // namespace facebook::presto::protocol
-namespace facebook::presto::protocol {
+} // namespace facebook::presto::protocol::hive
+namespace facebook::presto::protocol::hive {
 enum class HiveCompressionCodec { NONE, SNAPPY, GZIP, LZ4, ZSTD };
 extern void to_json(json& j, const HiveCompressionCodec& e);
 extern void from_json(const json& j, HiveCompressionCodec& e);
-} // namespace facebook::presto::protocol
-namespace facebook::presto::protocol {
+} // namespace facebook::presto::protocol::hive
+namespace facebook::presto::protocol::hive {
 enum class PrestoTableType {
   MANAGED_TABLE,
   EXTERNAL_TABLE,
@@ -180,8 +180,8 @@ enum class PrestoTableType {
 };
 extern void to_json(json& j, const PrestoTableType& e);
 extern void from_json(const json& j, PrestoTableType& e);
-} // namespace facebook::presto::protocol
-namespace facebook::presto::protocol {
+} // namespace facebook::presto::protocol::hive
+namespace facebook::presto::protocol::hive {
 struct StorageFormat {
   String serDe = {};
   String inputFormat = {};
@@ -189,8 +189,8 @@ struct StorageFormat {
 };
 void to_json(json& j, const StorageFormat& p);
 void from_json(const json& j, StorageFormat& p);
-} // namespace facebook::presto::protocol
-namespace facebook::presto::protocol {
+} // namespace facebook::presto::protocol::hive
+namespace facebook::presto::protocol::hive {
 struct Storage {
   StorageFormat storageFormat = {};
   String location = {};
@@ -201,8 +201,8 @@ struct Storage {
 };
 void to_json(json& j, const Storage& p);
 void from_json(const json& j, Storage& p);
-} // namespace facebook::presto::protocol
-namespace facebook::presto::protocol {
+} // namespace facebook::presto::protocol::hive
+namespace facebook::presto::protocol::hive {
 struct Table {
   String databaseName = {};
   String tableName = {};
@@ -217,7 +217,7 @@ struct Table {
 };
 void to_json(json& j, const Table& p);
 void from_json(const json& j, Table& p);
-} // namespace facebook::presto::protocol
+} // namespace facebook::presto::protocol::hive
 /*
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -235,17 +235,17 @@ void from_json(const json& j, Table& p);
 // dependency Table
 // dependency SchemaTableName
 
-namespace facebook::presto::protocol {
+namespace facebook::presto::protocol::hive {
 
 struct HivePageSinkMetadata {
   SchemaTableName schemaTableName = {};
-  std::shared_ptr<Table> table = {};
+  std::shared_ptr<hive::Table> table = {};
   // TODO Add modifiedPartitions
 };
 void to_json(json& j, const HivePageSinkMetadata& p);
 void from_json(const json& j, HivePageSinkMetadata& p);
 
-} // namespace facebook::presto::protocol
+} // namespace facebook::presto::protocol::hive
 /*
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -260,7 +260,7 @@ void from_json(const json& j, HivePageSinkMetadata& p);
  * limitations under the License.
  */
 
-namespace facebook::presto::protocol {
+namespace facebook::presto::protocol::hive {
 
 enum class HiveStorageFormat {
   ORC,
@@ -280,13 +280,13 @@ enum class HiveStorageFormat {
 void to_json(json& j, const HiveStorageFormat& p);
 void from_json(const json& j, HiveStorageFormat& p);
 
-} // namespace facebook::presto::protocol
-namespace facebook::presto::protocol {
+} // namespace facebook::presto::protocol::hive
+namespace facebook::presto::protocol::hive {
 enum class TableType { NEW, EXISTING, TEMPORARY };
 extern void to_json(json& j, const TableType& e);
 extern void from_json(const json& j, TableType& e);
-} // namespace facebook::presto::protocol
-namespace facebook::presto::protocol {
+} // namespace facebook::presto::protocol::hive
+namespace facebook::presto::protocol::hive {
 enum class WriteMode {
   STAGE_AND_MOVE_TO_TARGET_DIRECTORY,
   DIRECT_TO_TARGET_NEW_DIRECTORY,
@@ -294,8 +294,8 @@ enum class WriteMode {
 };
 extern void to_json(json& j, const WriteMode& e);
 extern void from_json(const json& j, WriteMode& e);
-} // namespace facebook::presto::protocol
-namespace facebook::presto::protocol {
+} // namespace facebook::presto::protocol::hive
+namespace facebook::presto::protocol::hive {
 struct LocationHandle {
   String targetPath = {};
   String writePath = {};
@@ -305,8 +305,8 @@ struct LocationHandle {
 };
 void to_json(json& j, const LocationHandle& p);
 void from_json(const json& j, LocationHandle& p);
-} // namespace facebook::presto::protocol
-namespace facebook::presto::protocol {
+} // namespace facebook::presto::protocol::hive
+namespace facebook::presto::protocol::hive {
 struct HiveInsertTableHandle : public ConnectorInsertTableHandle {
   String schemaName = {};
   String tableName = {};
@@ -325,8 +325,8 @@ struct HiveInsertTableHandle : public ConnectorInsertTableHandle {
 };
 void to_json(json& j, const HiveInsertTableHandle& p);
 void from_json(const json& j, HiveInsertTableHandle& p);
-} // namespace facebook::presto::protocol
-namespace facebook::presto::protocol {
+} // namespace facebook::presto::protocol::hive
+namespace facebook::presto::protocol::hive {
 struct HiveMetadataUpdateHandle : public ConnectorMetadataUpdateHandle {
   UUID requestId = {};
   SchemaTableName schemaTableName = {};
@@ -337,8 +337,8 @@ struct HiveMetadataUpdateHandle : public ConnectorMetadataUpdateHandle {
 };
 void to_json(json& j, const HiveMetadataUpdateHandle& p);
 void from_json(const json& j, HiveMetadataUpdateHandle& p);
-} // namespace facebook::presto::protocol
-namespace facebook::presto::protocol {
+} // namespace facebook::presto::protocol::hive
+namespace facebook::presto::protocol::hive {
 struct HiveOutputTableHandle : public ConnectorOutputTableHandle {
   String schemaName = {};
   String tableName = {};
@@ -360,16 +360,16 @@ struct HiveOutputTableHandle : public ConnectorOutputTableHandle {
 };
 void to_json(json& j, const HiveOutputTableHandle& p);
 void from_json(const json& j, HiveOutputTableHandle& p);
-} // namespace facebook::presto::protocol
-namespace facebook::presto::protocol {
+} // namespace facebook::presto::protocol::hive
+namespace facebook::presto::protocol::hive {
 struct HivePartitionKey {
   String name = {};
   std::shared_ptr<String> value = {};
 };
 void to_json(json& j, const HivePartitionKey& p);
 void from_json(const json& j, HivePartitionKey& p);
-} // namespace facebook::presto::protocol
-namespace facebook::presto::protocol {
+} // namespace facebook::presto::protocol::hive
+namespace facebook::presto::protocol::hive {
 struct HivePartitioningHandle : public ConnectorPartitioningHandle {
   int bucketCount = {};
   std::shared_ptr<int> maxCompatibleBucketCount = {};
@@ -381,16 +381,16 @@ struct HivePartitioningHandle : public ConnectorPartitioningHandle {
 };
 void to_json(json& j, const HivePartitioningHandle& p);
 void from_json(const json& j, HivePartitioningHandle& p);
-} // namespace facebook::presto::protocol
-namespace facebook::presto::protocol {
+} // namespace facebook::presto::protocol::hive
+namespace facebook::presto::protocol::hive {
 struct TableToPartitionMapping {
   std::shared_ptr<Map<Integer, Integer>> tableToPartitionColumns = {};
   Map<Integer, Column> partitionSchemaDifference = {};
 };
 void to_json(json& j, const TableToPartitionMapping& p);
 void from_json(const json& j, TableToPartitionMapping& p);
-} // namespace facebook::presto::protocol
-namespace facebook::presto::protocol {
+} // namespace facebook::presto::protocol::hive
+namespace facebook::presto::protocol::hive {
 struct HiveSplit : public ConnectorSplit {
   HiveFileSplit fileSplit = {};
   String database = {};
@@ -416,8 +416,8 @@ struct HiveSplit : public ConnectorSplit {
 };
 void to_json(json& j, const HiveSplit& p);
 void from_json(const json& j, HiveSplit& p);
-} // namespace facebook::presto::protocol
-namespace facebook::presto::protocol {
+} // namespace facebook::presto::protocol::hive
+namespace facebook::presto::protocol::hive {
 struct HiveTableHandle : public ConnectorTableHandle {
   String schemaName = {};
   String tableName = {};
@@ -427,8 +427,8 @@ struct HiveTableHandle : public ConnectorTableHandle {
 };
 void to_json(json& j, const HiveTableHandle& p);
 void from_json(const json& j, HiveTableHandle& p);
-} // namespace facebook::presto::protocol
-namespace facebook::presto::protocol {
+} // namespace facebook::presto::protocol::hive
+namespace facebook::presto::protocol::hive {
 struct HiveTableLayoutHandle : public ConnectorTableLayoutHandle {
   SchemaTableName schemaTableName = {};
   String tablePath = {};
@@ -452,8 +452,8 @@ struct HiveTableLayoutHandle : public ConnectorTableLayoutHandle {
 };
 void to_json(json& j, const HiveTableLayoutHandle& p);
 void from_json(const json& j, HiveTableLayoutHandle& p);
-} // namespace facebook::presto::protocol
-namespace facebook::presto::protocol {
+} // namespace facebook::presto::protocol::hive
+namespace facebook::presto::protocol::hive {
 struct HiveTransactionHandle : public ConnectorTransactionHandle {
   UUID uuid = {};
 
@@ -461,4 +461,4 @@ struct HiveTransactionHandle : public ConnectorTransactionHandle {
 };
 void to_json(json& j, const HiveTransactionHandle& p);
 void from_json(const json& j, HiveTransactionHandle& p);
-} // namespace facebook::presto::protocol
+} // namespace facebook::presto::protocol::hive

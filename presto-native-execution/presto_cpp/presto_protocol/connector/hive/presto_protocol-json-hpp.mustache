@@ -45,7 +45,7 @@
 {{/hinc}}
 {{^hinc}}
 {{#struct}}
-namespace facebook::presto::protocol {
+namespace facebook::presto::protocol::hive {
     struct {{class_name}} {{#super_class}}: public {{super_class}}{{/super_class}}{
         {{#fields}}
         {{#field_local}}{{#optional}}std::shared_ptr<{{/optional}}{{&field_text}}{{#optional}}>{{/optional}} {{&field_name}} = {};{{/field_local}}
@@ -60,7 +60,7 @@ namespace facebook::presto::protocol {
 }
 {{/struct}}
 {{#enum}}
-namespace facebook::presto::protocol {
+namespace facebook::presto::protocol::hive {
     enum class {{class_name}} {
         {{#elements}}
         {{&element}}{{^_last}},{{/_last}}

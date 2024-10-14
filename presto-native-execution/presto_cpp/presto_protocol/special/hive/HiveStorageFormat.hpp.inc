@@ -12,7 +12,7 @@
  * limitations under the License.
  */
 
-namespace facebook::presto::protocol {
+namespace facebook::presto::protocol::hive {
 
 enum class HiveStorageFormat {
   ORC,
