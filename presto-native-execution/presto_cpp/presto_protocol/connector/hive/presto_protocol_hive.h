@@ -436,7 +436,7 @@ struct HiveTableLayoutHandle : public ConnectorTableLayoutHandle {
   List<Column> dataColumns = {};
   Map<String, String> tableParameters = {};
   TupleDomain<Subfield> domainPredicate = {};
-  RowExpression remainingPredicate = {};
+  std::shared_ptr<RowExpression> remainingPredicate = {};
   Map<String, HiveColumnHandle> predicateColumns = {};
   TupleDomain<std::shared_ptr<ColumnHandle>> partitionColumnPredicate = {};
   std::shared_ptr<HiveBucketHandle> bucketHandle = {};

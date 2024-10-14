@@ -91,6 +91,69 @@ AbstractClasses:
     subclasses:
       - { name: HiveSplit,            key: hive }
 
+  ConnectorHistogram:
+    super: JsonEncodedSubclass
+    subclasses:
+      - { name: UniformDistributionHistogram, key: uniform-distribution }
+
+  ExecutionWriterTarget:
+    super: JsonEncodedSubclass
+    subclasses:
+      - { name: CreateHandle,            key: CreateHandle }
+      - { name: InsertHandle,            key: InsertHandle }
+      - { name: DeleteHandle,            key: DeleteHandle }
+
+  PlanNode:
+    super: JsonEncodedSubclass
+    subclasses:
+      - { name: AggregationNode,          key: .AggregationNode }
+      - { name: GroupIdNode,              key: com.facebook.presto.sql.planner.plan.GroupIdNode }
+      - { name: DistinctLimitNode,        key: .DistinctLimitNode }
+      - { name: EnforceSingleRowNode,     key: com.facebook.presto.sql.planner.plan.EnforceSingleRowNode }
+      - { name: ExchangeNode,             key: com.facebook.presto.sql.planner.plan.ExchangeNode }
+      - { name: FilterNode,               key: .FilterNode }
+      - { name: JoinNode,                 key: com.facebook.presto.sql.planner.plan.JoinNode }
+      - { name: LimitNode,                key: .LimitNode }
+      - { name: MarkDistinctNode,         key: .MarkDistinctNode }
+      - { name: SortNode,                 key: .SortNode }
+      - { name: OutputNode,               key: .OutputNode }
+      - { name: ProjectNode,              key: .ProjectNode }
+      - { name: RowNumberNode,            key: com.facebook.presto.sql.planner.plan.RowNumberNode }
+      - { name: RemoteSourceNode,         key: com.facebook.presto.sql.planner.plan.RemoteSourceNode }
+      - { name: SampleNode,               key: com.facebook.presto.sql.planner.plan.SampleNode }
+      - { name: SemiJoinNode,             key: com.facebook.presto.sql.planner.plan.SemiJoinNode }
+      - { name: TableScanNode,            key: .TableScanNode }
+      - { name: TableWriterNode,          key: com.facebook.presto.sql.planner.plan.TableWriterNode }
+      - { name: TableWriterMergeNode,     key: com.facebook.presto.sql.planner.plan.TableWriterMergeNode }
+      - { name: TopNNode,                 key: .TopNNode }
+      - { name: TopNRowNumberNode,        key: com.facebook.presto.sql.planner.plan.TopNRowNumberNode }
+      - { name: UnnestNode,               key: com.facebook.presto.sql.planner.plan.UnnestNode }
+      - { name: ValuesNode,               key: .ValuesNode }
+      - { name: AssignUniqueId,           key: com.facebook.presto.sql.planner.plan.AssignUniqueId }
+      - { name: MergeJoinNode,            key: com.facebook.presto.sql.planner.plan.MergeJoinNode }
+      - { name: WindowNode,               key: com.facebook.presto.sql.planner.plan.WindowNode }
+
+  RowExpression:
+    super: JsonEncodedSubclass
+    subclasses:
+      - { name: CallExpression,             key: call }
+      - { name: ConstantExpression,         key: constant }
+      - { name: SpecialFormExpression,      key: special }
+      - { name: LambdaDefinitionExpression, key: lambda }
+      - { name: VariableReferenceExpression,key: variable }
+
+  ValueSet:
+    super: JsonEncodedSubclass
+    subclasses:
+      - { name: EquatableValueSet,          key: equatable }
+      - { name: SortedRangeSet,             key: sortable }
+      - { name: AllOrNoneValueSet,          key: allOrNone }
+
+  FunctionHandle:
+    super: JsonEncodedSubclass
+    subclasses:
+      - { name: BuiltInFunctionHandle,      key: $static }
+      - { name: SqlFunctionHandle,          key: json_file }
 
 JavaClasses:
   - presto-hive-metastore/src/main/java/com/facebook/presto/hive/BucketFunctionType.java
