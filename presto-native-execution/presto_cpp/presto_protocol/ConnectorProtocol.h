@@ -227,4 +227,15 @@ class ConnectorProtocolTemplate final : public ConnectorProtocol {
     VELOX_NYI("Not implemented: {}", typeid(BASE).name());
   }
 };
+using SystemConnectorProtocol = ConnectorProtocolTemplate<
+    SystemTableHandle,
+    SystemTableLayoutHandle,
+    SystemColumnHandle,
+    NotImplemented,
+    NotImplemented,
+    SystemSplit,
+    SystemPartitioningHandle,
+    SystemTransactionHandle,
+    NotImplemented>;
+
 }// namespace facebook::presto::protocol
