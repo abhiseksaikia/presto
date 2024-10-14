@@ -24,6 +24,19 @@
 using namespace std::string_literals;
 
 namespace facebook::presto::protocol::tpch {
+
+void to_json(json& j, const TpchTransactionHandle& p) {
+  j = json::array();
+  j.push_back(p._type);
+  j.push_back(p.instance);
+}
+
+void from_json(const json& j, TpchTransactionHandle& p) {
+  j[0].get_to(p._type);
+  j[1].get_to(p.instance);
+}
+} // namespace facebook::presto::protocol::tpch
+namespace facebook::presto::protocol::tpch {
 void to_json(json& j, const std::shared_ptr<PlanNode>& p) {
   if (p == nullptr) {
     return;
